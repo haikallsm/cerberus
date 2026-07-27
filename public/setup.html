@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup - HAWKEYE GCS</title>
+    <link rel="stylesheet" href="./static/css/gcs.css">
+    <link rel="stylesheet" href="./static/css/setup.css">
+</head>
+
+<body style="background: transparent;">
+
+<div class="setup-container">
+    <h2>Pengaturan Jaringan Sistem</h2>
+    <p>Masukkan alamat IP Raspberry Pi Anda untuk menghubungkan web ke mesin Python (WebSocket) dan Video Stream (WebRTC).</p>
+    
+    <div class="input-group">
+        <label>IP Raspberry Pi (Backend):</label>
+        <input type="text" id="raspiIpInput" class="gcs-input" placeholder="Contoh: 192.168.1.100" value="127.0.0.1">
+        <button onclick="saveRaspiIP()">Simpan IP RasPi</button>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const savedUrl = localStorage.getItem('raspyUrl');
+        if (savedUrl) {
+            const ipOnly = savedUrl.replace('http://', '').replace(':5000', '');
+            document.getElementById('raspiIpInput').value = ipOnly;
+        }
+    });
+
+    function saveRaspiIP() {
+        const ip = document.getElementById('raspiIpInput').value.trim();
+        if(!ip) {
+            alert("Harap masukkan IP!");
+            return;
+        }
+        
+        const url = `http://${ip}:5000`;
+        
+        if (window.parent && window.parent.gcsConnection) {
+            window.parent.gcsConnection.setBaseUrl(url);
+        }
+        
+        localStorage.setItem('raspyUrl', url);
+        
+        alert("IP Backend/RasPi berhasil diatur ke: " + url);
+    }
+</script>
+</body>
+</html>

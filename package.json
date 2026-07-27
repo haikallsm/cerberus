@@ -1,0 +1,36 @@
+{
+  "name": "cerberus",
+  "version": "1.0.0",
+  "description": "HAWKEYE Ground Control Station",
+  "author": "hkl",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:portable": "cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win portable"
+  },
+  "devDependencies": {
+    "cross-env": "^10.1.0",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.0.0"
+  },
+  "build": {
+    "appId": "com.hawkeyecs",
+    "productName": "cerberus",
+    "files": [
+      "main.js",
+      "public/**/*",
+      "!node_modules/**/*"
+    ],
+    "win": {
+      "target": [
+        "portable",
+        "nsis"
+      ]
+    },
+    "asar": true
+  },
+  "dependencies": {
+    "leaflet": "^1.9.4"
+  }
+}
