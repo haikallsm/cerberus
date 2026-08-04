@@ -15,8 +15,6 @@
     <div id="map"></div>
 
     <div class="telemetry-panel">
-        <div style="font-size: 11px; color: #888; margin-bottom: 8px; font-weight: bold; text-transform: uppercase;"> TELEMETRY</div>
-
         <div class="ah-container">
             <canvas id="gyroCanvas" width="200" height="100"></canvas>
             <div class="ah-overlay">
@@ -25,87 +23,119 @@
             </div>
         </div>
 
-        <div class="telemetry-grid">
-            <div class="telemetry-item">
-                <div class="telemetry-label">Altitude</div>
-                <div id="altitude" class="telemetry-value">0 m</div>
+        <div id="page-telems" class="telem-page" style="display: block">
+
+            <div class="telem-tabs" style="margin-bottom: 8px;">
+                <button class="telem-tab-btn active" onclick="switchTelemPage('telems', this)">Quick</button>
+                <button class="telem-tab-btn" onclick="switchTelemPage('actions', this)">Actions</button>
             </div>
-            <div class="telemetry-item">
-                <div class="telemetry-label">Roll</div>
-                <div id="roll" class="telemetry-value">0°</div>
-            </div>
-            <div class="telemetry-item">
-                <div class="telemetry-label">Pitch</div>
-                <div id="pitch" class="telemetry-value">0°</div>
-            </div>
-            <div class="telemetry-item">
-                <div class="telemetry-label">Lat / Lon</div>
-                <div id="coords" class="telemetry-value" style="font-size: 10px;">0.00000, 0.00000</div>
-            </div>
-            <div class="telemetry-item">
-                <div class="telemetry-label">Speed</div>
-                <div id="speed" class="telemetry-value">0 m/s</div>
-            </div>
-            <div class="telemetry-item">
-                <div class="telemetry-label">Climb Rate</div>
-                <div id="climb" class="telemetry-value">0 m/s</div>
-            </div>
-            <div class="telemetry-item">
-                <div class="telemetry-label">Flight Mode</div>
-                <div id="flightModeLabel" class="telemetry-value">UNKNOWN</div>
-            </div>
-            <div class="telemetry-item">
-                <div class="telemetry-label">Throttle</div>
-                <div id="throttleGridValue" class="telemetry-value">0%</div>
-            </div>
-            <div class="telemetry-item">
-                <div class="telemetry-label">Heading</div>
-                <div id="yaw" class="telemetry-value">0°</div>
-            </div>
-            <div class="telemetry-item">
-                <div class="telemetry-label">Armed</div>
-                <div id="armGridStatus" class="telemetry-value">DISARMED</div>
-            </div>
-            <div class="telemetry-item">
-                <div class="telemetry-label">Signal</div>
-                <div id="rssiBars" class="signal-container">
-                    <div class="signal-bar bar-1"></div>
-                    <div class="signal-bar bar-2"></div>
-                    <div class="signal-bar bar-3"></div>
-                    <div class="signal-bar bar-4"></div>
-                    <div class="signal-bar bar-5"></div>
+
+            <div class="telemetry-grid">
+                <div class="telemetry-item">
+                    <div class="telemetry-label">Altitude</div>
+                    <div id="altitude" class="telemetry-value">0 m</div>
                 </div>
-                <div id="rssiValue" class="telemetry-value" style="font-size: 10px; margin-top: 2px;">--%</div>
+                <div class="telemetry-item">
+                    <div class="telemetry-label">Roll</div>
+                    <div id="roll" class="telemetry-value">0°</div>
+                </div>
+                <div class="telemetry-item">
+                    <div class="telemetry-label">Pitch</div>
+                    <div id="pitch" class="telemetry-value">0°</div>
+                </div>
+                <div class="telemetry-item">
+                    <div class="telemetry-label">Lat / Lon</div>
+                    <div id="coords" class="telemetry-value" style="font-size: 10px;">0.00000, 0.00000</div>
+                </div>
+                <div class="telemetry-item">
+                    <div class="telemetry-label">Speed</div>
+                    <div id="speed" class="telemetry-value">0 m/s</div>
+                </div>
+                <div class="telemetry-item">
+                    <div class="telemetry-label">Climb Rate</div>
+                    <div id="climb" class="telemetry-value">0 m/s</div>
+                </div>
+                <div class="telemetry-item">
+                    <div class="telemetry-label">Flight Mode</div>
+                    <div id="flightModeLabel" class="telemetry-value">UNKNOWN</div>
+                </div>
+                <div class="telemetry-item">
+                    <div class="telemetry-label">Throttle</div>
+                    <div id="throttleGridValue" class="telemetry-value">0%</div>
+                </div>
+                <div class="telemetry-item">
+                    <div class="telemetry-label">Heading</div>
+                    <div id="yaw" class="telemetry-value">0°</div>
+                </div>
+                <div class="telemetry-item">
+                    <div class="telemetry-label">Armed</div>
+                    <div id="armGridStatus" class="telemetry-value">DISARMED</div>
+                </div>
+                
+                <div class="telemetry-item">
+                    <div class="telemetry-label">Vehicle Type</div>
+                    <div id="vehicleType" class="telemetry-value">UNKNOWN</div>
+                </div>
+    
+                <div class="telemetry-item" id="rangefinderItem">
+                    <div class="telemetry-label">RangeFinder</div>
+                    <div id="rangefinderDistance" class="telemetry-value">-- m</div>
+                    <div id="rangefinderDetail" class="telemetry-detail">UNKNOWN</div>
+                </div>
             </div>
-
-            <div class="telemetry-item">
-                <div class="telemetry-label">Battery</div>
-                <div id="batteryVoltage" class="telemetry-value">0.0 V</div>
-                <div id="batteryStatusDetail" class="telemetry-detail">0.0 A &middot; 0%</div>
+    
+            <!-- GPS Status -->
+            <div style="margin-top: 6px; padding: 6px; background: #0a0a1a; border-radius: 2px; border-left: 3px solid #2196f3;">
+                <div style="font-size: 10px; color: #888; margin-bottom: 4px;">GPS</div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div id="gpsIndicator" style="width: 8px; height: 8px; border-radius: 50%; background: #f44336;"></div>
+                    <div style="flex: 1;">
+                        <div id="gpsFix" style="font-size: 10px; color: #ccc;">No Fix</div>
+                        <div id="gpsSats" style="font-size: 9px; color: #888;">0 satellites</div>
+                    </div>
+                </div>
             </div>
-
-            <div class="telemetry-item" id="rangefinderItem">
-                <div class="telemetry-label">RangeFinder</div>
-                <div id="rangefinderDistance" class="telemetry-value">-- m</div>
-                <div id="rangefinderDetail" class="telemetry-detail">UNKNOWN</div>
+    
+            <div style="border-top: 1px solid #444; margin-top: 8px; padding-top: 8px; font-size: 9px; color: #888;">
+                <div> <span id="msgCount">0</span> msgs</div>
+                <div> <span id="errorCount">0</span> errors</div>
             </div>
         </div>
 
-        <!-- GPS Status -->
-        <div style="margin-top: 6px; padding: 6px; background: #0a0a1a; border-radius: 2px; border-left: 3px solid #2196f3;">
-            <div style="font-size: 10px; color: #888; margin-bottom: 4px;">GPS</div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <div id="gpsIndicator" style="width: 8px; height: 8px; border-radius: 50%; background: #f44336;"></div>
-                <div style="flex: 1;">
-                    <div id="gpsFix" style="font-size: 10px; color: #ccc;">No Fix</div>
-                    <div id="gpsSats" style="font-size: 9px; color: #888;">0 satellites</div>
-                </div>
+        <!-- PAGE 2: ACTIONS (Tombol Perintah) -->
+        <div id="page-actions" class="telem-page" style="display: none; padding-top: 10px;">
+            
+            <div class="telem-tabs" style="margin-bottom: 8px;">
+                <button class="telem-tab-btn active" onclick="switchTelemPage('telems', this)">Quick</button>
+                <button class="telem-tab-btn" onclick="switchTelemPage('actions', this)">Actions</button>
             </div>
-        </div>
 
-        <div style="border-top: 1px solid #444; margin-top: 8px; padding-top: 8px; font-size: 9px; color: #888;">
-            <div> <span id="msgCount">0</span> msgs</div>
-            <div> <span id="errorCount">0</span> errors</div>
+            <div class="action-grid">
+                <button class="action-btn btn-arm" onclick="doAction('arm')">ARM</button>
+                <button class="action-btn btn-disarm" onclick="doAction('disarm')">DISARM</button>
+                <button class="action-btn" onclick="doAction('takeoff')">TAKEOFF</button>
+                
+                <button class="action-btn btn-warning" onclick="doAction('safety_off')">SAFETY OFF</button>
+                <button class="action-btn btn-disarm" onclick="doAction('safety_on')">SAFETY ON</button>
+                <button class="action-btn" onclick="doAction('land')">LAND</button>
+                
+                <button class="action-btn btn-danger" onclick="doAction('reboot')">REBOOT</button>
+                <button class="action-btn btn-rover" onclick="doAction('rover')">ROVER</button>
+                <button class="action-btn btn-copter" onclick="doAction('copter')">COPTER</button>
+                <button class="action-btn btn-rtl" onclick="doAction('rtl')">RTL</button>
+            </div>
+
+            <div class="action-section-title" style="margin-top: 12px;">Flight Modes</div>
+            <div style="display: flex; gap: 8px;">
+                <select id="flightModeSelect" class="action-select">
+                    <option value="0">STABILIZE</option>
+                    <option value="2">ALT_HOLD</option>
+                    <option value="3">AUTO</option>
+                    <option value="4">GUIDED</option>
+                    <option value="5">LOITER</option>
+                </select>
+                <button class="action-btn" onclick="doAction('setmode')" style="width: 80px;">SET</button>
+            </div>
         </div>
     </div>
 
@@ -174,15 +204,23 @@ function drawstring(ctx, string, font, fontsize, color, x, y) {
 }
 
 function drawArtificialHorizon(rollDeg, pitchDeg, yawDeg) {
+    // Validasi input: pastikan semua angka valid
+    if (!isFinite(rollDeg)) rollDeg = 0;
+    if (!isFinite(pitchDeg)) pitchDeg = 0;
+    if (!isFinite(yawDeg)) yawDeg = 0;
+
     resizeCanvas();
     const deg2rad = Math.PI / 180;
     const canvas = gyroCanvas, ctx = gyroCtx;
+    
+    // TAMBAHKAN BARIS INI: Hentikan rendering bila ukuran kanvas 0 (saat tab disembunyikan)
+    if (canvas.width === 0 || canvas.height === 0) return; 
     
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
     
     ctx.translate(canvas.width / 2, canvas.height / 2);
-    ctx.rotate(-rollDeg * deg2rad);
+    ctx.rotate(rollDeg * deg2rad);
 
     const font = "Arial";
     const fontsize = Math.max(9, canvas.height / 18);
@@ -259,34 +297,10 @@ function drawArtificialHorizon(rollDeg, pitchDeg, yawDeg) {
 drawArtificialHorizon(0, 0, 0);
 
 // ===== MAIN TELEMETRY HANDLER =====
-// Terekspos secara global agar index.html (Parent) bisa memanggil fungsi ini via Iframe
 window.updateTelemetryUI = function(data) {
     if (!data) return;
 
-    if (data.rssi !== undefined) {
-        const rssiValue = Math.max(0, Math.min(100, data.rssi));
-        let bars = 0;
-        if (rssiValue > 5) bars = 1;
-        if (rssiValue > 25) bars = 2;
-        if (rssiValue > 50) bars = 3;
-        if (rssiValue > 70) bars = 4;
-        if (rssiValue > 85) bars = 5;
-
-        let colorClass = 'red';
-        if (rssiValue >= 70) colorClass = 'green';
-        else if (rssiValue >= 40) colorClass = 'yellow';
-
-        const container = document.getElementById('rssiBars');
-        if (container) {
-            const barElements = container.querySelectorAll('.signal-bar');
-            barElements.forEach((bar, index) => {
-                bar.className = `signal-bar bar-${index + 1}`;
-                if (index < bars) bar.classList.add('active', colorClass);
-            });
-        }
-        const rssiValueEl = document.getElementById('rssiValue');
-        if (rssiValueEl) rssiValueEl.innerText = Math.round(rssiValue) + '%';
-    }
+    window.lastTelemetry = Object.assign(window.lastTelemetry || {}, data);
 
     if (data.lat !== undefined && data.lon !== undefined) {
         const lat = Number(data.lat), lon = Number(data.lon), alt = Number(data.alt) || 0;
@@ -374,6 +388,22 @@ window.updateTelemetryUI = function(data) {
         if (flightModeEl) flightModeEl.innerText = data.flight_mode;
     }
 
+    if (data.vehicle_type !== undefined) {
+        const vehicleTypeEl = document.getElementById('vehicleType');
+        if (vehicleTypeEl) {
+            vehicleTypeEl.innerText = data.vehicle_type;
+
+            if (data.vehicle_type === 'COPTER') {
+                vehicleTypeEl.style.color = '#2196f3';
+            } else if (data.vehicle_type === 'ROVER') {
+                vehicleTypeEl.style.color = '#4caf50';
+            } else {
+                vehicleTypeEl.style.color = '#ffff';
+            }
+        }
+            
+    }
+
     if (data.throttle !== undefined) {
         const throttleGridEl = document.getElementById('throttleGridValue');
         if (throttleGridEl) throttleGridEl.innerText = Math.round(data.throttle) + '%';
@@ -389,8 +419,247 @@ window.updateTelemetryUI = function(data) {
     }
 }
 
+// ===== TELEMETRY TABS & ACTIONS LOGIC =====
+function switchTelemPage(pageId, btnElement) {
+    document.querySelectorAll('.telem-page').forEach(p => p.style.display = 'none');
+    document.querySelectorAll('.telem-tab-btn').forEach(b => b.classList.remove('active'));
+    
+    document.getElementById('page-' + pageId).style.display = 'block';
+    btnElement.classList.add('active');
+}
+
+async function doAction(action) {
+    if (!window.parent.commands) {
+        alert("Sistem command belum termuat.");
+        return;
+    }
+    
+    const isLive = window.parent.commands._radioActive() || window.parent.commands._piActive();
+    if (!isLive) {
+        alert("Gagal: Tidak ada koneksi aktif ke Drone.");
+        return;
+    }
+
+    const link = window.parent.commands._getActiveLink();
+
+    try {
+        switch(action) {
+            case 'arm': 
+                await window.parent.commands.armDisarm(true); 
+                break;
+            case 'disarm': 
+                await window.parent.commands.armDisarm(false); 
+                break;
+            case 'safety_on':
+                await window.parent.commands.setSafetySwitch(true);
+                console.log("Safety Switch ON (SAFE)");
+                break;
+            case 'safety_off':
+                await window.parent.commands.setSafetySwitch(false);
+                console.log("Safety Switch OFF (LIVE)");
+                break;
+            case 'reboot':
+                if (confirm("Yakin ingin melakukan Reboot pada Flight Controller?")) {
+                    await window.parent.commands.reboot();
+                }
+                break;
+            case 'takeoff': 
+                await link.takeoff(2); 
+                break;
+            case 'rover':
+                const telem = window.parent.gcsConnection.telemetry;
+                const bataslanding = 0.5;
+                const currentAlt = telem.alt || 0;
+                if (currentAlt > bataslanding) {
+                    alert(`Gagal: Drone masih berada di udara (altitude ${currentAlt.toFixed(2)} m). Silakan mendaratkan drone terlebih dahulu sebelum beralih ke mode ROVER.`);
+                    return;
+                }
+                await window.parent.commands.setHybridMode('rover');
+                console.log("[TRANSITION] Switching to Rover mode (ready)...");
+                break;
+            case 'copter':
+                console.log("[TRANSITION] Switching to Copter mode (safety)...");
+                await window.parent.commands.setHybridMode('copter_safe'); 
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                console.log("[TRANSITION] Switching to Copter mode (ready)...");
+                await window.parent.commands.setHybridMode('ready'); 
+                break;
+            case 'rtl': 
+                await link.rtl(); 
+                break;
+            case 'land': 
+                await link.land(); 
+                break;
+            case 'setmode': 
+                const modeValue = document.getElementById('flightModeSelect').value;
+                await window.parent.commands.setFlightMode(parseInt(modeValue, 10)); 
+                break;
+        }
+    } catch (e) {
+        alert(`Gagal mengirim perintah ${action}: ${e.message}`);
+    }
+}
+
+// ===== SAR VICTIM MARKER (reusable — dipakai baik oleh deteksi AI/vision maupun laporan FCU) =====
+let victimMarkers = [];
+const VICTIM_BUFFER_RADIUS_METERS = 10;
+
+function getDistanceMeters(lat1, lon1, lat2, lon2) {
+    const R = 6371e3;
+    const p1 = lat1 * Math.PI / 180, p2 = lat2 * Math.PI / 180;
+    const dp = (lat2 - lat1) * Math.PI / 180, dl = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dp/2) * Math.sin(dp/2) + Math.cos(p1) * Math.cos(p2) * Math.sin(dl/2) * Math.sin(dl/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function addVictimMarker(lat, lon, opts = {}) {
+    const { status = 'unknown', jumlah = 1, confidence = null, source = 'AI' } = opts;
+
+    const isDuplicate = victimMarkers.some(m => {
+        const mLatLng = m.marker.getLatLng();
+        return getDistanceMeters(lat, lon, mLatLng.lat, mLatLng.lng) < VICTIM_BUFFER_RADIUS_METERS;
+    });
+    if (isDuplicate) return null;
+
+    const isDead = status === 'D';
+    const accentColor = isDead ? '#616161' : '#f44336';
+    const iconBg = isDead ? '33,33,33' : '244,67,54';
+    const iconGlyph = isDead ? '💀' : '🆘';
+
+    const bufferCircle = L.circle([lat, lon], {
+        color: isDead ? '#424242' : 'red',
+        fillColor: isDead ? '#424242' : '#f44336',
+        fillOpacity: 0.15,
+        radius: VICTIM_BUFFER_RADIUS_METERS,
+        weight: 1,
+        dashArray: '5, 5'
+    }).addTo(map);
+
+    const victimIcon = L.divIcon({
+        html: `<div style="font-size: 18px; background: rgba(${iconBg}, 0.9); border-radius: 50%; width: 30px; height: 30px; text-align: center; line-height: 30px; color: white; border: 2px solid white; box-shadow: 0 0 10px ${isDead ? '#000' : 'red'}; font-family: Arial;">${iconGlyph}</div>`,
+        className: 'victim-icon',
+        iconSize: [30, 30],
+        iconAnchor: [15, 15]
+    });
+
+    const detailLine = source === 'SAR'
+        ? `Status: ${isDead ? 'Korban Tewas' : 'Korban Hidup'} &middot; Jumlah: ${jumlah} Orang<br>Sumber: Laporan FCU (STATUSTEXT)`
+        : `Keyakinan (AI): ${(confidence !== null ? confidence * 100 : 0).toFixed(1)}%`;
+
+    const marker = L.marker([lat, lon], { icon: victimIcon, zIndexOffset: 1000 })
+    .bindPopup(`
+        <div style="text-align: center;">
+            <b style="color:${accentColor}; font-size:14px;">🚨 KORBAN TERDETEKSI</b><br>
+            <span style="font-size:11px; color:#666;">Zona Eksklusif: Radius ${VICTIM_BUFFER_RADIUS_METERS}m</span><br><br>
+            ${detailLine}<br>
+            Lat: ${lat.toFixed(7)}<br>Lon: ${lon.toFixed(7)}<br><br>
+            <button onclick="goToVictim(${lat}, ${lon})"
+                style="background:#2196f3;color:white;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:12px;">
+                Terbang ke titik ini
+            </button>
+        </div>
+    `)
+    .addTo(map);
+
+    marker.openPopup();
+    victimMarkers.push({ marker, circle: bufferCircle });
+
+    const logContent = document.getElementById('mavlinkLogContent');
+    if (logContent) {
+        const timeStr = new Date().toTimeString().split(' ')[0];
+        const msgDiv = document.createElement('div');
+        msgDiv.style.marginBottom = "3px";
+        msgDiv.innerHTML = `<span style="color:#f44336; font-weight:bold;">[${timeStr}] 🎯 SAR ALERT (${source}): ${isDead ? 'Korban Tewas' : 'Korban Hidup'} dikunci pada ${lat.toFixed(5)}, ${lon.toFixed(5)}</span>`;
+        logContent.appendChild(msgDiv);
+        logContent.scrollTop = logContent.scrollHeight;
+    }
+
+    return marker;
+}
+
+// ===== SAR STATUSTEXT PARSING (chunk-aware) =====
+const SAR_PREFIX = "[SAR]";
+const STATUSTEXT_MAX_LEN = 50; // panjang field 'text' per-chunk di MAVLink1/2; chunk penuh = masih ada lanjutan
+const SAR_CHUNK_TIMEOUT_MS = 2000; // flush paksa kalau chunk lanjutan tak kunjung datang (buang buffer basi)
+const sarChunkBuffers = new Map(); // msgId -> { text, lastSeq, timeoutHandle }
+
+function flushSarBuffer(msgId) {
+    const buf = sarChunkBuffers.get(msgId);
+    if (!buf) return null;
+    clearTimeout(buf.timeoutHandle);
+    sarChunkBuffers.delete(msgId);
+    return buf.text;
+}
+
+function reassembleSarText(logItem) {
+    const text = String(logItem.text);
+    const msgId = logItem.msgId ?? 0;
+    const chunkSeq = logItem.chunkSeq ?? 0;
+
+    // Kasus paling umum saat ini: single-chunk (field tidak ada / msgId=0)
+    if (!msgId) {
+        return text.startsWith(SAR_PREFIX) ? { status: 'complete', text } : { status: 'not_sar' };
+    }
+
+    // Kasus multi-chunk
+    let buf = sarChunkBuffers.get(msgId);
+    if (chunkSeq === 0) {
+        if (!text.startsWith(SAR_PREFIX)) return { status: 'not_sar' }; // chunked tapi bukan pesan SAR, lewat sbg log biasa
+        if (buf) clearTimeout(buf.timeoutHandle);
+        buf = { text: '', lastSeq: -1 };
+        sarChunkBuffers.set(msgId, buf);
+    }
+    if (!buf) return { status: 'not_sar' }; // chunk_seq > 0 tanpa chunk awal yg tercatat -> out-of-order, abaikan
+
+    buf.text += text;
+    buf.lastSeq = chunkSeq;
+    clearTimeout(buf.timeoutHandle);
+
+    if (text.length >= STATUSTEXT_MAX_LEN) {
+        // Chunk ini penuh -> kemungkinan besar masih ada lanjutan, tunggu
+        buf.timeoutHandle = setTimeout(() => flushSarBuffer(msgId), SAR_CHUNK_TIMEOUT_MS);
+        return { status: 'pending' };
+    }
+    return { status: 'complete', text: flushSarBuffer(msgId) };
+}
+
+// Format: [SAR];STATUS;JUMLAH;LAT;LON  -- identik dengan parsing_msg.py
+function parseSarStatustext(fullText) {
+    const data = fullText.trim().split(";");
+    if (data.length !== 5) {
+        console.warn("[SAR] Format tidak valid, field count:", data.length, fullText);
+        return null;
+    }
+    const [, status, jumlahStr, latStr, lonStr] = data;
+    const jumlah = parseInt(jumlahStr, 10);
+    const lat = parseFloat(latStr);
+    const lon = parseFloat(lonStr);
+
+    if (!Number.isFinite(jumlah) || !Number.isFinite(lat) || !Number.isFinite(lon)) {
+        console.warn("[SAR] Gagal parse numerik:", fullText);
+        return null;
+    }
+    if (status !== 'H' && status !== 'D') {
+        console.warn("[SAR] Status tidak dikenal:", status);
+        return null;
+    }
+    return { status, jumlah, lat, lon };
+}
+
 window.updateMavlogUI = function(logItem) {
     console.log("[LOG] Received:", logItem.text);
+
+    // --- Intersepsi [SAR] SEBELUM ditampilkan sebagai log FCU biasa ---
+    const sarResult = reassembleSarText(logItem);
+    if (sarResult.status === 'pending') return; // masih menunggu chunk lanjutan, jangan render apa pun dulu
+    if (sarResult.status === 'complete') {
+        const parsed = parseSarStatustext(sarResult.text);
+        if (parsed) {
+            addVictimMarker(parsed.lat, parsed.lon, { status: parsed.status, jumlah: parsed.jumlah, source: 'SAR' });
+        }
+        return; // jangan lanjut ke log biasa
+    }
+    // sarResult.status === 'not_sar' -> lanjut render sebagai log FCU biasa (tidak berubah)
 
     const logContent = document.getElementById('mavlinkLogContent');
     if (!logContent) return;
@@ -456,8 +725,13 @@ function updateMap(data) {
 
 // ===== DRAG PANEL =====
 const panel = document.querySelector('.telemetry-panel');
-let isDragging = false, offsetX, offsetY;
+let isDragging = false, offsetX, offsetY, headerPanelGap = 0;
+
 panel.addEventListener('mousedown', e => {
+     const tag = e.target.tagName.toLowerCase();
+    if (tag === 'select' || tag === 'button' || tag === 'input' || tag === 'textarea') {
+        return;
+    }
     isDragging = true;
     offsetX = e.clientX - panel.offsetLeft;
     offsetY = e.clientY - panel.offsetTop;
@@ -468,6 +742,7 @@ document.addEventListener('mousemove', e => {
     panel.style.top = (e.clientY - offsetY) + 'px';
     panel.style.right = 'auto';
 });
+
 document.addEventListener('mouseup', () => isDragging = false);
 
 // ===== VIDEO STREAMING (WebRTC) =====
@@ -482,34 +757,13 @@ window.openVideo = async function() {
     statusText.style.color = '#00bcd4';
 
     try {
-        // Ambil Base URL secara dinamis dari Parent Induk
-        // let apiBase = window.parent.gcsConnection?.baseUrl;
-
-        // if (!apiBase || apiBase.includes('localhost') || apiBase.includes('')) {
-        //     const saveIp = localStorage.getItem('raspyUrl');
-        //     apiBase = saveIp ? saveIp : 'http://localhost:5000';
-        // }
-        // let apiBase = window.location.protocol + '//' + window.location.hostname + '5000';
         let apiBase = localStorage.getItem('raspyUrl') || 'http://127.0.0.1:5000';
-        // if(!apiBase) {
-        //     apiBase = "https://tapered-muck-illusion.ngrok-free.dev";
-        // }
         console.log("[WebRTC] Using API Base URL:", apiBase);
 
         const config = {
             sdpSemantics: 'unified-plan',
             bundlePolicy: 'max-bundle',
             rtcpMuxPolicy: 'require',
-            // iceServers: [
-            //     { urls: ['stun:stun.l.google.com:19302'] },
-            //     {
-            //          urls: 'turn:openrelay.metered.ca:80',
-            //          username: 'openrelayproject',
-            //          credential: 'openrelayproject'
-            //     }
-            // ]
-            // iceServers: [{ urls: ['stun:74.125.250.129:19302'] }]
-            // iceServers: []
         };
         pc = new RTCPeerConnection(config);
         pc.addEventListener('iceconnectionstatechange', () => console.log("[WebRTC] ICE iceConnection State:", pc.iceConnectionState));
@@ -605,25 +859,14 @@ window.closeVideo = function() {
     if (pc) { pc.close(); pc = null; }
 }
 
-// ===== SAR VICTIM DETECTION =====
-let victimMarkers = [];
-const VICTIM_BUFFER_RADIUS_METERS = 10;
-
-function getDistanceMeters(lat1, lon1, lat2, lon2) {
-    const R = 6371e3;
-    const p1 = lat1 * Math.PI / 180, p2 = lat2 * Math.PI / 180;
-    const dp = (lat2 - lat1) * Math.PI / 180, dl = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dp/2) * Math.sin(dp/2) + Math.cos(p1) * Math.cos(p2) * Math.sin(dl/2) * Math.sin(dl/2);
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
-
+// ===== SAR VICTIM DETECTION (computer-vision, via polling /video/detections) =====
 async function pollVictimDetection() {
     try {
         // Ambil Base URL dari Parent Iframe
         const baseUrl = window.parent.gcsConnection?.baseUrl || 'http://localhost:5000';
         const response = await fetch(baseUrl + '/video/detections');
         if (!response.ok) throw new Error('HTTP error ' + response.status);
-        
+
         const result = await response.json();
 
         if (result && result.objects) {
@@ -631,69 +874,69 @@ async function pollVictimDetection() {
                 if (obj.class === 'person' && obj.confidence > 0.6) {
                     const vLat = result.lat;
                     const vLon = result.lon;
-                    
-                    if (Math.abs(vLat) < 0.0001 && Math.abs(vLon) < 0.0001) return; 
-                    
-                    let isDuplicate = victimMarkers.some(m => {
-                        const mLatLng = m.marker.getLatLng();
-                        return getDistanceMeters(vLat, vLon, mLatLng.lat, mLatLng.lng) < VICTIM_BUFFER_RADIUS_METERS;
-                    });
-                    
-                    if (!isDuplicate) {
-                        const bufferCircle = L.circle([vLat, vLon], {
-                            color: 'red',
-                            fillColor: '#f44336',
-                            fillOpacity: 0.15,
-                            radius: VICTIM_BUFFER_RADIUS_METERS,
-                            weight: 1,
-                            dashArray: '5, 5'
-                        }).addTo(map);
 
-                        const victimIcon = L.divIcon({
-                            html: '<div style="font-size: 18px; background: rgba(244, 67, 54, 0.9); border-radius: 50%; width: 30px; height: 30px; text-align: center; line-height: 30px; color: white; border: 2px solid white; box-shadow: 0 0 10px red; font-family: Arial;">🆘</div>',
-                            className: 'victim-icon',
-                            iconSize: [30, 30],
-                            iconAnchor: [15, 15]
-                        });
-                        
-                        const marker = L.marker([vLat, vLon], {icon: victimIcon, zIndexOffset: 1000})
-                            .bindPopup(`
-                                <div style="text-align: center;">
-                                    <b style="color:#f44336; font-size:14px;">🚨 KORBAN TERDETEKSI</b><br>
-                                    <span style="font-size:11px; color:#666;">Zona Eksklusif: Radius ${VICTIM_BUFFER_RADIUS_METERS}m</span><br><br>
-                                    Keyakinan (AI): ${(obj.confidence*100).toFixed(1)}%<br>
-                                    Lat: ${vLat.toFixed(7)}<br>Lon: ${vLon.toFixed(7)}
-                                </div>
-                            `)
-                            .addTo(map);
-                            
-                        marker.openPopup();
-                        victimMarkers.push({ marker: marker, circle: bufferCircle }); 
-                        
-                        const logContent = document.getElementById('mavlinkLogContent');
-                        if(logContent) {
-                            const timeStr = new Date().toTimeString().split(' ')[0];
-                            const msgDiv = document.createElement('div');
-                            msgDiv.style.marginBottom = "3px";
-                            msgDiv.innerHTML = `<span style="color:#f44336; font-weight:bold;">[${timeStr}] 🎯 SAR ALERT: Area Korban Baru (Radius ${VICTIM_BUFFER_RADIUS_METERS}m) dikunci pada ${vLat.toFixed(5)}, ${vLon.toFixed(5)}</span>`;
-                            logContent.appendChild(msgDiv);
-                            logContent.scrollTop = logContent.scrollHeight;
-                        }
-                    }
+                    if (Math.abs(vLat) < 0.0001 && Math.abs(vLon) < 0.0001) return;
+
+                    addVictimMarker(vLat, vLon, { status: 'unknown', confidence: obj.confidence, source: 'AI' });
                 }
             });
         }
     } catch (e) {}
 }
 
+async function goToVictim(lat, lon, alt = null) {
+    if (!windpw.parent.commands) {
+        alert("Command bridge not loaded.");
+        return;
+    }
+    const link = window.parent.commands._getActiveLink();
+    if(!link) {
+        alert("No active link to drone.");
+        return;
+    }
+    const t = window.lastTelemetry || {};
+    const isArmed = t.is_armed || (t.arm_mode === 'armed') || false;
+    const currentMode =t.flight_mode || 'UNKNOWN';
+
+    if (isArmed && currentMode === 'AUTO') {
+        const confirmMsg= `⚠️ Drone sedang ARMED dan menjalankan mission (AUTO).\n\n` +
+            `Mengirim drone ke titik korban akan MEMINDAHKAN mode ke GUIDED dan ` +
+            `menginterupsi mission saat ini (mission TIDAK dihapus, hanya di-pause).\n\n` +
+            `Lat: ${lat.toFixed(7)}, Lon: ${lon.toFixed(7)}\n\n` +
+            `Lanjutkan?`;
+        if (!confirm(confirmMsg)) return;
+    }
+
+    const result = await link.sendCommandLong(192, {
+        p1: -1,
+        p2: 0,
+        p3: 0,
+        p4: NaN,
+        p5: lat,
+        p6: lon,
+        p7: targetAlt,
+    })
+
+    if (result.ok) {
+        console.log(`[SAR] Reposition ke korban dikirim: ${lat}, ${lon}, alt=${targetAlt}m`);
+    } else {
+        alert(`Gagal mengirim perintah reposition: ${result.result}`);
+    }
+}
+
 // setInterval(pollVictimDetection, 1000);
 
 // ===== UPDATE STATS =====
 function updateStats() {
-    if (!window.parent.gcsConnection) return;
+    if (!window.parent.commands) return;
+    const isLive = window.parent.commands._radioActive() || window.parent.commands._piActive();
     const msgCountEl = document.getElementById('msgCount');
     const errorCountEl = document.getElementById('errorCount');
-    if (msgCountEl) msgCountEl.innerText = window.parent.gcsConnection.isConnected ? 'Live' : '0';
+    if (msgCountEl){
+        msgCountEl.innerText = isLive ? 'Live' : '0';
+        msgCountEl.style.color = isLive ? '#4caf50' : '#888';
+
+    } 
     if (errorCountEl) errorCountEl.innerText = '0';
 }
 setInterval(updateStats, 1000);

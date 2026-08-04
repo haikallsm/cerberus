@@ -426,16 +426,15 @@ async function readMissionFromFC() {
 }
 
 async function updateMissionStatus() {
+    const statusEl = document.getElementById('missionStatus');
     if (!isConnected()) {
-        document.getElementById('missionStatus').innerText = 'Not connected';
+        statusEl.innerText = 'Not connected';
+        statusEl.style.color = '#888';
         return;
     }
-    try {
-        // Ambil status dari API (sebelumnya sepertinya ini custom JS)
-        const response = await fetch(getBaseUrl() + '/mission/status');
-        const result = await response.json();
-        document.getElementById('missionStatus').innerText = result.status === 'success' ? result.total_missions + ' items' : 'Error';
-    } catch (err) {}
+    
+    statusEl.innerText = `Connected (${waypoints.filter(wp => wp.command !== 'HOME').length} items)`;
+    statusEl.style.color = '#00bcd4';
 }
 
 window.setHomeHere = async function(lat, lon) {

@@ -1,12 +1,3 @@
-// mavlink-protocol.js
-// Logika protokol MAVLink murni (parser byte-stream, tabel CRC, decoder per-pesan,
-// pembuat frame). TIDAK peduli transport-nya serial atau UDP -- dipakai bersama
-// oleh radio-mavlink.js (Serial/Radio) dan udp-mavlink.js (UDP/IP).
-//
-// PENTING: muat file ini via <script> SEBELUM radio-mavlink.js dan udp-mavlink.js
-// di index.html, karena keduanya mengandalkan const/class/function di file ini
-// yang otomatis ada di scope global (classic <script>, bukan module).
-
 function mavlinkCrc16Update(crc, byte) {
     let tmp = byte ^ (crc & 0xFF);
     tmp = (tmp ^ (tmp << 4)) & 0xFF;
@@ -30,6 +21,7 @@ const CRC_EXTRA = {
     51: 196,   // MISSION_REQUEST_INT
     40: 230,   // MISSION_REQUEST (legacy)
     66: 148,   // REQUEST_DATA_STREAM
+    70: 124,   // RC_CHANNELS_OVERRIDE
     73: 38,    // MISSION_ITEM_INT
     74: 20,    // VFR_HUD
     76: 152,   // COMMAND_LONG

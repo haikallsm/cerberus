@@ -1,23 +1,42 @@
 // main.js (proses utama Electron)
-const { app, BrowserWindow, session } = require('electron');
+const { app, BrowserWindow, session, ipcMain } = require('electron');
 const path = require('path');
+const fs = require('fs');
+const dgram = require('dgram'); // Wajib ditambahkan untuk membuka socket UDP
 
 app.commandLine.appendSwitch('disable-features', 'WebRtcHideLocalIpsWithMdns');
 
 let mainWindow;
+let udpClient = null; // Menyimpan status socket UDP
 
 app.whenReady().then(() => {
+    // === DIAGNOSTIC: pastikan preload.js benar-benar ada di path yang dituju ===
+    const preloadPath = path.join(__dirname, '/public/static/js/preload.js');
+    console.log('[DEBUG] __dirname     =', __dirname);
+    console.log('[DEBUG] preloadPath   =', preloadPath);
+    console.log('[DEBUG] file exists?  =', fs.existsSync(preloadPath));
+    // ============================================================================
+
     mainWindow = new BrowserWindow({
         width: 1280,
         height: 800,
         webPreferences: {
             contextIsolation: true,
             nodeIntegration: false,
+            // Wajib ditambahkan agar file preload dieksekusi sebelum HTML
+            preload: preloadPath
         }
     });
 
-    // Wajib: Electron butuh handler manual buat serial port picker,
-    // karena tidak ada UI bawaan seperti di Chrome
+    // === DIAGNOSTIC: tangkap error preload yang biasanya "ditelan diam-diam" ===
+    mainWindow.webContents.on('preload-error', (event, preloadPath, error) => {
+        console.error('[Electron] PRELOAD GAGAL DIMUAT!');
+        console.error('[Electron] Path:', preloadPath);
+        console.error('[Electron] Error:', error);
+    });
+    // ============================================================================
+
+    // Wajib: Electron butuh handler manual buat serial port picker
     mainWindow.webContents.session.on('select-serial-port', (event, portList, webContents, callback) => {
         event.preventDefault();
         if (portList.length === 0) {
@@ -44,6 +63,74 @@ app.whenReady().then(() => {
         console.error(`[Electron] did-fail-load: ${errorCode} - ${errorDescription}`);
     });
 });
+
+// ==========================================================
+// BACKEND UDP HANDLERS (Dikendalikan oleh dgram Node.js)
+// ==========================================================
+
+// 1. Menangani permintaan buka koneksi UDP dari Frontend
+ipcMain.handle('udp-connect', async (event, { ip, port }) => {
+    if (udpClient) {
+        udpClient.close();
+        udpClient = null;
+    }
+
+    return new Promise((resolve) => {
+        try {
+            udpClient = dgram.createSocket('udp4');
+
+            // 2. Mendengarkan data masuk dari FC/Drone
+            udpClient.on('message', (msg, rinfo) => {
+                if (mainWindow) {
+                    // Teruskan data mentah (byte array) kembali ke UI
+                    mainWindow.webContents.send('udp-data', new Uint8Array(msg));
+                }
+            });
+
+            udpClient.on('error', (err) => {
+                console.error('[UDP Backend] Error:', err);
+                if (udpClient) udpClient.close();
+                udpClient = null;
+            });
+
+            // UDP adalah connectionless, kita bind ke port lokal acak
+            udpClient.bind(() => {
+                console.log(`[UDP Backend] Socket terbuka, siap mengirim ke ${ip}:${port}`);
+                resolve({ ok: true });
+            });
+
+            // Simpan target IP dan Port untuk referensi saat mengirim
+            udpClient.targetIp = ip;
+            udpClient.targetPort = port;
+
+        } catch (err) {
+            console.error('[UDP Backend] Gagal membuat socket UDP:', err);
+            resolve({ ok: false, message: err.message });
+        }
+    });
+});
+
+// 3. Menangani permintaan putus koneksi UDP dari Frontend
+ipcMain.handle('udp-disconnect', async () => {
+    if (udpClient) {
+        udpClient.close();
+        udpClient = null;
+        console.log('[UDP Backend] Socket UDP ditutup');
+    }
+    return { ok: true };
+});
+
+// 4. Menangani pengiriman perintah (byte) dari Frontend ke Drone
+ipcMain.on('udp-send', (event, bytes) => {
+    if (udpClient && udpClient.targetIp && udpClient.targetPort) {
+        const buf = Buffer.from(bytes);
+        udpClient.send(buf, udpClient.targetPort, udpClient.targetIp, (err) => {
+            if (err) console.error('[UDP Backend] Gagal mengirim paket:', err);
+        });
+    }
+});
+
+// ==========================================================
 
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {

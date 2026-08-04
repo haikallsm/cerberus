@@ -1,24 +1,3 @@
-// udp-mavlink.js
-// Kelas UDP MAVLink untuk Electron -- API publik SENGAJA dibuat identik dengan
-// RadioMavlink (radio-mavlink.js), supaya command.js bisa pakai keduanya secara
-// bergantian tanpa perlu tahu bedanya (armDisarm, setMode, uploadMission, dst
-// semua method/signature-nya sama persis).
-//
-// BEDA dari RadioMavlink:
-//   - I/O sesungguhnya (kirim/terima byte) TIDAK langsung ke hardware, tapi
-//     lewat window.udpBridge (diekspos preload.js) -> IPC -> main.js -> dgram
-//     socket asli (Node.js). Renderer process tidak punya akses UDP socket.
-//   - connect(ip, port) bukan connect(baudRate) -- tidak ada konsep baud rate di UDP.
-//   - Mengirim HEARTBEAT sendiri secara periodik (1Hz) -- WAJIB untuk mode
-//     "UDP Client": ArduPilot/SITL baru tahu alamat GCS (dan mulai kirim balik
-//     telemetry) setelah menerima packet PERTAMA dari GCS. Tanpa heartbeat
-//     berkala, kalau tidak ada command yang dikirim untuk sementara waktu, FC
-//     bisa "lupa" alamat GCS dan berhenti mengirim data.
-//
-// Bergantung pada mavlink-protocol.js (CRC_EXTRA, DECODERS, MavlinkFrameParser,
-// buildMavlink1Frame, REQUESTED_STREAMS, STREAM_RATE_HZ) -- pastikan file itu
-// dimuat LEBIH DULU di index.html.
-
 class UdpMavlink {
     constructor() {
         this.parser = new MavlinkFrameParser((msgId, payload, sysid, compid) => this._handleFrame(msgId, payload, sysid, compid));
@@ -36,6 +15,8 @@ class UdpMavlink {
         this.targetSystem = 1;
         this.targetComponent = 1;
         this._streamsRequested = false;
+        this.rcChannels = [1500, 1500, 1000, 1500, 65535, 65535, 65535, 65535];
+        this._rcOverrideTimer = null;
 
         this._remoteIp = null;
         this._remotePort = null;
@@ -50,7 +31,6 @@ class UdpMavlink {
         this._missionCountWaiter = null;
         this._missionItemWaiter = null;
 
-        // Callback publik -- sama persis kontraknya dengan RadioMavlink
         this.onTelemetry = null;
         this.onMavlog = null;
         this.onConnect = null;
@@ -83,12 +63,14 @@ class UdpMavlink {
 
         this._startGcsHeartbeat();
         this._startWatchdog();
+        this._startRcOverrideLoop();
         if (this.onConnect) this.onConnect();
     }
 
     async disconnect() {
         this._stopGcsHeartbeat();
         this._stopWatchdog();
+        this._stopRcOverrideLoop();
         if (this._dataUnsubscribe) { this._dataUnsubscribe(); this._dataUnsubscribe = null; }
         if (window.udpBridge) {
             try { await window.udpBridge.disconnect(); } catch (e) {}
@@ -99,8 +81,6 @@ class UdpMavlink {
         if (this.onDisconnect) this.onDisconnect();
     }
 
-    // Kirim HEARTBEAT kita sendiri (identitas GCS) tiap 1 detik -- WAJIB di UDP
-    // client mode, lihat penjelasan di komentar atas file.
     _startGcsHeartbeat() {
         this._stopGcsHeartbeat();
         const sendGcsHeartbeat = () => {
@@ -135,6 +115,24 @@ class UdpMavlink {
 
     _stopWatchdog() {
         if (this._watchdogTimer) { clearInterval(this._watchdogTimer); this._watchdogTimer = null; }
+    }
+
+    _startRcOverrideLoop() {
+        this._stopRcOverrideLoop();
+        this._rcOverrideTimer = setInterval(() => {
+            if (this.telemetry.connected && this.rcChannels.some(ch => ch !== 65535)) {
+                const payload = [this.targetSystem, this.targetComponent];
+                for (let i = 0; i < 8; i++) {
+                    const ch = this.rcChannels[i];
+                    payload.push(ch & 0xFF, (ch >> 8) & 0xFF);
+                }
+                this._sendFrame(70, payload, CRC_EXTRA[70]).catch(()=>{});
+            }
+        }, 500);
+    }
+
+    _stopRcOverrideLoop() {
+        if (this._rcOverrideTimer) { clearInterval(this._rcOverrideTimer); this._rcOverrideTimer = null; }
     }
 
     async _sendFrame(msgId, payloadBytes, crcExtra) {
@@ -380,6 +378,19 @@ class UdpMavlink {
     async reboot() { return this.sendCommandLong(246, { p1: 1 }); }
     async setHome(lat, lon, alt = 0) { return this.sendCommandLong(179, { p1: 0, p5: lat, p6: lon, p7: alt }); }
     async setServo(channel, pwm) { return this.sendCommandLong(183, { p1: channel, p2: pwm }); }
+    async sendRcOverride(chIndex, pwmValue) {
+        if (chIndex < 0 || chIndex > 7) {
+            throw new Error(`Channel index ${chIndex} tidak valid. Harus antara 0-7.`);
+        }
+        this.rcChannels[chIndex] = pwmValue;
+
+        const payload = [this.targetSystem, this.targetComponent];
+        for (let i = 0; i < 8; i++) {
+            const ch = this.rcChannels[i];
+            payload.push(ch & 0xFF, (ch >> 8) & 0xFF);
+        }
+        await this._sendFrame(70, payload, CRC_EXTRA[70]);
+    }
 
     async calibrateMag(compassId = -1) { return this.sendCommandLong(241, { p3: 1, p4: compassId >= 0 ? compassId : 0 }); }
     async calibrateAccel(retries = 0) { return this.sendCommandLong(241, { p1: 1, p2: retries }); }
@@ -405,13 +416,8 @@ class UdpMavlink {
         return true;
     }
 
-    // --- Semua handler di bawah ini SALINAN PERSIS dari RadioMavlink ---
-    // (logika pemrosesan pesan sama sekali tidak bergantung ke transport)
-
     _handleFrame(msgId, payload, sysid, compid) {
         if (msgId === 0 && sysid !== this._gcsSysId) {
-            // Abaikan HEARTBEAT dari diri sendiri (echo, jarang tapi bisa terjadi
-            // di beberapa setup UDP broadcast/loopback) -- hanya proses HEARTBEAT dari FC.
             this.lastHeartbeatTime = Date.now();
             if (!this._streamsRequested) {
                 this.targetSystem = sysid;

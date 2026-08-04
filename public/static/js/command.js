@@ -3,165 +3,138 @@ const commands = {
         return !!(window.radioMavlink && window.radioMavlink.isLive());
     },
     _piActive() {
-        return !!(window.gcsConnection && window.gcsConnection.isConnected);
+        return !!(window.udpMavlink && window.udpMavlink.isLive());
     },
-
-    async _piPost(path, body = {}) {
-        const resp = await fetch(window.gcsConnection.baseUrl + path, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-        });
-        const data = await resp.json();
-        if (data.status && data.status !== 'success' && data.status !== 'ok') {
-            throw new Error(data.message || `Request ke ${path} gagal`);
-        }
-        return data;
+    
+    _getActiveLink() {
+        if (this._radioActive()) return window.radioMavlink;
+        if (this._piActive()) return window.udpMavlink;
+        throw new Error('Tidak ada koneksi aktif. Silakan hubungkan Radio atau UDP terlebih dahulu.');
     },
 
     async armDisarm(arm) {
-        if (this._radioActive()) return window.radioMavlink.armDisarm(arm);
-        if (this._piActive()) return this._piPost('/command', { cmd: arm ? 'ARM' : 'DISARM' });
-        throw new Error('Tidak ada koneksi aktif');
+        return this._getActiveLink().armDisarm(arm);
     },
 
     async reboot() {
-        if (this._radioActive()) return window.radioMavlink.reboot();
-        if (this._piActive()) return this._piPost('/command/reboot');
-        throw new Error('Tidak ada koneksi aktif');
+        return this._getActiveLink().reboot();
     },
 
     async setFlightMode(mode) {
-        if (this._radioActive()) return window.radioMavlink.setMode(mode);
-        if (this._piActive()) return this._piPost('/command', { cmd: 'MODE:' + mode });
-        throw new Error('Tidak ada koneksi aktif');
+        return this._getActiveLink().setMode(mode);
     },
 
     async setSafetySwitch(turnOn) {
-        // MAV_CMD_DO_SET_SAFETY_SWITCH_STATE (294): 0.0 = on, 1.0 = off
-        const p1Value = turnOn ? 0.0 : 1.0; 
-        if (this._radioActive()) return window.radioMavlink.sendCommandLong(294, { p1: p1Value });
-        if (this._piActive()) return this._piPost('/safety', { state: turnOn ? 'on' : 'off' });
-        throw new Error('Tidak ada koneksi aktif');
+        const baseMode = 128.0;
+        const customMode = turnOn ? 1.0 : 0.0;
+
+        if (turnOn) {
+            console.log("[Command] HARDWARE SAFETY");
+        } else {
+            console.log("[Command] UNSAFETY");
+        }
+
+        const ack = await this._getActiveLink().sendCommandLong(176, { 
+            p1: baseMode, 
+            p2: customMode,
+            p3: 0.0,
+            p4: 0.0
+        });
+
+        if (!ack.ok) {
+            console.error("[Command] Safety Switch Failed", ack);
+        }
+        return ack;
     },
 
     async setServo(channel, pwm) {
-        if (this._radioActive()) return window.radioMavlink.setServo(channel, pwm);
-        if (this._piActive()) return this._piPost('/command/servo', { channel, pwm });
-        throw new Error('Tidak ada koneksi aktif');
+        return this._getActiveLink().setServo(channel, pwm);
+    },
+
+    async setHybridMode(state) {
+        const stateStr = String(state).toLowerCase();
+        const CH5_INDEX = 4;
+
+        let pwm;
+        if(['low', 'rover'].includes(stateStr)) {
+            pwm = 1100;
+            console.log("[COMMAND] HYBRID MODE: ROVER (LOW)");
+        } else if(['mid', 'middle', 'copter_safe'].includes(stateStr)) {
+            pwm = 1500;
+            console.log("[COMMAND] HYBRID MODE: COPTER & SAFETY (MID)");
+        } else if (['high', 'copter_unsafe', 'ready'].includes(stateStr)) {
+            pwm = 2000;
+            console.log("[COMMAND] HYBRID MODE: COPTER & UNSAFETY (HIGH)");
+        } else if (['release', 'off'].includes(stateStr)) {
+            pwm = 65535;
+            console.log("[COMMAND] HYBRID MODE: RELEASED");
+        } else {
+            throw new Error(`Invalid hybrid mode state: ${state}`);
+        }
+        return this._getActiveLink().sendRcOverride(CH5_INDEX, pwm);
     },
 
     async setHome(lat, lon, alt = 0) {
-        if (this._radioActive()) return window.radioMavlink.setHome(lat, lon, alt);
-        if (this._piActive()) return this._piPost('/command/set_home', { lat, lon, alt });
-        throw new Error('Tidak ada koneksi aktif');
+        return this._getActiveLink().setHome(lat, lon, alt);
     },
 
     async getAllParams(onProgress) {
-        if (this._radioActive()) return window.radioMavlink.getAllParams(onProgress);
-        if (this._piActive()) {
-            const resp = await fetch(window.gcsConnection.baseUrl + '/param/list');
-            const data = await resp.json();
-            if (data.status !== 'success') throw new Error(data.message);
-            return data.params;
-        }
-        throw new Error('Tidak ada koneksi aktif');
+        return this._getActiveLink().getAllParams(onProgress);
     },
 
     async setParam(name, value, paramType = 9) {
-        if (this._radioActive()) return window.radioMavlink.setParam(name, value, paramType);
-        if (this._piActive()) return this._piPost('/param/set', { name, value });
-        throw new Error('Tidak ada koneksi aktif');
+        return this._getActiveLink().setParam(name, value, paramType);
     },
 
     async getPID(axis) {
-        if (this._radioActive()) return window.radioMavlink.getPID(axis);
-        if (this._piActive()) {
-            const resp = await fetch(window.gcsConnection.baseUrl + `/param/pid/${axis}`);
-            const data = await resp.json();
-            if (data.status !== 'success') throw new Error(data.message);
-            return data.pid;
-        }
-        throw new Error('Tidak ada koneksi aktif');
+        return this._getActiveLink().getPID(axis);
     },
 
     async setPID(axis, pid) {
-        if (this._radioActive()) return window.radioMavlink.setPID(axis, pid);
-        if (this._piActive()) return this._piPost(`/param/pid/${axis}`, pid);
-        throw new Error('Tidak ada koneksi aktif');
+        return this._getActiveLink().setPID(axis, pid);
     },
 
     async uploadMission(items) {
-        if (this._radioActive()) return window.radioMavlink.uploadMission(items);
-        if (this._piActive()) return this._piPost('/mission/upload', { items });
-        throw new Error('Tidak ada koneksi aktif');
+        return this._getActiveLink().uploadMission(items);
     },
 
     async downloadMission() {
-        if (this._radioActive()) return window.radioMavlink.downloadMission();
-        if (this._piActive()) {
-            const resp = await fetch(window.gcsConnection.baseUrl + '/mission/read');
-            const data = await resp.json();
-            if (data.status !== 'success') throw new Error(data.message);
-            return data.items;
-        }
-        throw new Error('Tidak ada koneksi aktif');
+        return this._getActiveLink().downloadMission();
     },
 
     async startAccel3Axis() {
-        if (this._radioActive()){
-            window.acceptCalStep = 0;
-            return window.radioMavlink.sendCommandLong(241, { p5: 1.0 });
-        } 
-        if (this._piActive()) return this._piPost('/command/calibrate', { type: 'accel_3axis' });
-        throw new Error('Tidak ada koneksi aktif');
+        window.acceptCalStep = 0;
+        return this._getActiveLink().sendCommandLong(241, { p5: 1.0 });
     },
 
     async startAccelLevel() {
-        if (this._radioActive()) return window.radioMavlink.sendCommandLong(241, { p5: 2.0 });
-        if (this._piActive()) return this._piPost('/command/calibrate', { type: 'accel_level' });
-        throw new Error('Tidak ada koneksi aktif');
+        return this._getActiveLink().sendCommandLong(241, { p5: 2.0 });
     },
 
     async startAccelSimple() {
-        if (this._radioActive()) return window.radioMavlink.sendCommandLong(241, { p5: 4.0 });
-        if (this._piActive()) return this._piPost('/command/calibrate', { type: 'accel_simple' });
-        throw new Error('Tidak ada koneksi aktif');
+        return this._getActiveLink().sendCommandLong(241, { p5: 4.0 });
     },
 
     async nextAccelStep() {
-        if (this._radioActive()){
-            window.acceptCalStep += 1;
-          return window.radioMavlink.sendCommandAck(window.acceptCalStep, 1);  
-        } 
-        if (this._piActive()) return this._piPost('/command/calibrate/next', { position: 'next' });
-        throw new Error('Tidak ada koneksi aktif');
+        window.acceptCalStep += 1;
+        return this._getActiveLink().sendCommandAck(window.acceptCalStep, 1);  
     },
 
     async startCompassCal() {
-        if (this._radioActive()) {
-            window.compassSuccessMask = 0; // Reset memori kompas
-            return window.radioMavlink.sendCommandLong(42424, { p3: 1.0 }); // 42424 = START_MAG_CAL
-        }
-        if (this._piActive()) return this._piPost('/command/calibrate/compass/start');
-        throw new Error('Tidak ada koneksi aktif');
+        window.compassSuccessMask = 0; // Reset memori kompas
+        return this._getActiveLink().sendCommandLong(42424, { p3: 1.0 }); // 42424 = START_MAG_CAL
     },
 
     async cancelCompassCal() {
-        if (this._radioActive()) return window.radioMavlink.sendCommandLong(42426, {}); // 42426 = CANCEL_MAG_CAL
-        if (this._piActive()) return this._piPost('/command/calibrate/compass/cancel');
-        throw new Error('Tidak ada koneksi aktif');
+        return this._getActiveLink().sendCommandLong(42426, {}); // 42426 = CANCEL_MAG_CAL
     },
 
     async acceptCompassCal() {
-        if (this._radioActive()) {
-            const mask = window.compassSuccessMask || 0;
-            if (mask === 0) throw new Error("Tidak ada compass yang SUCCESS. Silakan kalibrasi ulang.");
-            return window.radioMavlink.sendCommandLong(42425, { p1: mask }); // 42425 = ACCEPT_MAG_CAL
-        }
-        if (this._piActive()) return this._piPost('/command/calibrate/compass/accept');
-        throw new Error('Tidak ada koneksi aktif');
+        const mask = window.compassSuccessMask || 0;
+        if (mask === 0) throw new Error("Tidak ada compass yang SUCCESS. Silakan kalibrasi ulang.");
+        return this._getActiveLink().sendCommandLong(42425, { p1: mask }); // 42425 = ACCEPT_MAG_CAL
     },
 };
+
 window.compassSuccessMask = 0;
 window.commands = commands;

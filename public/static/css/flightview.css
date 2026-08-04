@@ -31,10 +31,10 @@ videostream {
 
 .telemetry-panel {
     position: absolute;
-    top: 78px;
+    top: 118px; /* digeser dari 78px: menyisakan ruang utk .telem-tabs-header (~40px) di atasnya */
     right: 14px;
-    left: auto !important;
-    height: 85vh; /* 80% of window height */
+    left: auto;
+    height: calc(85vh - 40px); /* dikurangi sebesar ruang yg diambil header, biar tepi bawah panel tidak berubah */
     width: 280px;  /* 10% of window width */
     max-width: 90vw;
     padding: 12px;
@@ -45,6 +45,22 @@ videostream {
     border: 1px solid rgba(56, 189, 248, 0.18);
     box-shadow: 0 18px 40px rgba(2, 6, 23, 0.45);
     z-index: 1000;
+    pointer-events: auto;
+}
+
+/* Header tab Telems/Actions -- dipindah keluar dari .telemetry-panel supaya tidak ikut
+   ke-scroll saat konten panel di-scroll (panel punya overflow-y: auto). Posisinya
+   independen tapi diselaraskan (right/width sama) dgn .telemetry-panel di bawahnya. */
+.telem-tabs-header {
+    position: absolute;
+    top: 78px;
+    right: 14px;
+    left: auto;
+    width: 280px;
+    max-width: 90vw;
+    box-sizing: border-box;
+    padding: 0 12px;
+    z-index: 1001; /* di atas .telemetry-panel biar tetap ke-klik saat drag panel bersinggungan */
     pointer-events: auto;
 }
 
@@ -289,3 +305,98 @@ videostream {
 .signal-bar.active.green { background-color: #4caf50; }
 .signal-bar.active.yellow { background-color: #ff9800; }
 .signal-bar.active.red { background-color: #f44336; }
+
+
+/* ===== TELEMETRY TABS & PAGES ===== */
+.telem-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid #333;
+    padding-bottom: 4px;
+}
+
+.telem-tab-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: #888;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    padding: 6px 0;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-bottom: 2px solid transparent;
+}
+
+.telem-tab-btn:hover {
+    color: #ccc;
+}
+
+.telem-tab-btn.active {
+    color: #00bcd4;
+    border-bottom: 2px solid #00bcd4;
+}
+
+/* ===== ACTION PAGE STYLES ===== */
+.action-section-title {
+    font-size: 10px;
+    color: #888;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Diubah menjadi 3 kolom mengikuti telemetry-grid */
+.action-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 3px;
+}
+
+/* Disesuaikan bentuknya mengikuti .telemetry-item */
+.action-btn {
+    background: #1f1f1f;
+    border: 1px solid #333;
+    color: #00e5ff;
+    padding: 6px;
+    border-radius: 7px;
+    font-size: 10px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-height: 56px; /* Tinggi disamakan dengan item telemetri */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.action-btn:hover { background: #2a2a2a; border-color: #00bcd4; }
+.action-btn:active { transform: scale(0.97); }
+
+.btn-arm { color: #f44336; border-color: rgba(244, 67, 54, 0.3); }
+.btn-arm:hover { border-color: #f44336; background: rgba(244, 67, 54, 0.1); }
+
+.btn-disarm { color: #4caf50; border-color: rgba(76, 175, 80, 0.3); }
+.btn-disarm:hover { border-color: #4caf50; background: rgba(76, 175, 80, 0.1); }
+
+.btn-rtl { color: #ff9800; border-color: rgba(255, 152, 0, 0.3); }
+.btn-rtl:hover { border-color: #ff9800; background: rgba(255, 152, 0, 0.1); }
+
+.btn-warning { color: #ff9800; border-color: rgba(255, 152, 0, 0.3); }
+.btn-warning:hover { border-color: #ff9800; background: rgba(255, 152, 0, 0.1); }
+
+.btn-danger { color: #ff4757; border-color: rgba(255, 71, 87, 0.3); }
+.btn-danger:hover { border-color: #ff4757; background: rgba(255, 71, 87, 0.1); }
+
+.action-select {
+    width: 100%;
+    background: #1f1f1f;
+    border: 1px solid #333;
+    color: #00bcd4;
+    padding: 6px;
+    border-radius: 7px;
+    font-size: 11px;
+    outline: none;
+}
