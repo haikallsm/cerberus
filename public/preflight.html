@@ -27,16 +27,16 @@
                 <div class="status-dot ok" id="compassStatus"></div>
             </div>
             <div class="health-value" id="compassHealth">Wait</div>
-            <div class="health-detail">Interference: <span id="compassInterf">Low</span></div>
+            <div class="health-detail">Status: <span id="compassInterf">--</span></div>
         </div>
 
         <div class="health-card">
             <div class="health-header">
-                <div class="health-title">Accelerometer</div>
-                <div class="status-dot ok" id="accelStatus"></div>
+                <div class="health-title">RC5 Input</div>
+                <div class="status-dot ok" id="rc5Status"></div>
             </div>
-            <div class="health-value" id="accelHealth">0.0, 0.0, 0.0</div>
-            <div class="health-detail">Mag: 0.00 m/s²</div>
+            <div class="health-value" id="rc5Health">0</div>
+            <div class="health-detail">PWM Value</div>
         </div>
 
         <div class="health-card">
@@ -497,18 +497,14 @@ function updateHealthCards() {
     document.getElementById('gpsSats').innerText = satellites;
     document.getElementById('gpsHdop').innerText = hdop !== 99.9 ? hdop.toFixed(2) : '--';
     
-    const accX = telemetryData.accel_x || 0;
-    const accY = telemetryData.accel_y || 0;
-    const accZ = telemetryData.accel_z || 0;
-    const accMag = telemetryData.accel_mag || 0;
-
-    const accelStatus = document.getElementById('accelStatus');
-    if (accMag > 8.5 && accMag < 11.0) accelStatus.className = 'status-dot ok';
-    else if (accMag === 0) accelStatus.className = 'status-dot error';
-    else accelStatus.className = 'status-dot warning'; 
-
-    document.getElementById('accelHealth').innerText = `${accX.toFixed(1)}, ${accY.toFixed(1)}, ${accZ.toFixed(1)}`;
-    document.querySelector('#accelHealth + .health-detail').innerText = `Mag: ${accMag.toFixed(2)} m/s²`;
+    const rc5 = telemetryData.rc5_in || 0;
+    const rc5Status = document.getElementById('rc5Status');
+    if (rc5 > 0) {
+        rc5Status.className = 'status-dot ok';
+    } else {
+        rc5Status.className = 'status-dot warning';
+    }
+    document.getElementById('rc5Health').innerText = rc5;
 
     const gyroX = telemetryData.gyro_x || 0;
     const gyroY = telemetryData.gyro_y || 0;
@@ -521,18 +517,24 @@ function updateHealthCards() {
     document.querySelector('#gyroHealth + .health-detail').innerText = `deg/s (X, Y, Z)`;
 
     const magField = telemetryData.mag_field || 0;
-    const magVar = telemetryData.ekf_compass_var || 0; 
-    
     const compassStatus = document.getElementById('compassStatus');
-    compassStatus.className = magField > 0 ? 'status-dot ok' : 'status-dot error';
     
-    document.getElementById('compassHealth').innerText = magField > 0 ? magField.toFixed(2) + ' G' : 'Wait';
-    document.getElementById('compassInterf').innerText = magVar > 0 ? `Var: ${magVar.toFixed(3)}` : 'Low';
+    if (magField > 0) {
+        compassStatus.className = 'status-dot ok';
+        document.getElementById('compassHealth').innerText = 'GOOD';
+        document.getElementById('compassHealth').style.color = '#00e5ff';
+        document.getElementById('compassInterf').innerText = 'Normal';
+    } else {
+        compassStatus.className = 'status-dot error';
+        document.getElementById('compassHealth').innerText = 'BAD';
+        document.getElementById('compassHealth').style.color = '#f44336';
+        document.getElementById('compassInterf').innerText = 'Check Sensor';
+    }
 
     const systemStatus = telemetryData.system_status || 'UNKNOWN';
     const allOk = systemStatus === 'OK' || systemStatus === 'STANDBY';
     
-    ['compass', 'accel', 'gyro'].forEach(sensor => {
+    ['compass', 'rc5', 'gyro'].forEach(sensor => {
         const statusDot = document.getElementById(sensor + 'Status');
         if (statusDot) {
             if (allOk) {

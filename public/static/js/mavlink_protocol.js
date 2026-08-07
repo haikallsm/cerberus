@@ -20,10 +20,12 @@ const CRC_EXTRA = {
     47: 153,   // MISSION_ACK
     51: 196,   // MISSION_REQUEST_INT
     40: 230,   // MISSION_REQUEST (legacy)
+    65: 118,
     66: 148,   // REQUEST_DATA_STREAM
     70: 124,   // RC_CHANNELS_OVERRIDE
     73: 38,    // MISSION_ITEM_INT
     74: 20,    // VFR_HUD
+    75: 158,   // COMMAND_INT
     76: 152,   // COMMAND_LONG
     77: 143,   // COMMAND_ACK
     109: 185,  // RADIO_STATUS
@@ -168,7 +170,7 @@ function readI32(dv, off) { return dv.getInt32(off, true); }
 function readU16(dv, off) { return dv.getUint16(off, true); }
 
 const MAV_TYPE_ROVER = 10;
-const MAV_TYPE_COPTER_SET = new Set([2, 13, 14]);
+const MAV_TYPE_COPTER_SET = new Set([2, 13, 14, 19, 20, 21]);
 const COPTER_MODE_MAP = { 0:'STABILIZE',2:'ALT_HOLD',3:'AUTO',4:'GUIDED',5:'LOITER',6:'RTL',9:'LAND',16:'POSHOLD',20:'GUIDED_NOGPS' };
 const ROVER_MODE_MAP = { 0:'MANUAL',3:'STEERING',4:'HOLD',5:'LOITER',10:'AUTO',11:'RTL',15:'GUIDED' };
 
@@ -237,6 +239,15 @@ const DECODERS = {
     47: (bytes) => {
         return { _kind:'mission_ack', result: bytes[2] };
     },
+
+    65: (bytes) => {
+        const dv = new DataView(new Uint8Array(bytes).buffer);
+        return {
+            _kind: 'telemetry',
+            rc5_in: dv.getUint16(12, true),
+        }
+    },
+
     73: (bytes) => {
         const dv = new DataView(new Uint8Array(bytes).buffer);
         return {

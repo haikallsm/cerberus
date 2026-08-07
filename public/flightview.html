@@ -899,7 +899,7 @@ async function goToVictim(lat, lon, alt = null) {
     const currentMode =t.flight_mode || 'UNKNOWN';
 
     if (isArmed && currentMode === 'AUTO') {
-        const confirmMsg= `⚠️ Drone sedang ARMED dan menjalankan mission (AUTO).\n\n` +
+        const confirmMsg= `Drone sedang ARMED dan menjalankan mission (AUTO).\n\n` +
             `Mengirim drone ke titik korban akan MEMINDAHKAN mode ke GUIDED dan ` +
             `menginterupsi mission saat ini (mission TIDAK dihapus, hanya di-pause).\n\n` +
             `Lat: ${lat.toFixed(7)}, Lon: ${lon.toFixed(7)}\n\n` +

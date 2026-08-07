@@ -121,14 +121,15 @@ class UdpMavlink {
         this._stopRcOverrideLoop();
         this._rcOverrideTimer = setInterval(() => {
             if (this.telemetry.connected && this.rcChannels.some(ch => ch !== 65535)) {
-                const payload = [this.targetSystem, this.targetComponent];
+                const payload = [];
                 for (let i = 0; i < 8; i++) {
                     const ch = this.rcChannels[i];
                     payload.push(ch & 0xFF, (ch >> 8) & 0xFF);
                 }
+                payload.push(this.targetSystem, this.targetComponent);
                 this._sendFrame(70, payload, CRC_EXTRA[70]).catch(()=>{});
             }
-        }, 500);
+        }, 100);
     }
 
     _stopRcOverrideLoop() {
@@ -186,23 +187,23 @@ class UdpMavlink {
 
     async sendCommandInt(command, params = {}, waitAck = true, timeout = 3000) {
         const p = { param1:0, param2:0, param3:0, param4:0, x:0, y:0, z:0, frame:0, ...params };
-        const buf = new ArrayBuffer(1+1+1+2+1+1+4*4+4+4+4);
+        const buf = new ArrayBuffer(35);
         const dv = new DataView(buf);
         let off=0;
-        dv.setUint8(off, this.targetSystem); off++;
-        dv.setUint8(off, this.targetComponent); off++;
-        dv.setUint8(off, p.frame); off++;
-        dv.setUint16(off, command, true); off+=2;
-        dv.setUint8(off, 0); off++;
-        dv.setUint8(off, 0); off++;
-        dv.setFloat32(off, p.param1, true); off+=4;
-        dv.setFloat32(off, p.param2, true); off+=4;
-        dv.setFloat32(off, p.param3, true); off+=4;
-        dv.setFloat32(off, p.param4, true); off+=4;
-        dv.setInt32(off, p.x, true); off+=4;
-        dv.setInt32(off, p.y, true); off+=4;
-        dv.setFloat32(off, p.z, true); off+=4;
-        const payload = Array.from(new Uint8Array(buf));
+        dv.setFloat32(0, p.param1, true);
+        dv.setFloat32(4, p.param2, true);
+        dv.setFloat32(8, p.param3, true);
+        dv.setFloat32(12, p.param4, true);
+        dv.setInt32(16, p.x, true);
+        dv.setInt32(20, p.y, true);
+        dv.setFloat32(24, p.z, true);
+        dv.setUint16(28, command, true);
+        dv.setUint8(30, this.targetSystem);
+        dv.setUint8(31, this.targetComponent);
+        dv.setUint8(32, p.frame);
+        dv.setUint8(33, 0);  // current
+        dv.setUint8(34, 0);  // autocontinue
+        const payload = Array.from(new Uint8Array(buf))
         if (!waitAck) {
             await this._sendFrame(75, payload, CRC_EXTRA[75]);
             return { ok: true, result: null };
@@ -384,12 +385,17 @@ class UdpMavlink {
         }
         this.rcChannels[chIndex] = pwmValue;
 
-        const payload = [this.targetSystem, this.targetComponent];
-        for (let i = 0; i < 8; i++) {
-            const ch = this.rcChannels[i];
-            payload.push(ch & 0xFF, (ch >> 8) & 0xFF);
-        }
-        await this._sendFrame(70, payload, CRC_EXTRA[70]);
+        const buildPayload = () => {
+            const payload = [];
+            for (let i = 0; i < 8; i++) {
+                const ch = this.rcChannels[i];
+                payload.push(ch & 0xFF, (ch >> 8) & 0xFF);
+            }
+            payload.push(this.targetSystem, this.targetComponent);
+            return payload;
+        };
+        await this._sendFrame(70, buildPayload(), CRC_EXTRA[70]);
+        this._sendFrame(70, buildPayload(), CRC_EXTRA[70]).catch(()=>{});
     }
 
     async calibrateMag(compassId = -1) { return this.sendCommandLong(241, { p3: 1, p4: compassId >= 0 ? compassId : 0 }); }
