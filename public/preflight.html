@@ -106,25 +106,28 @@
                     <select id="cmdSelect" class="action-select">
                         <option value="arm">ARM</option>
                         <option value="disarm">DISARM</option>
-                        <option value="safety_toggle">Toggle Safety</option>
-                        <option value="reboot">Reboot FC</option>
-                        <option value="takeoff">Takeoff</option>
-                        <option value="land">Land</option>
+                        <option value="safety_off">SAFETY OFF</option>
+                        <option value="safety_on">SAFETY ON</option>
+                        <option value="reboot">REBOOT</option>
+                        <option value="takeoff">TAKEOFF</option>
+                        <option value="land">LAND</option>
                         <option value="rtl">RTL</option>
+                        <option value="rover">ROVER</option>
+                        <option value="copter">COPTER</option>
                     </select>
-                    <button class="btn-action" onclick="executeCommand()">Action</button>
+                    <button class="btn-action" onclick="doAction(document.getElementById('cmdSelect').value)">Action</button>
                 </div>
 
                 <!-- BARIS 2: Flight Mode (Stabilize, AltHold, Loiter, Guided, Auto) -->
                 <div class="action-row">
                     <select id="modeSelect" class="action-select">
-                        <option value="stabilize">Stabilize</option>
-                        <option value="althold">Alt Hold</option>
-                        <option value="loiter">Loiter</option>
-                        <option value="guided">Guided</option>
-                        <option value="auto">Auto</option>
+                        <option value="0">STABILIZE</option>
+                        <option value="2">ALT_HOLD</option>
+                        <option value="3">AUTO</option>
+                        <option value="4">GUIDED</option>
+                        <option value="5">LOITER</option>
                     </select>
-                    <button class="btn-action" onclick="executeMode()">Set Mode</button>
+                    <button class="btn-action" onclick="doAction('setmode')">Set Mode</button>
                 </div>
 
                 <!-- ARM/DISARM Status Badge -->
@@ -155,19 +158,6 @@ const isConnected = () => {
     return false;
 };
 
-async function sendArmDisarm(cmd) {
-    if (!isConnected()) { alert('Flight Controller is not connected.'); return; }
-    if (cmd === 'ARM' && !confirm('Yakin ingin ARM? Pastikan propeller sudah dilepas atau area sekitar aman.')) return;
-    const arm = (cmd === 'ARM');
-    logToConsole(`> Sending ${cmd}...`);
-    try {
-        const result = await window.parent.mavFeatures.armDisarm(arm);
-        logToConsole(result.ok ? `System: Perintah ${cmd} terkirim` : `Error: FC menolak ${cmd} (result: ${result.result})`);
-    } catch (err) {
-        logToConsole(`Error: ${err.message}`);
-    }
-}
-
 function updateArmStatusUI() {
     const badge = document.getElementById('armStatusBadge');
     const btnArm = document.getElementById('btnArm');
@@ -182,151 +172,85 @@ function updateArmStatusUI() {
     if (btnDisarm) btnDisarm.disabled = !isArmed;
 }
 
-const MODE_MAP = {
-    'stabilize': 0,
-    'althold': 2,
-    'loiter': 5,
-    'guided': 4,
-    'auto': 3,
-    // tambahkan jika perlu
-};
-
-// ===== EKSEKUSI PERINTAH (baris 1) =====
-function executeCommand() {
-    const select = document.getElementById('cmdSelect');
-    const cmd = select.value;
-    switch(cmd) {
-        case 'arm': sendArmDisarm('ARM'); break;
-        case 'disarm': sendArmDisarm('DISARM'); break;
-        case 'safety_toggle': toggleSafetySwitch(); break;
-        case 'reboot': rebootFC(); break;
-        case 'takeoff': 
-            // Ketinggian tidak lagi diambil dari input, 
-            // tapi dikirim sebagai 0 (FC akan pakai default/mission)
-            sendTakeoff(0); 
-            break;
-        case 'land': sendLand(); break;
-        case 'rtl': sendRTL(); break;
-        default: logToConsole('Unknown command');
-    }
-}
-
-// ===== EKSEKUSI FLIGHT MODE (baris 2) =====
-function executeMode() {
-    const select = document.getElementById('modeSelect');
-    const mode = select.value;
-    const modeCode = MODE_MAP[mode];
-    if (modeCode === undefined) {
-        logToConsole(`Unknown mode: ${mode}`);
+async function doAction(action) {
+    if (!window.parent.commands) {
+        alert("Sistem command belum termuat.");
         return;
     }
-    switchFlightMode(mode, modeCode);
-}
-
-async function switchFlightMode(modeName, modeCode) {
-    logToConsole(`> Switching flight mode to ${modeName.toUpperCase()}...`);
-    try {
-        const result = await window.parent.mavFeatures.setFlightMode(modeCode);
-        logToConsole(result.ok ? `System: Perintah mode ${modeName} terkirim` : `Error: Mode ditolak (result: ${result.result})`);
-    } catch (err) {
-        logToConsole(`Error: ${err.message}`);
+    
+    const isLive = window.parent.commands._radioActive() || window.parent.commands._piActive();
+    if (!isLive) {
+        alert("Gagal: Tidak ada koneksi aktif ke Drone.");
+        return;
     }
-}
 
-async function sendTakeoff(alt) {
-    if (!isConnected()) { alert('Flight Controller is not connected.'); return; }
-    if (!confirm('Execute Takeoff?')) return;
-    logToConsole('> Sending command: TAKEOFF...');
-    try {
-        const result = await window.parent.mavFeatures.takeoff(alt || 10);
-        logToConsole(result.ok ? `System: ${result.message}` : `Error: ${result.message}`);
-    } catch (err) {
-        logToConsole(`Error: ${err.message}`);
-    }
-}
+    const link = window.parent.commands._getActiveLink();
+    logToConsole(`> Mengeksekusi aksi: ${action.toUpperCase()}...`);
 
-async function sendLand() {
-    if (!isConnected()) { alert('Flight Controller is not connected.'); return; }
-    if (!confirm('Land drone?')) return;
-    logToConsole('> Sending command: LAND...');
     try {
-        const result = await window.parent.mavFeatures.land();
-        logToConsole(result.ok ? `System: ${result.message}` : `Error: ${result.message}`);
-    } catch (err) {
-        logToConsole(`Error: ${err.message}`);
-    }
-}
-
-async function sendRTL() {
-    if (!isConnected()) { alert('Flight Controller is not connected.'); return; }
-    if (!confirm('Return to Launch?')) return;
-    logToConsole('> Sending command: RTL...');
-    try {
-        const result = await window.parent.mavFeatures.rtl();
-        logToConsole(result.ok ? `System: ${result.message}` : `Error: ${result.message}`);
-    } catch (err) {
-        logToConsole(`Error: ${err.message}`);
-    }
-}
-
-async function toggleSafetySwitch() {
-    const targetState = !safetyIsOff; 
-    logToConsole(`> Setting safety switch to ${targetState ? 'ON' : 'OFF'}...`);
-    try {
-        const result = await window.parent.mavFeatures.setSafetySwitch(targetState);
-        if (result.ok) {
-            safetyIsOff = targetState;
-            logToConsole(`System: Safety ${safetyIsOff ? 'ON' : 'OFF'} command sent`);
-        } else {
-            logToConsole(`Error: Safety switch command ditolak (result: ${result.result})`);
+        switch(action) {
+            case 'arm': 
+                await window.parent.commands.armDisarm(true); 
+                logToConsole("System: Perintah ARM terkirim");
+                break;
+            case 'disarm': 
+                await window.parent.commands.armDisarm(false); 
+                logToConsole("System: Perintah DISARM terkirim");
+                break;
+            case 'safety_on':
+                await window.parent.commands.setSafetySwitch(true);
+                logToConsole("System: Safety Switch ON (SAFE)");
+                break;
+            case 'safety_off':
+                await window.parent.commands.setSafetySwitch(false);
+                logToConsole("System: Safety Switch OFF (LIVE)");
+                break;
+            case 'reboot':
+                if (confirm("Yakin ingin melakukan Reboot pada Flight Controller?")) {
+                    await window.parent.commands.reboot();
+                    logToConsole("System: Reboot command accepted");
+                }
+                break;
+            case 'takeoff': 
+                await link.takeoff(2); 
+                logToConsole("System: Perintah TAKEOFF terkirim");
+                break;
+            case 'rover':
+                const telem = window.parent.gcsConnection.telemetry;
+                const bataslanding = 0.5;
+                const currentAlt = telem.alt || 0;
+                if (currentAlt > bataslanding) {
+                    alert(`Gagal: Drone masih berada di udara (altitude ${currentAlt.toFixed(2)} m). Silakan mendaratkan drone terlebih dahulu sebelum beralih ke mode ROVER.`);
+                    return;
+                }
+                await window.parent.commands.setHybridMode('rover');
+                logToConsole("System: [TRANSITION] Switching to Rover mode (ready)...");
+                break;
+            case 'copter':
+                logToConsole("System: [TRANSITION] Switching to Copter mode (safety)...");
+                await window.parent.commands.setHybridMode('copter_safe'); 
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                logToConsole("System: [TRANSITION] Switching to Copter mode (ready)...");
+                await window.parent.commands.setHybridMode('ready'); 
+                break;
+            case 'rtl': 
+                await link.rtl(); 
+                logToConsole("System: Perintah RTL terkirim");
+                break;
+            case 'land': 
+                await link.land(); 
+                logToConsole("System: Perintah LAND terkirim");
+                break;
+            case 'setmode': 
+                const modeValue = document.getElementById('flightModeSelect').value;
+                await window.parent.commands.setFlightMode(parseInt(modeValue, 10)); 
+                logToConsole(`System: Perintah ganti mode terkirim`);
+                break;
         }
-    } catch (err) {
-        logToConsole(`Error: ${err.message}`);
+    } catch (e) {
+        logToConsole(`Error mengirim perintah ${action}: ${e.message}`);
+        alert(`Gagal mengirim perintah ${action}: ${e.message}`);
     }
-}
-
-async function rebootFC() {
-    if (!confirm("Reboot Flight Controller?")) return;
-    logToConsole("> Sending reboot...");
-    try {
-        const result = await window.parent.mavFeatures.reboot();
-        logToConsole(result.ok ? "System: Reboot command accepted" : `Error: ${result.message}`);
-        // Optional: disconnect setelah beberapa detik
-    } catch (err) {
-        logToConsole(`Error: ${err.message}`);
-    }
-}
-
-let currentTransformMode = 'QUAD';
-const TRANSFORM_CHANNEL = 5;
-const PWM_QUAD = 1500;
-const PWM_ROVER = 1900;
-
-async function toggleTransform() {
-    if (!isConnected()) { alert('Flight Controller is not connected.'); return; }
-    const newMode = currentTransformMode === 'QUAD' ? 'ROVER' : 'QUAD';
-    const pwm = newMode === 'ROVER' ? PWM_ROVER : PWM_QUAD;
-    const btn = document.getElementById('transformBtn');
-    btn.disabled = true;
-    btn.innerText = `Switching to ${newMode}...`;
-    logToConsole(`> Transform to ${newMode.toUpperCase()} (channel ${TRANSFORM_CHANNEL}, PWM ${pwm})...`);
-    try {
-        const result = await window.parent.mavFeatures.setServo(TRANSFORM_CHANNEL, pwm);
-        if (result.ok) {
-            currentTransformMode = newMode;
-            document.getElementById('transformStatus').innerText = `Mode: ${newMode.toUpperCase()}`;
-            document.getElementById('transformStatus').style.color = newMode === 'ROVER' ? '#ff9800' : '#4caf50';
-            btn.innerText = `Transform to ${newMode === 'QUAD' ? 'ROVER' : 'QUAD'}`;
-            logToConsole(`System: ${result.message}`);
-        } else {
-            logToConsole(`Error: ${result.message}`);
-            btn.innerText = `Transform to ${currentTransformMode === 'QUAD' ? 'ROVER' : 'QUAD'}`;
-        }
-    } catch (err) {
-        logToConsole(`Error: ${err.message}`);
-        btn.innerText = `Transform to ${currentTransformMode === 'QUAD' ? 'ROVER' : 'QUAD'}`;
-    }
-    btn.disabled = false;
 }
 
 async function sendCalibration(cmdType) {
@@ -376,13 +300,13 @@ async function sendCompassCalibration(cmdType) {
     const mav = window.parent.mavFeatures;
     try {
         if (cmdType === 'compass_start') {
+            window.compassSuccessMask = 0; 
+            resetMagProgressUI();
             await mav.startCompassCal();
             logToConsole('System: Compass calibration started');
-            startCompassStatusPolling(); 
         } 
         else if (cmdType === 'compass_accept') {
             await mav.acceptCompassCal();
-            stopCompassStatusPolling();
             logToConsole('✓ Compass calibration accepted.');
             const btnReboot = document.getElementById('btnRebootFC');
             if (btnReboot) btnReboot.style.display = 'inline-block';
@@ -390,7 +314,6 @@ async function sendCompassCalibration(cmdType) {
         else if (cmdType === 'compass_cancel') {
             await mav.cancelCompassCal();
             logToConsole('System: Compass calibration cancelled');
-            stopCompassStatusPolling();
             resetMagProgressUI();
         }
     } catch (err) {
@@ -405,69 +328,6 @@ function resetMagProgressUI() {
     }
 }
 
-function startCompassStatusPolling() {
-    stopCompassStatusPolling(); 
-    compassStatusPollTimer = setInterval(fetchCompassStatus, 1000);
-}
-
-function stopCompassStatusPolling() {
-    if (compassStatusPollTimer) {
-        clearInterval(compassStatusPollTimer);
-        compassStatusPollTimer = null;
-    }
-}
-
-let lastCompassReportKeys = new Set();
-
-async function fetchCompassStatus() {
-    try {
-        const response = await fetch(getBaseUrl() + '/command/calibrate/compass/status');
-        if (!response.ok) return;
-        const status = await response.json();
-
-        const progress = status.compass_progress || {};
-        Object.keys(progress).forEach((compassId) => {
-            const idx = parseInt(compassId, 10);
-            const inputEl = document.getElementById(`mag${idx + 1}_prog`);
-            if (inputEl && !inputEl.value.includes('SUCCESS') && inputEl.value !== '100%' && inputEl.value !== 'FAILED') {
-                inputEl.value = `${progress[compassId]}%`;
-            }
-        });
-
-        const reports = status.compass_reports || {};
-        Object.keys(reports).forEach((compassId) => {
-            const idx = parseInt(compassId, 10);
-            const inputEl = document.getElementById(`mag${idx + 1}_prog`);
-            const reportKey = `${compassId}:${reports[compassId].status}`;
-
-            if (inputEl) {
-                inputEl.value = reports[compassId].status === 'SUCCESS' ? '100%' : 'FAILED';
-            }
-
-            if (!lastCompassReportKeys.has(reportKey)) {
-                lastCompassReportKeys.add(reportKey);
-                const fit = reports[compassId].fitness;
-                logToConsole(
-                    reports[compassId].status === 'SUCCESS'
-                        ? `✓ Compass ${compassId} SUKSES (fitness: ${fit})`
-                        : `✗ Compass ${compassId} GAGAL (fitness: ${fit})`
-                );
-            }
-        });
-
-        const btnAccept = document.getElementById('btnCompassAccept');
-        if (btnAccept) btnAccept.disabled = (status.success_mask === 0);
-
-        if (status.timeout_ok === false) {
-            logToConsole("Error: Compass calibration timeout. Klik Start untuk ulang.");
-            stopCompassStatusPolling();
-        }
-
-        if (status.state === 'IDLE' || status.state === 'SUCCESS') stopCompassStatusPolling();
-
-    } catch (err) {}
-}
-
 function logToConsole(text) {
     const consoleBox = document.getElementById('calibConsole');
     if (!consoleBox) return;
@@ -476,7 +336,6 @@ function logToConsole(text) {
     consoleBox.scrollTop = consoleBox.scrollHeight;
 }
 
-// ===== PENGGANTI POLLING (DIDORONG OLEH MASTER IFRAME) =====
 window.updateTelemetryUI = function(data) {
     telemetryData = data;
     updateHealthCards();
@@ -545,6 +404,36 @@ function updateHealthCards() {
         }
     });
 
+    if (telemetryData.mag_cal_progress) {
+        const prog = telemetryData.mag_cal_progress;
+        const inputEl = document.getElementById(`mag${prog.id + 1}_prog`);
+        if (inputEl && inputEl.value !== 'SUCCESS' && inputEl.value !== 'FAILED') {
+            inputEl.value = `${prog.pct}%`;
+        }
+    }
+
+    if (telemetryData.mag_cal_report) {
+        const rep = telemetryData.mag_cal_report;
+        const inputEl = document.getElementById(`mag${rep.id + 1}_prog`);
+        if (inputEl) {
+            if (rep.status === 4) { // 4 = MAG_CAL_SUCCESS
+                if (inputEl.value !== 'SUCCESS') {
+                    inputEl.value = 'SUCCESS';
+                    window.compassSuccessMask = (window.compassSuccessMask || 0) | (1 << rep.id);
+                    logToConsole(`✓ Compass ${rep.id} SUKSES (fitness: ${rep.fitness.toFixed(2)})`);
+                }
+            } else if (rep.status > 4) { // 5 = FAILED, 6 = BAD_ORIENTATION, 7 = BAD_RADIUS
+                if (inputEl.value !== 'FAILED') {
+                    inputEl.value = 'FAILED';
+                    logToConsole(`✗ Compass ${rep.id} GAGAL (kode: ${rep.status})`);
+                }
+            }
+        }
+        const btnAccept = document.getElementById('btnCompassAccept');
+        if (btnAccept && window.compassSuccessMask > 0) {
+            btnAccept.disabled = false;
+        }
+    }
     if (telemetryData.status === 'disconnected' || telemetryData.system_status === 'disconnected') {
         document.getElementById('gpsStatus').className = 'status-dot error';
         document.getElementById('gpsSats').innerText = '0';
@@ -555,11 +444,7 @@ function updateHealthCards() {
 
 window.updateMavlogUI = function(logItem) {
     const safeText = String(logItem.text).replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    
-    // Tampilkan di konsol
     logToConsole(safeText);
-    
-    // Teruskan ke parser kalibrasi untuk trigger posisi selanjutnya
     if (typeof processCalibrationMessages === 'function') {
         processCalibrationMessages(safeText);
     }
@@ -567,7 +452,6 @@ window.updateMavlogUI = function(logItem) {
 
 function processCalibrationMessages(msgText) {
     const text = msgText.toLowerCase();
-
     if (text.includes("place vehicle")) {
         if (text.includes("level")) currentCalibPosition = "level";
         else if (text.includes("right")) currentCalibPosition = "right";
@@ -575,10 +459,8 @@ function processCalibrationMessages(msgText) {
         else if (text.includes("down")) currentCalibPosition = "nosedown";
         else if (text.includes("up")) currentCalibPosition = "noseup";
         else if (text.includes("back")) currentCalibPosition = "back";
-
         const btnNext = document.getElementById('btnAccelNext');
         if (btnNext) btnNext.style.display = 'inline-block';
-        
     } else if (text.includes("calibration successful") || text.includes("calibration failed")) {
         const btnNext = document.getElementById('btnAccelNext');
         if (btnNext) btnNext.style.display = 'none';

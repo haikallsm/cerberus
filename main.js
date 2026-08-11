@@ -69,6 +69,7 @@ app.whenReady().then(() => {
 // ==========================================================
 
 // 1. Menangani permintaan buka koneksi UDP dari Frontend
+// 1. Menangani permintaan buka koneksi UDP dari Frontend
 ipcMain.handle('udp-connect', async (event, { ip, port }) => {
     if (udpClient) {
         udpClient.close();
@@ -81,9 +82,14 @@ ipcMain.handle('udp-connect', async (event, { ip, port }) => {
 
             // 2. Mendengarkan data masuk dari FC/Drone
             udpClient.on('message', (msg, rinfo) => {
+                // AUTO-TARGETING: Begitu drone membalas, kita kunci IP drone aslinya!
+                // Ini meniru cara kerja Mission Planner
+                udpClient.targetIp = rinfo.address;
+                udpClient.targetPort = rinfo.port;
+
                 if (mainWindow) {
-                    // Teruskan data mentah (byte array) kembali ke UI
-                    mainWindow.webContents.send('udp-data', new Uint8Array(msg));
+                    // Wajib gunakan Array.from agar data aman saat dikirim ke UI
+                    mainWindow.webContents.send('udp-data', Array.from(msg));
                 }
             });
 
@@ -93,15 +99,16 @@ ipcMain.handle('udp-connect', async (event, { ip, port }) => {
                 udpClient = null;
             });
 
-            // UDP adalah connectionless, kita bind ke port lokal acak
-            udpClient.bind(() => {
-                console.log(`[UDP Backend] Socket terbuka, siap mengirim ke ${ip}:${port}`);
-                resolve({ ok: true });
-            });
-
-            // Simpan target IP dan Port untuk referensi saat mengirim
             udpClient.targetIp = ip;
             udpClient.targetPort = port;
+
+            // 3. Bind ke 0.0.0.0
+            udpClient.bind(port, '0.0.0.0', () => {
+                // WAJIB AKTIF agar bisa mencari drone ke seluruh jaringan (Broadcast)
+                udpClient.setBroadcast(true); 
+                console.log(`[UDP Backend] Socket terbuka di 0.0.0.0:${port}`);
+                resolve({ ok: true });
+            });
 
         } catch (err) {
             console.error('[UDP Backend] Gagal membuat socket UDP:', err);

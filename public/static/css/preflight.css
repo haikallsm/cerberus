@@ -84,78 +84,6 @@
     }
 }
 
-.calibration-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px;
-    border-radius: 6px;
-    margin-bottom: 6px;
-    transition: background 0.2s;
-    cursor: pointer;
-}
-
-.calibration-item:hover {
-    background: #252525;
-}
-
-.calibration-item input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
-    accent-color: #00bcd4;
-    cursor: pointer;
-}
-
-.calibration-item label {
-    flex: 1;
-    cursor: pointer;
-    font-size: 13px;
-}
-
-.calibration-item.checked label {
-    text-decoration: line-through;
-    color: #666;
-}
-
-.action-bar {
-    display: flex;
-    gap: 15px;
-    align-items: center;
-    flex-wrap: wrap;
-}
-
-.btn-arm {
-    background: #4caf50;
-    color: white;
-    padding: 12px 24px;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: bold;
-    transition: 0.2s;
-}
-
-.btn-arm:hover {
-    background: #45a049;
-}
-
-.btn-disarm {
-    background: #f44336;
-    color: white;
-    padding: 12px 24px;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: bold;
-    transition: 0.2s;
-}
-
-.btn-disarm:hover {
-    background: #da190b;
-}
-
 .status-badge {
     padding: 8px 16px;
     border-radius: 6px;
@@ -204,22 +132,6 @@
 
 .health-value.warning {
     color: #ff9800;
-}
-
-.calibration-item.auto-check {
-    background: #1a2a2a;
-}
-
-.calibration-item.auto-check input[type="checkbox"]:checked {
-    accent-color: #4caf50;
-}
-
-.calibration-item.auto-check.failed {
-    background: #2a1a1a;
-}
-
-.calibration-item.auto-check.failed input[type="checkbox"] {
-    accent-color: #f44336;
 }
 
 .data-source {
@@ -372,34 +284,6 @@
     background: #c62828;
 }
 
-.arm-control-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 10px;
-}
-
-.arm-control-bar .btn-disarm,
-.arm-control-bar .btn-arm {
-    flex: 1;
-    padding: 10px 16px;
-    font-size: 13px;
-    text-align: center;
-}
-
-.arm-control-bar .status-badge {
-    flex-shrink: 0;
-    min-width: 80px;
-    text-align: center;
-}
-
-.arm-control-bar button:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-    filter: grayscale(40%);
-}
-
 /* === ACTION ROW (baris perintah) === */
 .action-row {
     display: grid;
@@ -443,11 +327,6 @@
     box-shadow: 0 0 8px rgba(0, 188, 212, 0.4);
 }
 
-.arm-status-row {
-    text-align: center;
-    margin-bottom: 15px;
-}
-
 .arm-status-row .status-badge {
     display: inline-block;
     padding: 8px 20px;
@@ -455,40 +334,9 @@
     border-radius: 6px;
 }
 
-/* === TRANSFORM BUTTON & STATUS === */
-.transform-row {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    margin-bottom: 10px;
-}
-.btn-transform {
-    background: #ff9800;
-    color: #000;
-    border: none;
-    padding: 8px 20px;
-    border-radius: 4px;
-    font-weight: bold;
-    cursor: pointer;
-    transition: 0.2s;
-}
-.btn-transform:hover {
-    background: #ffb74d;
-    box-shadow: 0 0 8px rgba(255, 152, 0, 0.4);
-}
-.btn-transform:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-.transform-status {
-    font-size: 14px;
-    font-weight: bold;
-    text-transform: uppercase;
-    margin-right: 15px;
-    color: #4caf50; /* default hijau untuk Quad */
-}
 .arm-status-row {
     display: flex;
+    text-align: center;
     align-items: center;
     justify-content: flex-start; /* rata kiri */
     gap: 15px;

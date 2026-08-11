@@ -30,6 +30,8 @@ const CRC_EXTRA = {
     77: 143,   // COMMAND_ACK
     109: 185,  // RADIO_STATUS
     132: 85,   // DISTANCE_SENSOR
+    191: 92,   // MAG_CAL_PROGRESS
+    192: 36,   // MAG_CAL_REPORT
     253: 83,   // STATUSTEXT
 };
 
@@ -272,6 +274,23 @@ const DECODERS = {
             current_distance: dv.getUint16(8, true),
             type: dv.getUint8(10),
             signal_quality: dv.getUint8(38),
+        };
+    },
+    191: (bytes) => {
+        const dv = new DataView(new Uint8Array(bytes).buffer);
+        return {
+            _kind: 'mag_cal_progress',
+            compass_id: dv.getUint8(12),
+            completion_pct: dv.getUint8(16)
+        };
+    },
+    192: (bytes) => {
+        const dv = new DataView(new Uint8Array(bytes).buffer);
+        return {
+            _kind: 'mag_cal_report',
+            fitness: dv.getFloat32(0, true),
+            compass_id: dv.getUint8(40),
+            cal_status: dv.getUint8(42)
         };
     },
     109: (bytes) => {

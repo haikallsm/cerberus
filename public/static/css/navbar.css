@@ -21,9 +21,7 @@
     flex-shrink: 0; /* Elemen kontrol kanan tetap dipertahankan ukurannya */
 }
 
-/* ==========================================
-   PADA BAGIAN INI CSS PINDAHAN DARI NAVBAR.HTML 
-   ========================================== */
+
 .nav-right-container {
     display: flex;
     align-items: center;

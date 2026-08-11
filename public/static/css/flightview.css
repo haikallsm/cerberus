@@ -8,12 +8,6 @@ html, body{
     flex-direction: column;
 }
 
-videostream {
-    width: 300px;
-    height: 200px;
-    position: left; 
-}
-
 .main {
     flex: 1; /* Ini kunci agar tidak ada celah di bawah */
     display: flex; 
@@ -47,23 +41,6 @@ videostream {
     z-index: 1000;
     pointer-events: auto;
 }
-
-/* Header tab Telems/Actions -- dipindah keluar dari .telemetry-panel supaya tidak ikut
-   ke-scroll saat konten panel di-scroll (panel punya overflow-y: auto). Posisinya
-   independen tapi diselaraskan (right/width sama) dgn .telemetry-panel di bawahnya. */
-.telem-tabs-header {
-    position: absolute;
-    top: 78px;
-    right: 14px;
-    left: auto;
-    width: 280px;
-    max-width: 90vw;
-    box-sizing: border-box;
-    padding: 0 12px;
-    z-index: 1001; /* di atas .telemetry-panel biar tetap ke-klik saat drag panel bersinggungan */
-    pointer-events: auto;
-}
-
 
 /* ===== ARTIFICIAL HORIZON ===== */
 .ah-container {
@@ -276,36 +253,6 @@ videostream {
     background: rgba(56, 189, 248, 0.5);
     border-radius: 4px;
 }
-
-.signal-container {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 3px;
-    height: 18px;
-    margin-top: 2px;
-    margin-bottom: 2px;
-}
-
-.signal-bar {
-    width: 8px;
-    background: #333;
-    border-radius: 1px;
-    transition: background-color 0.2s ease;
-}
-
-/* Ketinggian berundak untuk tiap balok */
-.signal-bar.bar-1 { height: 6px; }
-.signal-bar.bar-2 { height: 9px; }
-.signal-bar.bar-3 { height: 12px; }
-.signal-bar.bar-4 { height: 15px; }
-.signal-bar.bar-5 { height: 18px; }
-
-/* Warna sinyal aktif berdasarkan kekuatan */
-.signal-bar.active.green { background-color: #4caf50; }
-.signal-bar.active.yellow { background-color: #ff9800; }
-.signal-bar.active.red { background-color: #f44336; }
-
 
 /* ===== TELEMETRY TABS & PAGES ===== */
 .telem-tabs {

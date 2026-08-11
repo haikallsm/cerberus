@@ -11,7 +11,7 @@
 
 <body style="background: transparent;">
 
-<div class="main" style="margin-left: 0;"> <!-- Hilangkan margin kiri navbar -->
+<div class="main" style="margin-left: 0;">
     <div id="map"></div>
 
     <div class="telemetry-panel">
@@ -388,20 +388,33 @@ window.updateTelemetryUI = function(data) {
         if (flightModeEl) flightModeEl.innerText = data.flight_mode;
     }
 
-    if (data.vehicle_type !== undefined) {
-        const vehicleTypeEl = document.getElementById('vehicleType');
-        if (vehicleTypeEl) {
-            vehicleTypeEl.innerText = data.vehicle_type;
-
-            if (data.vehicle_type === 'COPTER') {
-                vehicleTypeEl.style.color = '#2196f3';
-            } else if (data.vehicle_type === 'ROVER') {
-                vehicleTypeEl.style.color = '#4caf50';
-            } else {
-                vehicleTypeEl.style.color = '#ffff';
-            }
+    if (data.vehicle_type !== undefined && data.vehicle_type !== 'UNKNOWN') {
+        window._stableVehicleType = data.vehicle_type; 
+    }
+    
+    let rc5 = data.rc5_in !== undefined ? data.rc5_in : (window.lastTelemetry ? window.lastTelemetry.rc5_in : 0);
+    
+    let displayType = window._stableVehicleType || 'UNKNOWN';
+    
+    if (rc5 > 800) { 
+        if (rc5 > 1700 || rc5 < 1200) {
+            displayType = 'ROVER';
+        } else {
+            displayType = 'COPTER';
         }
-            
+    }
+
+    const vehicleTypeEl = document.getElementById('vehicleType');
+    if (vehicleTypeEl) {
+        vehicleTypeEl.innerText = displayType;
+
+        if (displayType === 'COPTER') {
+            vehicleTypeEl.style.color = '#2196f3';
+        } else if (displayType === 'ROVER') {
+            vehicleTypeEl.style.color = '#ff9800';
+        } else {
+            vehicleTypeEl.style.color = '#ffff';
+        }
     }
 
     if (data.throttle !== undefined) {
@@ -500,7 +513,6 @@ async function doAction(action) {
     }
 }
 
-// ===== SAR VICTIM MARKER (reusable — dipakai baik oleh deteksi AI/vision maupun laporan FCU) =====
 let victimMarkers = [];
 const VICTIM_BUFFER_RADIUS_METERS = 10;
 
@@ -512,17 +524,47 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
+function buildPopupHtml(lat, lon, opts = {}) {
+    const { status = 'unknown', jumlah = 1, confidence = null, source = 'AI' } = opts;
+    const isDead = status === 'D';
+    const accentColor = isDead ? '#616161' : '#f44336';
+
+    const detailLine = source === 'SAR'
+        ? `Status: ${isDead ? 'Korban Tewas' : 'Korban Hidup'} &middot; Jumlah: ${jumlah} Orang<br>Sumber: Laporan FCU (STATUSTEXT)`
+        : `Keyakinan (AI): ${(confidence !== null ? confidence * 100 : 0).toFixed(1)}%`;
+
+    return `
+        <div style="text-align: center;">
+            <b style="color:${accentColor}; font-size:14px;">🚨 KORBAN TERDETEKSI</b><br>
+            <span style="font-size:11px; color:#666;">Zona Eksklusif: Radius ${VICTIM_BUFFER_RADIUS_METERS}m</span><br><br>
+            ${detailLine}<br>
+            Lat: ${lat.toFixed(7)}<br>Lon: ${lon.toFixed(7)}<br><br>
+            <button onclick="goToVictim(${lat}, ${lon})"
+                style="background:#2196f3;color:white;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:12px;">
+                Terbang ke titik ini
+            </button>
+        </div>
+    `;
+}
+
 function addVictimMarker(lat, lon, opts = {}) {
     const { status = 'unknown', jumlah = 1, confidence = null, source = 'AI' } = opts;
 
-    const isDuplicate = victimMarkers.some(m => {
+    const existing = victimMarkers.find(m => {
         const mLatLng = m.marker.getLatLng();
         return getDistanceMeters(lat, lon, mLatLng.lat, mLatLng.lng) < VICTIM_BUFFER_RADIUS_METERS;
     });
-    if (isDuplicate) return null;
+
+    if (existing) {
+        if (existing.status !== status || existing.jumlah !== jumlah) {
+            existing.status = status;
+            existing.jumlah = jumlah;
+            existing.marker.setPopupContent(buildPopupHtml(lat, lon, { status, jumlah, confidence, source }));
+        }
+        return existing.marker;
+    }
 
     const isDead = status === 'D';
-    const accentColor = isDead ? '#616161' : '#f44336';
     const iconBg = isDead ? '33,33,33' : '244,67,54';
     const iconGlyph = isDead ? '💀' : '🆘';
 
@@ -542,27 +584,12 @@ function addVictimMarker(lat, lon, opts = {}) {
         iconAnchor: [15, 15]
     });
 
-    const detailLine = source === 'SAR'
-        ? `Status: ${isDead ? 'Korban Tewas' : 'Korban Hidup'} &middot; Jumlah: ${jumlah} Orang<br>Sumber: Laporan FCU (STATUSTEXT)`
-        : `Keyakinan (AI): ${(confidence !== null ? confidence * 100 : 0).toFixed(1)}%`;
-
     const marker = L.marker([lat, lon], { icon: victimIcon, zIndexOffset: 1000 })
-    .bindPopup(`
-        <div style="text-align: center;">
-            <b style="color:${accentColor}; font-size:14px;">🚨 KORBAN TERDETEKSI</b><br>
-            <span style="font-size:11px; color:#666;">Zona Eksklusif: Radius ${VICTIM_BUFFER_RADIUS_METERS}m</span><br><br>
-            ${detailLine}<br>
-            Lat: ${lat.toFixed(7)}<br>Lon: ${lon.toFixed(7)}<br><br>
-            <button onclick="goToVictim(${lat}, ${lon})"
-                style="background:#2196f3;color:white;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:12px;">
-                Terbang ke titik ini
-            </button>
-        </div>
-    `)
-    .addTo(map);
+        .bindPopup(buildPopupHtml(lat, lon, { status, jumlah, confidence, source }))
+        .addTo(map);
 
     marker.openPopup();
-    victimMarkers.push({ marker, circle: bufferCircle });
+    victimMarkers.push({ marker, circle: bufferCircle, status, jumlah });
 
     const logContent = document.getElementById('mavlinkLogContent');
     if (logContent) {
@@ -576,6 +603,14 @@ function addVictimMarker(lat, lon, opts = {}) {
 
     return marker;
 }
+
+function removeVictimMarkers() {
+    victimMarkers.forEach(v => {
+        map.removeLayer(v.marker);
+        map.removeLayer(v.circle);
+    });
+    victimMarkers = victimMarkers.filter(m => m !== markerEntry);
+} 
 
 // ===== SAR STATUSTEXT PARSING (chunk-aware) =====
 const SAR_PREFIX = "[SAR]";
@@ -641,7 +676,7 @@ function parseSarStatustext(fullText) {
     }
     if (status !== 'H' && status !== 'D') {
         console.warn("[SAR] Status tidak dikenal:", status);
-        return null;
+        return {status, jumlah, lat, lon};
     }
     return { status, jumlah, lat, lon };
 }
@@ -885,21 +920,22 @@ async function pollVictimDetection() {
 }
 
 async function goToVictim(lat, lon, alt = null) {
-    if (!windpw.parent.commands) {
+    if (!window.parent.commands) {
         alert("Command bridge not loaded.");
         return;
     }
     const link = window.parent.commands._getActiveLink();
-    if(!link) {
+    if (!link) {
         alert("No active link to drone.");
         return;
     }
     const t = window.lastTelemetry || {};
     const isArmed = t.is_armed || (t.arm_mode === 'armed') || false;
-    const currentMode =t.flight_mode || 'UNKNOWN';
+    const currentMode = t.flight_mode || 'UNKNOWN';
+    const targetAlt = (alt !== null && !Number.isNaN(alt)) ? alt : (Number(t.altitude) || 0);
 
     if (isArmed && currentMode === 'AUTO') {
-        const confirmMsg= `Drone sedang ARMED dan menjalankan mission (AUTO).\n\n` +
+        const confirmMsg = `Drone sedang ARMED dan menjalankan mission (AUTO).\n\n` +
             `Mengirim drone ke titik korban akan MEMINDAHKAN mode ke GUIDED dan ` +
             `menginterupsi mission saat ini (mission TIDAK dihapus, hanya di-pause).\n\n` +
             `Lat: ${lat.toFixed(7)}, Lon: ${lon.toFixed(7)}\n\n` +
@@ -915,7 +951,7 @@ async function goToVictim(lat, lon, alt = null) {
         p5: lat,
         p6: lon,
         p7: targetAlt,
-    })
+    });
 
     if (result.ok) {
         console.log(`[SAR] Reposition ke korban dikirim: ${lat}, ${lon}, alt=${targetAlt}m`);
@@ -923,7 +959,6 @@ async function goToVictim(lat, lon, alt = null) {
         alert(`Gagal mengirim perintah reposition: ${result.result}`);
     }
 }
-
 // setInterval(pollVictimDetection, 1000);
 
 // ===== UPDATE STATS =====
