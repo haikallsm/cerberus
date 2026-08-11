@@ -346,7 +346,7 @@ class RadioMavlink {
         dv.setUint16(30, item.command, true);
         dv.setUint8(32, this.targetSystem);
         dv.setUint8(33, this.targetComponent);
-        dv.setUint8(34, item.frame ?? 3); // default MAV_FRAME_GLOBAL_RELATIVE_ALT
+        dv.setUint8(34, item.frame ?? 3);
         dv.setUint8(35, item.current || 0);
         dv.setUint8(36, item.autocontinue ?? 1);
         return Array.from(new Uint8Array(buf));

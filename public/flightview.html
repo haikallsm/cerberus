@@ -566,7 +566,7 @@ function addVictimMarker(lat, lon, opts = {}) {
 
     const isDead = status === 'D';
     const iconBg = isDead ? '33,33,33' : '244,67,54';
-    const iconGlyph = isDead ? '💀' : '🆘';
+    const iconGlyph = isDead ? '📍' : '🆘';
 
     const bufferCircle = L.circle([lat, lon], {
         color: isDead ? '#424242' : 'red',
@@ -692,9 +692,8 @@ window.updateMavlogUI = function(logItem) {
         if (parsed) {
             addVictimMarker(parsed.lat, parsed.lon, { status: parsed.status, jumlah: parsed.jumlah, source: 'SAR' });
         }
-        return; // jangan lanjut ke log biasa
+        return;
     }
-    // sarResult.status === 'not_sar' -> lanjut render sebagai log FCU biasa (tidak berubah)
 
     const logContent = document.getElementById('mavlinkLogContent');
     if (!logContent) return;
@@ -859,7 +858,6 @@ window.openVideo = async function() {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json', 
-                // 'ngrok-skip-browser-warning': 'true'
             },
             body: JSON.stringify({
                 sdp: pc.localDescription.sdp,
