@@ -26,7 +26,7 @@ class WebcamVideoTrack(VideoStreamTrack):
 
     def __init__(self, device_id: int = CAMERA_DEVICE_ID):
         super().__init__()
-        self.cap = cv2.VideoCapture(device_id, cv2.CAP_DSHOW)  # Windows: lebih stabil
+        self.cap = cv2.VideoCapture(device_id, cv2.CAP_DSHOW)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAPTURE_WIDTH)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAPTURE_HEIGHT)
         self.cap.set(cv2.CAP_PROP_FPS, CAPTURE_FPS)

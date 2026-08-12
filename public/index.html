@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HAWKEYE GCS Master</title>
+    <title>Cerberus</title>
     <link rel="stylesheet" href="./static/css/navbar.css">
     <link rel="stylesheet" href="./static/css/gcs.css">
     <script src="./static/js/socket.io.min.js"></script>
@@ -23,7 +23,6 @@
     
     <div id="navbar-placeholder"></div>
 
-    <!-- Iframe tempat halaman anak (flightview, mission, dll) diputar -->
     <iframe id="main-frame" src="./flightview.html"></iframe>
 
 
@@ -81,7 +80,6 @@
                 }
             };
 
-            // ===== PATCH BUG 2: Routing data RADIO =====
             window.radioMavlink.onTelemetry = (data) => {
                 const adaptedData = window.adaptRadioTelemetry(data);
                 
@@ -303,7 +301,7 @@
         async function handleMainConnect() {
             const type = document.getElementById('connTypeSelect').value;
             const isRadioConnected = !!(window.radioMavlink && window.radioMavlink.telemetry?.connected);
-            const isUdpConnected = !!(window.gcsConnection && window.gcsConnection.isConnected);
+            const isUdpConnected = !!(window.udpMavlink && window.udpMavlink.telemetry?.connected);
 
             if (type === 'serial') {
                 if (isRadioConnected) {

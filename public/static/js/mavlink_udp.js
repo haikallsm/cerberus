@@ -15,7 +15,7 @@ class UdpMavlink {
         this.targetSystem = 1;
         this.targetComponent = 1;
         this._streamsRequested = false;
-        this.rcChannels = [1500, 1500, 1000, 1500, 65535, 65535, 65535, 65535];
+        this.rcChannels = new Array(8).fill(65535);
         this._rcOverrideTimer = null;
 
         this._remoteIp = null;
@@ -71,6 +71,7 @@ class UdpMavlink {
         this._stopGcsHeartbeat();
         this._stopWatchdog();
         this._stopRcOverrideLoop();
+        this.rcChannels = new Array(8).fill(65535);
         if (this._dataUnsubscribe) { this._dataUnsubscribe(); this._dataUnsubscribe = null; }
         if (window.udpBridge) {
             try { await window.udpBridge.disconnect(); } catch (e) {}
@@ -378,6 +379,10 @@ class UdpMavlink {
     }
     async reboot() { return this.sendCommandLong(246, { p1: 1 }); }
     async setHome(lat, lon, alt = 0) { return this.sendCommandLong(179, { p1: 0, p5: lat, p6: lon, p7: alt }); }
+    async reposition(lat, lon, alt = null) {
+        const targetAlt = (alt !== null && !Number.isNaN(alt)) ? alt : (Number(this.telemetry.altitude) || 0);
+        return this.sendCommandLong(192, { p1: -1, p4: NaN, p5: lat, p6: lon, p7: targetAlt });
+    }
     async setServo(channel, pwm) { return this.sendCommandLong(183, { p1: channel, p2: pwm }); }
     async sendRcOverride(chIndex, pwmValue) {
         if (chIndex < 0 || chIndex > 7) {
@@ -423,7 +428,7 @@ class UdpMavlink {
     }
 
     _handleFrame(msgId, payload, sysid, compid) {
-        if (msgId === 0 && sysid !== this._gcsSysId) {
+        if (msgId === 0 && compid === 1) {
             this.lastHeartbeatTime = Date.now();
             if (!this._streamsRequested) {
                 this.targetSystem = sysid;
@@ -475,11 +480,12 @@ class UdpMavlink {
             this.telemetry.rangefinder_healthy = isHealthy;
             this.telemetry.rangefinder_type = RANGEFINDER_TYPE_MAP[result.type] || 'UNKNOWN';
             if (this.onTelemetry) this.onTelemetry({ ...this.telemetry });
-        } else if (result._kind === 'radio_status') {
-            this.telemetry.rssi = Math.round((result.rssi / 254) * 100);
-            this.telemetry.remrssi = Math.round((result.remrssi / 254) * 100);
-            this.telemetry.radio_noise = result.noise;
-            this.telemetry.radio_txbuf = result.txbuf;
+        } else if (result._kind === 'mag_cal_progress') {
+            this.telemetry.mag_cal_progress = { id: result.compass_id, pct: result.completion_pct };
+            if (this.onTelemetry) this.onTelemetry({ ...this.telemetry });
+            
+        } else if (result._kind === 'mag_cal_report') {
+            this.telemetry.mag_cal_report = { id: result.compass_id, status: result.cal_status, fitness: result.fitness };
             if (this.onTelemetry) this.onTelemetry({ ...this.telemetry });
         }
     }

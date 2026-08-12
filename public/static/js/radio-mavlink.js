@@ -35,7 +35,7 @@ class RadioMavlink {
         this.onConnect = null;
         this.onDisconnect = null;
 
-        this.rcChannels = [1500, 1500, 1000, 1500, 65535, 65535, 65535, 65535];
+        this.rcChannels = new Array(8).fill(65535);
         this._rcOverrideTimer = null;
 
         this._setupAutoReconnectListeners();
@@ -144,6 +144,7 @@ class RadioMavlink {
         this.keepReading = false;
         this._stopWatchdog();
         this._stopRcOverrideLoop();
+        this.rcChannels = new Array(8).fill(65535);
         try {
             if (this.writer) { await this.writer.close().catch(()=>{}); this.writer = null; }
             if (this.reader) { await this.reader.cancel(); this.reader.releaseLock(); }
@@ -345,7 +346,7 @@ class RadioMavlink {
         dv.setUint16(30, item.command, true);
         dv.setUint8(32, this.targetSystem);
         dv.setUint8(33, this.targetComponent);
-        dv.setUint8(34, item.frame ?? 3); // default MAV_FRAME_GLOBAL_RELATIVE_ALT
+        dv.setUint8(34, item.frame ?? 3);
         dv.setUint8(35, item.current || 0);
         dv.setUint8(36, item.autocontinue ?? 1);
         return Array.from(new Uint8Array(buf));
@@ -419,6 +420,11 @@ class RadioMavlink {
     }
     async setHome(lat, lon, alt = 0) {
         return this.sendCommandLong(179, { p1: 0, p5: lat, p6: lon, p7: alt });
+    }
+    async reposition(lat, lon, alt = null) {
+    // p1 = -1 (ground speed: no change), p4 = NaN (yaw: no change)
+        const targetAlt = (alt !== null && !Number.isNaN(alt)) ? alt : (Number(this.telemetry?.alt) || 0);
+        return this.sendCommandLong(192, { p1: -1, p4: NaN, p5: lat, p6: lon, p7: targetAlt });
     }
     async setServo(channel, pwm) {
         return this.sendCommandLong(183, { p1: channel, p2: pwm });
@@ -497,7 +503,7 @@ class RadioMavlink {
     }
 
     _handleFrame(msgId, payload, sysid, compid) {
-        if (msgId === 0) {
+        if (msgId === 0 && compid === 1) {
             this.lastHeartbeatTime = Date.now();   // <- tambahkan ini, di luar kondisi _streamsRequested
             if (!this._streamsRequested) {
                 this.targetSystem = sysid;
@@ -553,11 +559,11 @@ class RadioMavlink {
             this.telemetry.rangefinder_healthy = isHealthy;
             this.telemetry.rangefinder_type = RANGEFINDER_TYPE_MAP[result.type] || 'UNKNOWN';
             if (this.onTelemetry) this.onTelemetry({ ...this.telemetry });
-        } else if (result._kind === 'radio_status') {
-            this.telemetry.rssi = Math.round((result.rssi / 254) * 100);   // <- ganti dari radio_rssi_pct
-            this.telemetry.remrssi = Math.round((result.remrssi / 254) * 100);
-            this.telemetry.radio_noise = result.noise;
-            this.telemetry.radio_txbuf = result.txbuf;
+        } else if (result._kind === 'mag_cal_progress') {
+            this.telemetry.mag_cal_progress = { id: result.compass_id, pct: result.completion_pct };
+            if (this.onTelemetry) this.onTelemetry({ ...this.telemetry });
+        } else if (result._kind === 'mag_cal_report') {
+            this.telemetry.mag_cal_report = { id: result.compass_id, status: result.cal_status, fitness: result.fitness };
             if (this.onTelemetry) this.onTelemetry({ ...this.telemetry });
         }
     }

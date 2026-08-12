@@ -5,7 +5,6 @@ import os
 import cv2
 import time
 import rclpy
-import json
 import asyncio
 import threading
 import logging
@@ -66,6 +65,10 @@ class AnnotatedFrameTrack(VideoStreamTrack):
         return vf
 
 
+async def _wait_ice_gathering_complete(pc):
+    while pc.iceGatheringState != "complete":
+        await asyncio.sleep(0.1)
+
 async def offer(request: web.Request):
     params = await request.json()
     if "sdp" not in params or "type" not in params:
@@ -107,21 +110,33 @@ async def offer(request: web.Request):
     pc.addTrack(AnnotatedFrameTrack())
 
     try:
-        offer_desc = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
-        await pc.setRemoteDescription(offer_desc)
-        answer = await pc.createAnswer()
-        await pc.setLocalDescription(answer)
         try:
-            async with asyncio.timeout(ICE_GATHERING_TIMEOUT):
-                while pc.iceGatheringState != "complete":
-                    await asyncio.sleep(0.1)
+            offer_desc = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
+        except Exception as e:
+            return web.json_response({"status": "error", "message": f"SDP offer invalid: {e or type(e).__name__}"}, status=400)
+        try:
+            await pc.setRemoteDescription(offer_desc)
+        except Exception as e:
+            webrtc_logger.error("setRemoteDescription gagal", exc_info=True)
+            await pc.close(); pcs.discard(pc)
+            return web.json_response({"status": "error", "message": f"setRemoteDescription: {e or type(e).__name__}"}, status=500)
+        try:
+            answer = await pc.createAnswer()
+            await pc.setLocalDescription(answer)
+        except Exception as e:
+            webrtc_logger.error("createAnswer/setLocalDescription gagal", exc_info=True)
+            await pc.close(); pcs.discard(pc)
+            return web.json_response({"status": "error", "message": f"createAnswer: {e or type(e).__name__}"}, status=500)
+        try:
+            await asyncio.wait_for(_wait_ice_gathering_complete(pc), timeout=ICE_GATHERING_TIMEOUT)
         except asyncio.TimeoutError:
             webrtc_logger.warning("ICE gathering timeout reached.", ICE_GATHERING_TIMEOUT) 
     except Exception as e:
-        webrtc_logger.error("Gagal SDP: %s", e, exc_info=True)
+        error_detail = str(e) or f"{type(e).__module__}.{type(e).__name__} (tanpa pesan — lihat log server)"
+        webrtc_logger.error("Gagal SDP: %s", error_detail, exc_info=True)
         await pc.close()
         pcs.discard(pc)
-        return web.json_response({"status": "error", "message": str(e)}, status=500)
+        return web.json_response({"status": "error", "message": error_detail}, status=500)
 
     return web.json_response({
         "sdp": pc.localDescription.sdp,
@@ -505,8 +520,9 @@ class HawkeyeVision(Node):
             return frame.copy(), (0, 0, frame.shape[1], frame.shape[0])
         h, w = frame.shape[:2]
         center = center or (w // 2, h // 2)
+        cx, cy = int(round(center[0])), int(round(center[1]))
         crop_w, crop_h = min(int(w / zoom), w), min(int(h / zoom), h)
-        x1, y1 = max(0, min(center[0] - crop_w // 2, w - crop_w)), max(0, min(center[1] - crop_h // 2, h - crop_h))
+        x1, y1 = max(0, min(cx - crop_w // 2, w - crop_w)), max(0, min(cy - crop_h // 2, h - crop_h))
         return cv2.resize(frame[y1:y1+crop_h, x1:x1+crop_w], (w, h), interpolation=cv2.INTER_LINEAR), (x1, y1, crop_w, crop_h)
 
     @staticmethod

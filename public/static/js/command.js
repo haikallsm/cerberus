@@ -60,7 +60,7 @@ const commands = {
             pwm = 1100;
             console.log("[COMMAND] HYBRID MODE: ROVER (LOW)");
         } else if(['mid', 'middle', 'copter_safe'].includes(stateStr)) {
-            pwm = 1500;
+            pwm = 1000;
             console.log("[COMMAND] HYBRID MODE: COPTER & SAFETY (MID)");
         } else if (['high', 'copter_unsafe', 'ready'].includes(stateStr)) {
             pwm = 2000;
