@@ -1,6 +1,7 @@
 // main.js (proses utama Electron)
 const { app, BrowserWindow, session, ipcMain } = require('electron');
 const path = require('path');
+
 const fs = require('fs');
 const dgram = require('dgram'); // Wajib ditambahkan untuk membuka socket UDP
 
@@ -11,7 +12,7 @@ let udpClient = null; // Menyimpan status socket UDP
 
 app.whenReady().then(() => {
     // === DIAGNOSTIC: pastikan preload.js benar-benar ada di path yang dituju ===
-    const preloadPath = path.join(__dirname, '/public/static/js/preload.js');
+   const preloadPath = path.join(__dirname, 'public', 'static', 'js', 'preload.js');
     console.log('[DEBUG] __dirname     =', __dirname);
     console.log('[DEBUG] preloadPath   =', preloadPath);
     console.log('[DEBUG] file exists?  =', fs.existsSync(preloadPath));
@@ -20,6 +21,7 @@ app.whenReady().then(() => {
     mainWindow = new BrowserWindow({
         width: 1280,
         height: 800,
+        icon: path.join(__dirname, "assets", "main-logo.png"),
         webPreferences: {
             contextIsolation: true,
             nodeIntegration: false,
@@ -137,10 +139,29 @@ app.on('window-all-closed', () => {
         app.quit();
     }
 });
-
 app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-        mainWindow = new BrowserWindow({ width: 1280, height: 800 });
-        mainWindow.loadFile(path.join(__dirname, 'public/index.html'));
+
+        const preloadPath = path.join(
+            __dirname,
+            'public',
+            'static',
+            'js',
+            'preload.js'
+        );
+
+        mainWindow = new BrowserWindow({
+            width: 1280,
+            height: 800,
+            icon: path.join(__dirname, 'assets', 'main-logo.png'),
+
+            webPreferences: {
+                contextIsolation: true,
+                nodeIntegration: false,
+                preload: preloadPath
+            }
+        });
+
+        mainWindow.loadFile(path.join(__dirname, 'public', 'index.html'));
     }
 });
