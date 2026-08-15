@@ -134,6 +134,15 @@ const commands = {
         if (mask === 0) throw new Error("Tidak ada compass yang SUCCESS. Silakan kalibrasi ulang.");
         return this._getActiveLink().sendCommandLong(42425, { p1: mask }); // 42425 = ACCEPT_MAG_CAL
     },
+    async uploadFence(points) {
+        return this._getActiveLink().uploadFence(points);
+    },
+    async downloadFence() {
+        return this._getActiveLink().downloadFence();
+    },
+    async clearFence() {
+        return this._getActiveLink().clearFence();
+    },
 };
 
 window.compassSuccessMask = 0;

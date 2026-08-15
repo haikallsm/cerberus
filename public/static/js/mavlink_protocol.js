@@ -33,6 +33,22 @@ const CRC_EXTRA = {
     191: 92,   // MAG_CAL_PROGRESS
     192: 36,   // MAG_CAL_REPORT
     253: 83,   // STATUSTEXT
+    160: 78,   // FENCE_POINT
+    161: 68,   // FENCE_FETCH_POINT
+};
+
+// NB: MSG_LENGTHS TIDAK dipakai lagi untuk perhitungan CRC (lihat _finishFrame).
+// CRC MAVLink2 harus dihitung persis atas payload yang diterima (sudah ter-truncate),
+// bukan di-pad ke panjang penuh struct. Dibiarkan di sini kalau-kalau dibutuhkan
+// untuk keperluan lain (mis. validasi panjang minimum sebelum decode).
+const MSG_LENGTHS = {
+    0: 9, 1: 31, 20: 20, 21: 2, 22: 25, 23: 23, 24: 30, 27: 29, 30: 28, 
+    33: 28, 40: 4, 43: 3, 44: 5, 47: 4, 51: 5, 65: 42, 66: 6, 70: 18, 
+    73: 38, 74: 20, 75: 35, 76: 33, 77: 3, 109: 9, 132: 14, 191: 27, 
+    192: 44, 253: 54, 160: 12, 161: 3
+    // NB: 253 (STATUSTEXT) = severity(1) + text[50] + id(u16) + chunk_seq(u8) = 54.
+    // Sebelumnya 51 (base v1 tanpa extension) -> CRC v2 mismatch tiap kali
+    // FC nge-trim trailing-zero extension fields (kasus umum, non-chunked STATUSTEXT).
 };
 
 const REQUESTED_STREAMS = [1, 2, 3, 6, 10, 11, 12];
@@ -46,6 +62,33 @@ function buildMavlink1Frame(seq, sysid, compid, msgId, payloadBytes, crcExtra) {
     crc = mavlinkCrc16Update(crc, crcExtra);
     return new Uint8Array([0xFE, ...beforeCrc, crc & 0xFF, (crc >> 8) & 0xFF]);
 }
+
+function buildMavlink2Frame(seq, sysid, compid, msgId, payloadBytes, crcExtra) {
+    const len = payloadBytes.length;
+    const incompatFlags = 0x00;
+    const compatFlags = 0x00;
+    const msgIdLo = msgId & 0xFF;
+    const msgIdMid = (msgId >> 8) & 0xFF;
+    const msgIdHi = (msgId >> 16) & 0xFF;
+    const beforeCrc = [
+        len, incompatFlags, compatFlags, seq & 0xFF, sysid, compid,
+        msgIdLo, msgIdMid, msgIdHi, ...payloadBytes
+    ];
+    let crc = 0xFFFF;
+    for (const b of beforeCrc) crc = mavlinkCrc16Update(crc, b);
+    crc = mavlinkCrc16Update(crc, crcExtra);
+    return new Uint8Array([0xFD, ...beforeCrc, crc & 0xFF, (crc >> 8) & 0xFF]);
+}
+
+const MAV_MISSION_TYPE_MISSION = 0;
+const MAV_MISSION_TYPE_FENCE = 1;
+
+// MAV_CMD fence item (ArduPilot Copter >= 4.2, mission protocol berbasis mission_type)
+const MAV_CMD_NAV_FENCE_RETURN_POINT = 5000;
+const MAV_CMD_NAV_FENCE_POLYGON_VERTEX_INCLUSION = 5001;
+const MAV_CMD_NAV_FENCE_POLYGON_VERTEX_EXCLUSION = 5002;
+const MAV_CMD_NAV_FENCE_CIRCLE_INCLUSION = 5003;
+const MAV_CMD_NAV_FENCE_CIRCLE_EXCLUSION = 5004;
 
 const PARSE_STATE = {
     IDLE: 0, GOT_STX: 1, GOT_LENGTH: 2, GOT_INCOMPAT: 3, GOT_COMPAT: 4,
@@ -156,12 +199,29 @@ class MavlinkFrameParser {
     _finishFrame() {
         const payload = this.buf.slice(this._payloadStart, this._payloadStart + this.payloadLen);
         const crcExtra = CRC_EXTRA[this.msgId];
-        if (crcExtra === undefined) return;
+        if (crcExtra === undefined) {
+            if (typeof window !== 'undefined' && window.MAVLINK_DEBUG_DROPS) {
+                console.warn(`[MavlinkParser] DROP msgId=${this.msgId}: unknown CRC_EXTRA (belum ada di map)`);
+            }
+            return;
+        }
+        // PENTING: CRC MAVLink2 dihitung PERSIS atas byte yang diterima (this.buf),
+        // yaitu payload yang SUDAH ter-truncate oleh sender. TIDAK ADA padding zero
+        // yang ikut masuk ke perhitungan CRC -- ini sesuai reference implementation
+        // resmi (mavlink_helpers.h: mavlink_update_checksum dipanggil atas rxmsg->len
+        // apa adanya, zero-fill baru terjadi SETELAH CRC valid, dan cuma untuk decode).
+        // Blok padding sebelumnya di sini keliru dan menyebabkan CRC mismatch untuk
+        // hampir semua STATUSTEXT bertext pendek -- sudah dihapus.
         let crc = 0xFFFF;
         for (const b of this.buf) crc = mavlinkCrc16Update(crc, b);
         crc = mavlinkCrc16Update(crc, crcExtra);
         const receivedCrc = this._crcBytes[0] | (this._crcBytes[1] << 8);
-        if (crc !== receivedCrc) return;
+        if (crc !== receivedCrc) {
+            if (typeof window !== 'undefined' && window.MAVLINK_DEBUG_DROPS) {
+                console.warn(`[MavlinkParser] DROP msgId=${this.msgId}: CRC mismatch (dihitung=0x${crc.toString(16)}, diterima=0x${receivedCrc.toString(16)}, payloadLen=${this.payloadLen}, v2=${this.isV2})`);
+            }
+            return;
+        }
         this.onFrame(this.msgId, payload, this._sysid, this._compid);
     }
 }
@@ -232,26 +292,39 @@ const DECODERS = {
     },
     51: (bytes) => {
         const dv = new DataView(new Uint8Array(bytes).buffer);
-        return { _kind:'mission_request', seq: dv.getUint16(0, true) };
+        const missionType = bytes.length > 4 ? bytes[4] : 0;
+        return { _kind:'mission_request', seq: dv.getUint16(0, true), missionType };
     },
     44: (bytes) => {
         const dv = new DataView(new Uint8Array(bytes).buffer);
-        return { _kind:'mission_count', count: dv.getUint16(0, true) };
+        // mission_type cuma ada di MAVLink2; kalau frame v1 (payload 4 byte, tanpa
+        // extension), default MAV_MISSION_TYPE_MISSION=0.
+        const missionType = bytes.length > 4 ? bytes[4] : 0;
+        return { _kind:'mission_count', count: dv.getUint16(0, true), missionType };
     },
     47: (bytes) => {
-        return { _kind:'mission_ack', result: bytes[2] };
+        const missionType = bytes.length > 3 ? bytes[3] : 0;
+        return { _kind:'mission_ack', result: bytes[2], missionType };
     },
 
     65: (bytes) => {
         const dv = new DataView(new Uint8Array(bytes).buffer);
         return {
             _kind: 'telemetry',
+            rc1_in: dv.getUint16(4, true),
+            rc2_in: dv.getUint16(6, true),
+            rc3_in: dv.getUint16(8, true),
+            rc4_in: dv.getUint16(10, true),
             rc5_in: dv.getUint16(12, true),
+            rc6_in: dv.getUint16(14, true),
+            rc7_in: dv.getUint16(16, true),
+            rc8_in: dv.getUint16(18, true),
         }
     },
 
     73: (bytes) => {
         const dv = new DataView(new Uint8Array(bytes).buffer);
+        const missionType = bytes.length > 37 ? bytes[37] : 0;
         return {
             _kind: 'mission_item',
             param1: dv.getFloat32(0, true), param2: dv.getFloat32(4, true),
@@ -259,6 +332,7 @@ const DECODERS = {
             x: dv.getInt32(16, true), y: dv.getInt32(20, true), z: dv.getFloat32(24, true),
             seq: dv.getUint16(28, true), command: dv.getUint16(30, true),
             frame: dv.getUint8(34), current: dv.getUint8(35), autocontinue: dv.getUint8(36),
+            missionType,
         };
     },
     77: (bytes) => {
@@ -314,6 +388,18 @@ const DECODERS = {
         const msgId = bytes.length >= 53 ? (bytes[51] | (bytes[52] << 8)) : 0;
         const chunkSeq = bytes.length >= 54 ? bytes[53] : 0;
         return { _kind:'statustext', severity, text, msgId, chunkSeq };
+    },
+    160: (bytes) => {
+        const dv = new DataView(new Uint8Array(bytes).buffer);
+        return  {
+            _kind: 'fence_point',
+            lat: dv.getInt32(0, true),
+            lon: dv.getInt32(4, true),
+            target_system: dv.getUint8(8),
+            target_component: dv.getUint8(9),
+            idx: dv.getUint8(10),
+            count: dv.getUint8(11),
+        };
     },
 };
 

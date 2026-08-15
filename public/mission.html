@@ -256,20 +256,7 @@ function saveMission() {
     a.href = url; a.download = 'mission.json'; a.click();
 }
 
-map.on('click', function(e) { addWaypoint(e.latlng.lat, e.latlng.lng); });
 
-map.on('contextmenu', function(e) {
-    const popupContent = `
-        <div style="text-align: center; padding: 5px;">
-            <b style="color: #000; font-size: 13px; display:block; margin-bottom:8px;">Opsi Peta</b>
-            <button onclick="setHomeHere(${e.latlng.lat}, ${e.latlng.lng})" 
-                    style="background: #00bcd4; color: black; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px;">
-                Set Home Here
-            </button>
-        </div>
-    `;
-    L.popup().setLatLng(e.latlng).setContent(popupContent).openOn(map);
-});
 
 function saveWaypointsLocal() { localStorage.setItem('hawkeye_mission', JSON.stringify(waypoints)); }
 
@@ -285,6 +272,209 @@ function loadWaypointsLocal() {
     }
 }
 loadWaypointsLocal();
+
+// ===== GEOFENCE (POLYGON) LOGIC =====
+let geofencePolygon = null;
+let fenceEditMode = false;
+let fenceVertices = [];        
+let fenceVertexMarkers = [];   
+
+function renderFencePolygon() {
+    if (geofencePolygon) { map.removeLayer(geofencePolygon); geofencePolygon = null; }
+    if (fenceVertices.length < 3) return;
+    
+    const latlngs = fenceVertices.map(p => [p.lat, p.lon]);
+    geofencePolygon = L.polygon(latlngs, {
+        color: '#ff9800', // Warna garis tepi sesuai Mission Planner
+        weight: 3,
+        dashArray: '5, 5',
+        fillColor: '#ff9800',
+        fillOpacity: 0.15
+    }).addTo(map);
+}
+
+function renderFenceVertexMarkers() {
+    fenceVertexMarkers.forEach(m => map.removeLayer(m));
+    fenceVertexMarkers = fenceVertices.map((p, idx) => {
+        const icon = L.divIcon({ className: 'fence-vertex-icon', iconSize: [14, 14], iconAnchor: [7, 7] });
+        const marker = L.marker([p.lat, p.lon], { icon, draggable: fenceEditMode, zIndexOffset: 800 }).addTo(map);
+        
+        marker.on('drag', (e) => {
+            const ll = e.target.getLatLng();
+            fenceVertices[idx] = { lat: ll.lat, lon: ll.lng };
+            renderFencePolygon();
+        });
+        marker.on('contextmenu', () => {
+            if (!fenceEditMode) return;
+            fenceVertices.splice(idx, 1);
+            refreshFenceUI();
+            map.closePopup(); // Tutup context menu jika titik di-klik kanan
+        });
+        return marker;
+    });
+}
+
+window.refreshFenceUI = function() {
+    renderFencePolygon();
+    renderFenceVertexMarkers();
+    saveFenceLocal();
+}
+window.saveFenceLocal = function() {
+    localStorage.setItem('hawkeye_fence', JSON.stringify(fenceVertices));
+}
+window.loadFenceLocal = function() {
+    const saved = localStorage.getItem('hawkeye_fence');
+    if(saved) {
+        try {
+            fenceVertices = JSON.parse(saved);
+            if(fenceVertices.length > 0) {
+                refreshFenceUI();
+            }
+        } catch (e) {}
+    }
+}
+loadFenceLocal();
+
+window.toggleFenceEditMode = function() {
+    fenceEditMode = !fenceEditMode;
+    refreshFenceUI();
+    map.closePopup();
+    if (fenceEditMode) {
+        alert("Draw Polygon Aktif:\nKlik kiri di peta untuk menggambar area.\nKlik kanan pada peta jika sudah selesai.");
+    }
+}
+
+window.uploadFenceToFC = async function() {
+    const link = window.parent.commands._getActiveLink();
+    if (!link) return alert("Tidak ada koneksi!");
+    try {
+        const result = await link.uploadFence(fenceVertices);
+        alert(result.ok ? "Polygon sukses disimpan di FC!" : "Gagal: " + result.message);
+        map.closePopup();
+    } catch (e) { alert("Error: " + e.message); }
+}
+
+window.downloadFenceFromFC = async function() {
+    const link = window.parent.commands._getActiveLink();
+    if (!link) return alert("Tidak ada koneksi!");
+    try {
+        const points = await link.downloadFence();
+        if (points.length === 0) return alert("FC tidak memiliki data Polygon.");
+        fenceVertices = points;
+        refreshFenceUI();
+        map.closePopup();
+        alert(`Sukses memuat ${points.length} titik Polygon dari FC.`);
+    } catch (e) { alert("Error: " + e.message); }
+}
+
+window.clearFenceEverywhere = async function() {
+    if (!confirm('Yakin ingin menghapus Polygon dari layar dan FC?')) return;
+    fenceVertices = [];
+    refreshFenceUI();
+    map.closePopup();
+    
+    // Coba hapus di FC juga jika terhubung
+    try {
+        const link = window.parent.commands._getActiveLink();
+        if (link) await link.clearFence();
+    } catch (e) { console.warn("Gagal hapus di FC:", e); }
+}
+
+// ===== EVENT HANDLING PETA (KLIK & KLIK KANAN) =====
+
+// Ganti map.on('click') bawaan Anda dengan ini:
+map.on('click', function(e) { 
+    if (fenceEditMode) {
+        // Jika sedang mode edit, tambahkan titik Polygon
+        fenceVertices.push({ lat: e.latlng.lat, lon: e.latlng.lng });
+        refreshFenceUI();
+    } else {
+        // Jika tidak, tambahkan Waypoint misi normal
+        addWaypoint(e.latlng.lat, e.latlng.lng); 
+    }
+});
+
+// Ganti map.on('contextmenu') bawaan Anda dengan ini:
+map.on('contextmenu', function(e) {
+    const popupContent = `
+        <div style="text-align: center; padding: 5px;">
+            <b style="color: #000; font-size: 13px; display:block; margin-bottom:8px;">Opsi Peta</b>
+            <button onclick="setHomeHere(${e.latlng.lat}, ${e.latlng.lng}); map.closePopup();" 
+                    style="background: #00bcd4; color: black; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px;">
+                Set Home Here
+            </button>
+        </div>
+    `;
+    L.popup().setLatLng(e.latlng).setContent(popupContent).openOn(map);
+});
+
+L.Control.PolygonMenu = L.Control.extend({
+    options: { position: 'topleft' }, // Mengikuti posisi di bawah tombol Zoom
+    onAdd: function(map) {
+        const container = L.DomUtil.create('div', 'leaflet-control-polygon-container leaflet-control');
+        
+        // Tombol lingkaran hitam dengan icon Polygon
+        const btn = L.DomUtil.create('div', 'leaflet-control-polygon-btn', container);
+        btn.title = 'Geofence / Polygon Menu';
+        btn.innerHTML = `<svg viewBox="0 0 24 24"><polygon points="8,4 18,8 16,20 6,16" stroke="white" stroke-width="1.5" fill="none"/></svg>`;
+        
+        // Kotak dropdown menu
+        const dropdown = L.DomUtil.create('div', 'polygon-dropdown', container);
+        dropdown.id = 'polygonDropdown';
+
+        // Mencegah klik tembus ke peta di belakangnya
+        L.DomEvent.disableClickPropagation(container);
+
+        // Buka/tutup menu saat tombol diklik
+        L.DomEvent.on(btn, 'click', function(e) {
+            updatePolygonDropdown();
+            dropdown.classList.toggle('show');
+        });
+
+        // Tutup menu otomatis jika area peta lain diklik
+        map.on('click', function() {
+            dropdown.classList.remove('show');
+        });
+
+        return container;
+    }
+});
+
+// Inisialisasi tombol ke peta
+map.addControl(new L.Control.PolygonMenu());
+
+// Fungsi untuk memperbarui item menu di dalam Dropdown
+window.updatePolygonDropdown = function() {
+    const dropdown = document.getElementById('polygonDropdown');
+    if (!dropdown) return;
+
+    let menuItems = `
+        <button onclick="toggleFenceEditMode(); closePolygonDropdown();">
+            ${fenceEditMode ? 'Finish Polygon' : 'Draw a Polygon'}
+        </button>
+    `;
+
+    if (!fenceEditMode) {
+        menuItems += `
+            <button onclick="clearFenceEverywhere(); closePolygonDropdown();">Clear Polygon</button>
+            <button onclick="downloadFenceFromFC(); closePolygonDropdown();">Load Polygon</button>
+        `;
+    }
+
+    if (fenceEditMode && fenceVertices.length >= 3) {
+        menuItems += `
+            <button onclick="uploadFenceToFC(); closePolygonDropdown();">Save Polygon</button>
+        `;
+    }
+
+    dropdown.innerHTML = menuItems;
+};
+
+// Helper untuk menutup dropdown setelah eksekusi perintah
+window.closePolygonDropdown = function() {
+    const dropdown = document.getElementById('polygonDropdown');
+    if (dropdown) dropdown.classList.remove('show');
+};
 
 // ===== ALTITUDE EDITING =====
 let editingWaypointIndex = -1;

@@ -1,6 +1,6 @@
 {
   "name": "cerberus",
-  "version": "1.1.0",
+  "version": "1.4.1",
   "description": "HAWKEYE Ground Control Station",
   "author": "hkl",
   "main": "main.js",
@@ -25,7 +25,8 @@
     "win": {
       "target": [
         "portable",
-        "nsis"
+        "nsis",
+        "icon": "public/assets/icon.ico"
       ]
     },
     "asar": true

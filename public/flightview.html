@@ -204,7 +204,6 @@ function drawstring(ctx, string, font, fontsize, color, x, y) {
 }
 
 function drawArtificialHorizon(rollDeg, pitchDeg, yawDeg) {
-    // Validasi input: pastikan semua angka valid
     if (!isFinite(rollDeg)) rollDeg = 0;
     if (!isFinite(pitchDeg)) pitchDeg = 0;
     if (!isFinite(yawDeg)) yawDeg = 0;
@@ -394,7 +393,7 @@ window.updateTelemetryUI = function(data) {
     
     let rc5 = data.rc5_in !== undefined ? data.rc5_in : (window.lastTelemetry ? window.lastTelemetry.rc5_in : 0);
     
-    let displayType = window._stableVehicleType || 'UNKNOWN';
+    let displayType = window._stableVehicleType;
     
     if (rc5 > 800) { 
         if (rc5 > 1700 || rc5 < 1200) {
@@ -535,8 +534,8 @@ function buildPopupHtml(lat, lon, opts = {}) {
 
     return `
         <div style="text-align: center;">
-            <b style="color:${accentColor}; font-size:14px;">🚨 KORBAN TERDETEKSI</b><br>
-            <span style="font-size:11px; color:#666;">Zona Eksklusif: Radius ${VICTIM_BUFFER_RADIUS_METERS}m</span><br><br>
+            <b style="color:${accentColor}; font-size:12px;">🚨 KORBAN TERDETEKSI</b><br>
+            <span style="font-size:11px; color:#666;">Radius: ${VICTIM_BUFFER_RADIUS_METERS}m</span><br><br>
             ${detailLine}<br>
             Lat: ${lat.toFixed(7)}<br>Lon: ${lon.toFixed(7)}<br><br>
             <button onclick="goToVictim(${lat}, ${lon})"
@@ -614,7 +613,7 @@ function removeVictimMarkers() {
 
 // ===== SAR STATUSTEXT PARSING (chunk-aware) =====
 const SAR_PREFIX = "[SAR]";
-const STATUSTEXT_MAX_LEN = 50; // panjang field 'text' per-chunk di MAVLink1/2; chunk penuh = masih ada lanjutan
+const STATUSTEXT_MAX_LEN = 50;
 const SAR_CHUNK_TIMEOUT_MS = 2000; // flush paksa kalau chunk lanjutan tak kunjung datang (buang buffer basi)
 const sarChunkBuffers = new Map(); // msgId -> { text, lastSeq, timeoutHandle }
 
@@ -631,7 +630,6 @@ function reassembleSarText(logItem) {
     const msgId = logItem.msgId ?? 0;
     const chunkSeq = logItem.chunkSeq ?? 0;
 
-    // Kasus paling umum saat ini: single-chunk (field tidak ada / msgId=0)
     if (!msgId) {
         return text.startsWith(SAR_PREFIX) ? { status: 'complete', text } : { status: 'not_sar' };
     }
@@ -658,7 +656,6 @@ function reassembleSarText(logItem) {
     return { status: 'complete', text: flushSarBuffer(msgId) };
 }
 
-// Format: [SAR];STATUS;JUMLAH;LAT;LON  -- identik dengan parsing_msg.py
 function parseSarStatustext(fullText) {
     const data = fullText.trim().split(";");
     if (data.length !== 5) {
@@ -698,7 +695,6 @@ window.updateMavlogUI = function(logItem) {
     const logContent = document.getElementById('mavlinkLogContent');
     if (!logContent) return;
 
-    // Hilangkan tulisan default jika ada
     if (logContent.innerHTML.includes('Menunggu pesan')) logContent.innerHTML = '';
     
     const safeText = String(logItem.text).replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -713,7 +709,6 @@ window.updateMavlogUI = function(logItem) {
     
     logContent.appendChild(msgDiv);
     
-    // Batasi agar tidak lebih dari 100 baris agar browser tidak berat
     if (logContent.childElementCount > 200) logContent.removeChild(logContent.firstChild);
     logContent.scrollTop = logContent.scrollHeight;
 };
@@ -730,11 +725,16 @@ window.updateMavlogUI = function(logItem) {
 })();
 
 // ===== UPDATE MAP MARKER =====
+let headingLineBlack = null;
+let headingLineYellow = null;
+
 function updateMap(data) {
     const lat = Number(data.lat), lon = Number(data.lon);
 
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || (Math.abs(lat) < 0.000001 && Math.abs(lon) < 0.000001)) {
         if (droneMarker) { map.removeLayer(droneMarker); droneMarker = null; }
+        if (headingLineBlack) { map.removeLayer(headingLineBlack); headingLineBlack = null; }
+        if (headingLineYellow) { map.removeLayer(headingLineYellow); headingLineYellow = null; }
         return;
     }
 
@@ -754,7 +754,22 @@ function updateMap(data) {
         icon.options.html = `<div class="drone-marker" style="transform: rotate(${heading}deg);"></div>`;
         droneMarker.setIcon(icon);
     }
-    map.setView([lat, lon], 15);
+
+    const lineLengthMeters = 300; // Panjang garis simulasi (dalam meter)
+    const latRad = lat * Math.PI / 180;
+    const headingRad = heading * Math.PI / 180;
+    const lat2 = lat + (lineLengthMeters * Math.cos(headingRad)) / 111320;
+    const lon2 = lon + (lineLengthMeters * Math.sin(headingRad)) / (111320 * Math.cos(latRad));
+    const lineCoords = [[lat, lon], [lat2, lon2]];
+
+    if (!headingLineBlack) {
+        headingLineBlack = L.polyline(lineCoords, { color: 'black', weight: 6, opacity: 0.8 }).addTo(map);
+        headingLineYellow = L.polyline(lineCoords, { color: '#ff9800', weight: 2, opacity: 1.0 }).addTo(map);
+    } else {
+        headingLineBlack.setLatLngs(lineCoords);
+        headingLineYellow.setLatLngs(lineCoords);
+    }
+    map.setView([lat, lon], map.getZoom());
 }
 
 // ===== DRAG PANEL =====

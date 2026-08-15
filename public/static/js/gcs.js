@@ -77,18 +77,14 @@ const DEFAULT_BACKEND_URL = 'http://127.0.0.1:5000'
 class GCSApiClient {
     constructor() {
         this.isConnected = false;
-        this.currentConnectionName = null;
         this.telemetry = new GCSTelemetry();
         this.ws = null;
-        this.statusInterval = null;
         this.baseUrl = DEFAULT_BACKEND_URL;
         this.onConnect = null;
         this.onDisconnect = null;
         this.onTelemetry = null;
         this.onMavlog = null;
         this.onStatusChange = null;
-        this.messagesReceived = 0;
-        this.parseErrors = 0;
         this.remoteBackendMode = false;
         this.lastLogSeq = 0;
         this.isFetchingLogs = false;
@@ -177,203 +173,6 @@ class GCSApiClient {
         }
     }
 
-    setBaseUrl(url) {
-        this.baseUrl = url || '';
-    }
-
-    buildBackendUrl(host, port = '5000') {
-        const rawHost = (host || '').trim().replace(/\/+$/, '');
-        const rawPort = (port || '5000').toString().trim();
-        if (!rawHost) return '';
-
-        if (rawHost.startsWith('http://') || rawHost.startsWith('https://')) {
-            const url = new URL(rawHost);
-            if (!url.port && rawPort) url.port = rawPort;
-            return url.origin;
-        }
-
-        if (rawHost.includes(':')) {
-            return 'http://' + rawHost;
-        }
-
-        return 'http://' + rawHost + ':' + rawPort;
-    }
-
-    async fetchBackendStatus(baseUrl) {
-        try {
-            let resp = await fetch(baseUrl + '/ping', { cache: 'no-store' });
-            if (resp.status === 404) {
-                resp = await fetch(baseUrl + '/status', { cache: 'no-store' });
-            }
-            const data = await resp.json();
-            return { ok: resp.ok, data };
-        } catch (err) {
-            return {
-                ok: false,
-                data: {
-                    message: `Tidak bisa menghubungi Raspberry Pi di ${baseUrl}. Pastikan server web di Raspy jalan pada host 0.0.0.0 port 5000, IP/port benar, satu jaringan, dan port tidak diblokir firewall. Detail: ${err.message}`
-                }
-            };
-        }
-    }
-
-    async loadPorts() {
-        if (!('serial' in navigator)) {
-            alert('Browser Anda tidak mendukung Web Serial API. Gunakan Chrome atau Edge PC.');
-            return;
-        }
-
-        try {
-            // 1. Munculkan popup bawaan Chrome untuk memilih port laptop
-            this.localSerialPort = await navigator.serial.requestPort();
-            
-            // 2. Ambil informasi port (Chrome membatasi info nama spesifik demi privasi)
-            const portInfo = this.localSerialPort.getInfo();
-            const vendorId = portInfo.usbVendorId ? portInfo.usbVendorId.toString(16) : 'Unknown';
-            
-            // 3. Masukkan port yang baru saja Anda pilih ke dalam dropdown UI yang sudah ada
-            const select = document.getElementById('portSelect');
-            if (!select) return;
-            
-            select.innerHTML = `<option value="webserial" selected>Radio Laptop (VID: ${vendorId})</option>`;
-            
-        } catch (err) {
-            console.log('Scan port dibatalkan oleh pengguna:', err);
-        }
-    }
-
-    switchMode() {
-        const mode = document.getElementById('modeSelect')?.value;
-        const ipInput = document.getElementById('ipInput');
-        const portSelect = document.getElementById('portSelect');
-        const baudSelect = document.getElementById('baudSelect');
-        
-        if (!ipInput || !portSelect || !baudSelect) return;
-        
-        if (mode === 'serial') {
-            portSelect.style.display = 'block';
-            baudSelect.style.display = 'block';
-            ipInput.style.display = 'none';
-            this.loadPorts();
-        } else {
-            portSelect.style.display = 'none';
-            baudSelect.style.display = 'none';
-            ipInput.style.display = 'block';
-        }
-    }
-
-    async connect() {
-        if (this.isConnected) {
-            await this.disconnect();
-            return;
-        }
-
-        const connTypeSelect = document.getElementById('connTypeSelect');
-        const mode = connTypeSelect ? connTypeSelect.value : 'ip';
-
-        if (mode === 'serial') {
-            console.warn('[gcsConnection.connect] Mode serial tidak lagi ditangani di sini -- gunakan window.radioMavlink.connect() langsung.');
-            return;
-        }
-
-        try {
-            await this.connectIP();
-        } catch (err) {
-            console.error('Connect error:', err);
-            this.updateUI(false, true);
-            alert('Error koneksi: ' + err.message);
-        }
-    }
-
-    async connectIP() {
-        const hostInput = document.getElementById('ipHostInput');
-        const portInput = document.getElementById('ipPortInput');
-        if (!hostInput) {
-            alert('Elemen IP Host tidak ditemukan!');
-            return;
-        }
-        let host = hostInput.value.trim();
-        let ip_port = portInput ? portInput.value.trim() : '14550';
-        if (!host) {
-            alert('Silahkan masukkan IP MAVLink (contoh: 192.168.1.100)');
-            return;
-        }
-        // Jika user memasukkan host:port di satu input, pakai itu
-        if (host.includes(':')) {
-            const parts = host.split(':');
-            host = parts[0];
-            ip_port = parts[1] || ip_port;
-        }
-        this.baseUrl = this.baseUrl && this.baseUrl.startsWith('http') ? this.baseUrl : window.location.origin;
-        this.remoteBackendMode = false;
-        try {
-            const connectData = {
-                type: 'ip',
-                host: host,
-                port: parseInt(ip_port, 10) || 14550
-            };
-            console.log('[connectIP] Sending:', connectData);
-            const resp = await fetch(this.baseUrl + '/connect', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(connectData)
-            });
-            const data = await resp.json();
-            console.log('[connectIP] Response:', data);
-            if (data.status === 'success' || resp.ok) {
-                this.isConnected = true;
-                this.updateUI(true);
-                this.startWebSocket();
-                if (this.onConnect) this.onConnect();
-            } else {
-                this.updateUI(false, true);
-                alert('Koneksi IP gagal: ' + (data.message || 'Error tidak diketahui'));
-            }
-        } catch (err) {
-            this.updateUI(false, true);
-            alert('Error koneksi IP: ' + err.message);
-        }
-    }
-
-    async disconnect() {
-        try {
-            this.stopWebSocket(); // Hentikan WebSocket
-            
-            // if (!this.remoteBackendMode) {
-            //     try { await fetch(this.baseUrl + '/disconnect', { method: 'POST' }); } catch (e) {}
-            // }
-
-            if (this.serialReader) {
-                try { await this.serialReader.cancel(); } catch(e){}
-                this.serialReader = null;
-            }
-            if (this.serialWriter) {
-                try { this.serialWriter.releaseLock(); } catch(e){}
-                this.serialWriter = null;
-            }
-            if (this.localSerialPort) {
-                try { await this.localSerialPort.close(); } catch(e){}
-                this.localSerialPort = null;
-            }
-            // --- AKHIR PENAMBAHAN ---
-
-            if (!this.remoteBackendMode) {
-                try { await fetch(this.baseUrl + '/disconnect', { method: 'POST' }); } catch (e) {}
-            }
-
-            this.isConnected = false;
-            this.currentConnectionName = null;
-            this.remoteBackendMode = false;
-            this.messagesReceived = 0;
-            this.parseErrors = 0;
-            if (typeof this.updateUI === 'function') this.updateUI(false);
-            if (this.onDisconnect) this.onDisconnect();
-            console.log('Disconnected');
-        } catch (err) {
-            console.error('Disconnect error:', err);
-        }
-    }
-
     updateUI(connected, failed = false) {
         const btn = document.getElementById('connectBtn'); // Sesuaikan dengan id di navbar baru
         const statusText = document.getElementById('statusText');
@@ -410,74 +209,8 @@ class GCSApiClient {
             // Silently ignore
         }
     }
-
-    async sendCommand(cmd, alt = 10) {
-        try {
-            const resp = await fetch(this.baseUrl + '/command', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cmd, alt })
-            });
-            return await resp.json();
-        } catch (err) {
-            return { status: 'failed', message: err.message };
-        }
-    }
 }
 
-// ===== PERSISTENT CONNECTION MANAGER =====
-class PersistentConnectionManager {
-    constructor() {
-        this.client = null;
-        this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
-        this.reconnectDelay = 2000;
-    }
-
-    init() {
-        if (!this.client) {
-            this.client = new GCSApiClient();
-            
-            // Handle automatic reconnection
-            this.client.onDisconnect = () => {
-                console.log('Connection lost, attempting to reconnect...');
-                this.attemptReconnect();
-            };
-            
-            this.client.onConnect = () => {
-                this.reconnectAttempts = 0;
-                console.log('Successfully reconnected');
-            };
-        }
-        return this.client;
-    }
-
-    attemptReconnect() {
-        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            console.error('Max reconnection attempts reached');
-            return;
-        }
-
-        this.reconnectAttempts++;
-        const delay = this.reconnectDelay * this.reconnectAttempts;
-        
-        console.log(`Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`);
-        
-        setTimeout(() => {
-            if (this.client) {
-                this.client.connect().catch(err => {
-                    console.error('Reconnect failed:', err);
-                    this.attemptReconnect();
-                });
-            }
-        }, delay);
-    }
-}
-
-// ===== GLOBAL PERSISTENT CONNECTION MANAGER =====
-const persistentConnectionMgr = new PersistentConnectionManager();
-
-// ===== Initialize Global GCS Connection =====
 window.gcsConnection = new GCSApiClient();
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -504,7 +237,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             frame.contentWindow.updateMavlogUI(logItem);
         }
     };
-    // CEK STATUS SAAT WEB DIBUKA (TANPA MEMAKSA KONEK)
     try {
         const res = await fetch(window.gcsConnection.baseUrl + '/status');
         const data = await res.json();
