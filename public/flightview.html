@@ -440,13 +440,50 @@ function switchTelemPage(pageId, btnElement) {
     btnElement.classList.add('active');
 }
 
+function logLocalFeedback(text, severity = 6) {
+    const logContent = document.getElementById('mavlinkLogContent');
+    if (!logContent) return;
+    if (logContent.innerHTML.includes('Menunggu pesan')) logContent.innerHTML = '';
+
+    const timeStr = new Date().toTimeString().split(' ')[0];
+    const safeText = String(text).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const msgDiv = document.createElement('div');
+    msgDiv.className = `log-sev-${severity}`;
+    msgDiv.style.marginBottom = "3px";
+    msgDiv.innerHTML = `<span style="color:#747d8c;">[${timeStr}]</span> ${safeText}`;
+
+    logContent.appendChild(msgDiv);
+    if (logContent.childElementCount > 200) logContent.removeChild(logContent.firstChild);
+    logContent.scrollTop = logContent.scrollHeight;
+}
+
+const MAV_RESULT_MAP = {
+    0: 'ACCEPTED', 1: 'TEMPORARILY_REJECTED', 2: 'DENIED',
+    3: 'UNSUPPORTED', 4: 'FAILED', 5: 'IN_PROGRESS', 6: 'CANCELLED',
+};
+
+function logAckResult(actionLabel, ack) {
+    if (!ack) {
+        logLocalFeedback(`${actionLabel}: perintah terkirim (tanpa ACK)`, 6);
+        return;
+    }
+    if (ack.ok) {
+        logLocalFeedback(`${actionLabel}`, 6);
+    } else if (ack.result === 'timeout') {
+        logLocalFeedback(`${actionLabel}`, 4);
+    } else {
+        const resultName = MAV_RESULT_MAP[ack.result] ?? ack.result;
+        logLocalFeedback(`${actionLabel}`, 3);
+    }
+}
+
 async function doAction(action) {
     if (!window.parent.commands) {
         alert("Sistem command belum termuat.");
         return;
     }
     
-    const isLive = window.parent.commands._radioActive() || window.parent.commands._piActive();
+    const isLive = window.parent.commands._radioActive() || window.parent.commands._udpActive();
     if (!isLive) {
         alert("Gagal: Tidak ada koneksi aktif ke Drone.");
         return;
@@ -456,29 +493,41 @@ async function doAction(action) {
 
     try {
         switch(action) {
-            case 'arm': 
-                await window.parent.commands.armDisarm(true); 
+            case 'arm': {
+                const ack = await window.parent.commands.armDisarm(true);
+                logAckResult('ARM', ack);
                 break;
-            case 'disarm': 
-                await window.parent.commands.armDisarm(false); 
+            }
+            case 'disarm': {
+                const ack = await window.parent.commands.armDisarm(false);
+                logAckResult('DISARM', ack);
                 break;
-            case 'safety_on':
-                await window.parent.commands.setSafetySwitch(true);
+            }
+            case 'safety_on': {
+                const ack = await window.parent.commands.setSafetySwitch(true);
+                logAckResult('SAFETY SWITCH ON', ack);
                 console.log("Safety Switch ON (SAFE)");
                 break;
-            case 'safety_off':
-                await window.parent.commands.setSafetySwitch(false);
+            }
+            case 'safety_off': {
+                const ack = await window.parent.commands.setSafetySwitch(false);
+                logAckResult('SAFETY SWITCH OFF', ack);
                 console.log("Safety Switch OFF (LIVE)");
                 break;
-            case 'reboot':
+            }
+            case 'reboot': {
                 if (confirm("Yakin ingin melakukan Reboot pada Flight Controller?")) {
-                    await window.parent.commands.reboot();
+                    const ack = await window.parent.commands.reboot();
+                    logAckResult('REBOOT FC', ack);
                 }
                 break;
-            case 'takeoff': 
-                await link.takeoff(2); 
+            }
+            case 'takeoff': {
+                const ack = await link.takeoff(2);
+                logAckResult('TAKEOFF', ack);
                 break;
-            case 'rover':
+            }
+            case 'rover': {
                 const telem = window.parent.gcsConnection.telemetry;
                 const bataslanding = 0.5;
                 const currentAlt = telem.alt || 0;
@@ -487,27 +536,40 @@ async function doAction(action) {
                     return;
                 }
                 await window.parent.commands.setHybridMode('rover');
+                logLocalFeedback('[TRANSITION] Rover mode ready', 6);
                 console.log("[TRANSITION] Switching to Rover mode (ready)...");
                 break;
-            case 'copter':
+            }
+            case 'copter': {
                 console.log("[TRANSITION] Switching to Copter mode (safety)...");
-                await window.parent.commands.setHybridMode('copter_safe'); 
+                await window.parent.commands.setHybridMode('copter_safe');
+                logLocalFeedback('[TRANSITION] Switching to Copter mode', 6);
                 await new Promise(resolve => setTimeout(resolve, 2000));
                 console.log("[TRANSITION] Switching to Copter mode (ready)...");
-                await window.parent.commands.setHybridMode('ready'); 
+                await window.parent.commands.setHybridMode('ready');
+                logLocalFeedback('[TRANSITION] Copter mode ready', 6);
                 break;
-            case 'rtl': 
-                await link.rtl(); 
+            }
+            case 'rtl': {
+                const ack = await link.rtl();
+                logAckResult('RTL', ack);
                 break;
-            case 'land': 
-                await link.land(); 
+            }
+            case 'land': {
+                const ack = await link.land();
+                logAckResult('LAND', ack);
                 break;
-            case 'setmode': 
+            }
+            case 'setmode': {
                 const modeValue = document.getElementById('flightModeSelect').value;
-                await window.parent.commands.setFlightMode(parseInt(modeValue, 10)); 
+                const modeLabel = document.getElementById('flightModeSelect').selectedOptions[0]?.text ?? modeValue;
+                const ack = await window.parent.commands.setFlightMode(parseInt(modeValue, 10));
+                logAckResult(`${modeLabel}`, ack);
                 break;
+            }
         }
     } catch (e) {
+        logLocalFeedback(`❌ Gagal mengirim perintah ${action}: ${e.message}`, 3);
         alert(`Gagal mengirim perintah ${action}: ${e.message}`);
     }
 }
@@ -977,7 +1039,7 @@ async function goToVictim(lat, lon, alt = null) {
 // ===== UPDATE STATS =====
 function updateStats() {
     if (!window.parent.commands) return;
-    const isLive = window.parent.commands._radioActive() || window.parent.commands._piActive();
+    const isLive = window.parent.commands._radioActive() || window.parent.commands._udpActive();
     const msgCountEl = document.getElementById('msgCount');
     const errorCountEl = document.getElementById('errorCount');
     if (msgCountEl){

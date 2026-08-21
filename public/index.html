@@ -37,6 +37,8 @@
             .then(response => response.text())
             .then(data => {
                 document.getElementById('navbar-placeholder').innerHTML = data;
+                toggleConnType();
+                updateNavbarStatus();
             })
             .catch(error => console.error('Gagal memuat navbar:', error));
         
@@ -49,7 +51,43 @@
         window.mavFeatures = window.commands;
 
         let iframeReady = false;          
-        const logQueue = [];              
+        const logQueue = [];
+
+        function routeTelemetry(raw) {
+            const adaptedData = window.adaptRadioTelemetry(raw);
+
+            // Simpan ke "Otak Utama" (Global Store) agar tab Mission & Preflight tidak buta
+            if (window.gcsConnection && window.gcsConnection.telemetry) {
+                window.gcsConnection.telemetry.updateFromApi(adaptedData);
+            }
+
+            // Dorong ke Iframe UI yang sedang aktif (Flight View)
+            const frame = document.getElementById('main-frame');
+            if (frame?.contentWindow?.updateTelemetryUI) {
+                frame.contentWindow.updateTelemetryUI(adaptedData);
+            }
+        }
+
+        function routeMavlog(logItem) {
+            if (!iframeReady) {
+                logQueue.push(logItem);
+                return;
+            }
+            const frame = document.getElementById('main-frame');
+            if (frame?.contentWindow?.updateMavlogUI) {
+                frame.contentWindow.updateMavlogUI(logItem);
+            }
+        }
+
+        function handleLinkConnect() {
+            updateNavbarStatus();
+            setTimeout(loadAllParams, 2000);
+        }
+        function handleLinkDisconnect() {
+            updateNavbarStatus();
+            window.paramCache.loaded = false;
+            window.paramCache.params = {};
+        }
 
         document.addEventListener('DOMContentLoaded', function() {
             const frame = document.getElementById('main-frame');
@@ -68,74 +106,11 @@
                 });
             }
 
-            // Timpa fungsi onMavlog dari gcs.js untuk menambahkan fitur antrean (Queue)
-            window.gcsConnection.onMavlog = (logItem) => {
-                const frame = document.getElementById('main-frame');
-                if (!iframeReady) {
-                    logQueue.push(logItem);
-                    return;
-                }
-                if (frame.contentWindow && typeof frame.contentWindow.updateMavlogUI === 'function') {
-                    frame.contentWindow.updateMavlogUI(logItem);
-                }
-            };
+            window.radioMavlink.onTelemetry = routeTelemetry;
+            window.radioMavlink.onMavlog = routeMavlog;
+            window.udpMavlink.onTelemetry = routeTelemetry;
+            window.udpMavlink.onMavlog = routeMavlog;
 
-            window.radioMavlink.onTelemetry = (data) => {
-                const adaptedData = window.adaptRadioTelemetry(data);
-                
-                // Simpan ke "Otak Utama" (Global Store) agar tab Mission & Preflight tidak buta
-                if (window.gcsConnection && window.gcsConnection.telemetry) {
-                    window.gcsConnection.telemetry.updateFromApi(adaptedData);
-                }
-
-                // Dorong ke Iframe UI yang sedang aktif (Flight View)
-                const frame = document.getElementById('main-frame');
-                if (frame?.contentWindow?.updateTelemetryUI) {
-                    frame.contentWindow.updateTelemetryUI(adaptedData);
-                }
-            };
-
-            window.radioMavlink.onMavlog = (logItem) => {
-                const frame = document.getElementById('main-frame');
-                if (!iframeReady) {
-                    logQueue.push(logItem);
-                    return;
-                }
-                if (frame?.contentWindow?.updateMavlogUI) {
-                    frame.contentWindow.updateMavlogUI(logItem);
-                }
-            };
-
-            window.udpMavlink.onTelemetry = (data) => {
-                const adaptedData = window.adaptRadioTelemetry(data);
-                
-                // Simpan ke "Otak Utama" (Global Store)
-                if (window.gcsConnection && window.gcsConnection.telemetry) {
-                    window.gcsConnection.telemetry.updateFromApi(adaptedData);
-                }
-
-                // Dorong ke Iframe UI yang sedang aktif (Flight View)
-                const frame = document.getElementById('main-frame');
-                if (frame?.contentWindow?.updateTelemetryUI) {
-                    frame.contentWindow.updateTelemetryUI(adaptedData);
-                }
-            };
-
-            window.udpMavlink.onMavlog = (logItem) => {
-                const frame = document.getElementById('main-frame');
-                if (!iframeReady) {
-                    logQueue.push(logItem);
-                    return;
-                }
-                if (frame?.contentWindow?.updateMavlogUI) {
-                    frame.contentWindow.updateMavlogUI(logItem);
-                }
-            };
-
-            // Sinkronisasi status navbar secara periodik
-            setInterval(() => {
-                updateNavbarStatus();
-            }, 2000);
         });
 
         window.paramCache = {
@@ -189,16 +164,10 @@
 
         }
 
-        window.radioMavlink.onConnect = () => {
-            setTimeout(() => {
-                loadAllParams();
-            }, 2000);
-        };
-
-        window.radioMavlink.onDisconnect = () => {
-            window.paramCache.loaded = false;
-            window.paramCache.params = {};
-        };
+        window.radioMavlink.onConnect = handleLinkConnect;
+        window.radioMavlink.onDisconnect = handleLinkDisconnect;
+        window.udpMavlink.onConnect = handleLinkConnect;
+        window.udpMavlink.onDisconnect = handleLinkDisconnect;
 
         function navigateTo(url, el) {
             document.getElementById('main-frame').src = url;
@@ -304,12 +273,14 @@
             const isUdpConnected = !!(window.udpMavlink && window.udpMavlink.telemetry?.connected);
 
             if (type === 'serial') {
+                if (isUdpConnected) await disconnectUdp();
                 if (isRadioConnected) {
                     await disconnectRadio();
                 } else {
                     await connectRadio();
                 }
             } else {
+                if (isRadioConnected) await disconnectRadio();
                 if (isUdpConnected) {
                     await disconnectUdp();
                 } else {
@@ -336,13 +307,7 @@
             }
         }
 
-        setInterval(updateNavbarStatus, 1500);
-        document.addEventListener('DOMContentLoaded', () => {
-            setTimeout(() => {
-                toggleConnType();
-                updateNavbarStatus();
-            }, 500);
-        });
+        setInterval(updateNavbarStatus, 5000);
     </script>
 </body>
 </html>

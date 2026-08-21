@@ -37,18 +37,11 @@ const CRC_EXTRA = {
     161: 68,   // FENCE_FETCH_POINT
 };
 
-// NB: MSG_LENGTHS TIDAK dipakai lagi untuk perhitungan CRC (lihat _finishFrame).
-// CRC MAVLink2 harus dihitung persis atas payload yang diterima (sudah ter-truncate),
-// bukan di-pad ke panjang penuh struct. Dibiarkan di sini kalau-kalau dibutuhkan
-// untuk keperluan lain (mis. validasi panjang minimum sebelum decode).
 const MSG_LENGTHS = {
     0: 9, 1: 31, 20: 20, 21: 2, 22: 25, 23: 23, 24: 30, 27: 29, 30: 28, 
     33: 28, 40: 4, 43: 3, 44: 5, 47: 4, 51: 5, 65: 42, 66: 6, 70: 18, 
     73: 38, 74: 20, 75: 35, 76: 33, 77: 3, 109: 9, 132: 14, 191: 27, 
     192: 44, 253: 54, 160: 12, 161: 3
-    // NB: 253 (STATUSTEXT) = severity(1) + text[50] + id(u16) + chunk_seq(u8) = 54.
-    // Sebelumnya 51 (base v1 tanpa extension) -> CRC v2 mismatch tiap kali
-    // FC nge-trim trailing-zero extension fields (kasus umum, non-chunked STATUSTEXT).
 };
 
 const REQUESTED_STREAMS = [1, 2, 3, 6, 10, 11, 12];
@@ -82,8 +75,6 @@ function buildMavlink2Frame(seq, sysid, compid, msgId, payloadBytes, crcExtra) {
 
 const MAV_MISSION_TYPE_MISSION = 0;
 const MAV_MISSION_TYPE_FENCE = 1;
-
-// MAV_CMD fence item (ArduPilot Copter >= 4.2, mission protocol berbasis mission_type)
 const MAV_CMD_NAV_FENCE_RETURN_POINT = 5000;
 const MAV_CMD_NAV_FENCE_POLYGON_VERTEX_INCLUSION = 5001;
 const MAV_CMD_NAV_FENCE_POLYGON_VERTEX_EXCLUSION = 5002;
@@ -205,13 +196,6 @@ class MavlinkFrameParser {
             }
             return;
         }
-        // PENTING: CRC MAVLink2 dihitung PERSIS atas byte yang diterima (this.buf),
-        // yaitu payload yang SUDAH ter-truncate oleh sender. TIDAK ADA padding zero
-        // yang ikut masuk ke perhitungan CRC -- ini sesuai reference implementation
-        // resmi (mavlink_helpers.h: mavlink_update_checksum dipanggil atas rxmsg->len
-        // apa adanya, zero-fill baru terjadi SETELAH CRC valid, dan cuma untuk decode).
-        // Blok padding sebelumnya di sini keliru dan menyebabkan CRC mismatch untuk
-        // hampir semua STATUSTEXT bertext pendek -- sudah dihapus.
         let crc = 0xFFFF;
         for (const b of this.buf) crc = mavlinkCrc16Update(crc, b);
         crc = mavlinkCrc16Update(crc, crcExtra);
@@ -338,6 +322,19 @@ const DECODERS = {
     77: (bytes) => {
         const dv = new DataView(new Uint8Array(bytes).buffer);
         return { _kind:'command_ack', command: readU16(dv,0), result: dv.getUint8(2) };
+    },
+    76: (bytes) => {
+        const dv = new DataView(new Uint8Array(bytes).buffer);
+        return {
+            _kind: 'command_long',
+            param1: dv.getFloat32(0, true), param2: dv.getFloat32(4, true),
+            param3: dv.getFloat32(8, true), param4: dv.getFloat32(12, true),
+            param5: dv.getFloat32(16, true), param6: dv.getFloat32(20, true),
+            param7: dv.getFloat32(24, true),
+            command: readU16(dv, 28),
+            targetSystem: dv.getUint8(30), targetComponent: dv.getUint8(31),
+            confirmation: dv.getUint8(32),
+        };
     },
     132: (bytes) => {
         const dv = new DataView(new Uint8Array(bytes).buffer);

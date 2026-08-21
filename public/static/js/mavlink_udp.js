@@ -509,7 +509,6 @@ class UdpMavlink {
         }
 
         const items = [];
-        // STANDAR ARDUPILOT: Wajib mengirim Return Point di urutan pertama (seq 0)
         items.push({
             command: 5000, // MAV_CMD_NAV_FENCE_RETURN_POINT
             param1: 0,
@@ -714,9 +713,6 @@ class UdpMavlink {
     }
 
     _handleFrame(msgId, payload, sysid, compid) {
-        // Di socket UDP broadcast (255.255.255.255), kita bisa menerima BALIK heartbeat
-        // yang GCS ini sendiri kirim (self-loopback) -- harus dikecualikan eksplisit,
-        // kalau tidak, GCS bisa salah kira dirinya sendiri sebagai "target vehicle".
         const isSelf = (sysid === this._gcsSysId && compid === this._gcsCompId);
 
         if (msgId === 0 && !isSelf) {
@@ -734,10 +730,6 @@ class UdpMavlink {
             }
         }
 
-        // Setelah target diketahui, ABAIKAN seluruh frame dari sysid lain -- termasuk
-        // echo heartbeat GCS sendiri dan vehicle/GCS lain yang kebetulan nyiar di
-        // broadcast address yang sama. Tanpa filter ini, telemetry (armed/mode/posisi)
-        // bisa "tertimpa" data dari sumber yang salah, bukan cuma masalah timing heartbeat.
         if (isSelf) return;
         if (this._streamsRequested && sysid !== this.targetSystem) return;
 
@@ -764,6 +756,8 @@ class UdpMavlink {
             this._handleStatustext(result);
         } else if (result._kind === 'command_ack') {
             this._handleCommandAck(result.command, result.result);
+        } else if (result._kind === 'command_long') {
+            this._handleCommandLong(result);
         } else if (result._kind === 'param_value') {
             this._handleParamValue(result);
         } else if (result._kind === 'mission_request') {
@@ -817,6 +811,16 @@ class UdpMavlink {
             this._ackWaiters.delete(command);
             clearTimeout(waiter.timer);
             waiter.resolve({ ok: result === 0, result });
+        }
+    }
+
+    _handleCommandLong({ command, param1 }) {
+        const MAV_CMD_ACCELCAL_VEHICLE_POS = 42429;
+        if (command === MAV_CMD_ACCELCAL_VEHICLE_POS) {
+            console.log(`[UdpMavlink] FC minta konfirmasi posisi accel cal #${param1}`);
+            if (this.onAccelCalPosRequest) this.onAccelCalPosRequest(param1);
+        } else {
+            console.log(`[UdpMavlink] COMMAND_LONG diterima dari FC (command=${command}), belum ada handler spesifik -- diabaikan.`);
         }
     }
 
@@ -898,8 +902,6 @@ class UdpMavlink {
             return;
         }
 
-        // Sama seperti radio-mavlink.js: text.length < 50 = sinyal akhir chunk,
-        // + idle-timeout safety net kalau chunk terakhir pas 50 char / paket hilang.
         let entry = this._statustextChunks[msgId];
         if (!entry) {
             entry = { chunks: {}, severity, timer: null };

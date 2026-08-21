@@ -2,13 +2,14 @@ const commands = {
     _radioActive() {
         return !!(window.radioMavlink && window.radioMavlink.isLive());
     },
-    _piActive() {
+    
+    _udpActive() {
         return !!(window.udpMavlink && window.udpMavlink.isLive());
     },
-    
+
     _getActiveLink() {
         if (this._radioActive()) return window.radioMavlink;
-        if (this._piActive()) return window.udpMavlink;
+        if (this._udpActive()) return window.udpMavlink;
         throw new Error('Tidak ada koneksi aktif. Silakan hubungkan Radio atau UDP terlebih dahulu.');
     },
 

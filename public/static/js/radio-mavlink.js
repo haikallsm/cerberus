@@ -8,7 +8,7 @@ class RadioMavlink {
         this.telemetry = { connected: false, source: 'radio' };
         this.logSeq = 0;
         this._statustextChunks = {};
-        this.lastHearbeat = null;
+        this.lastHearbeatTime = null;
         this._watchdogTimer = null;
         this._linkLossTimeoutMs = 5000;
 
@@ -46,6 +46,7 @@ class RadioMavlink {
         this._awaitingReconnect = false;
         this._reconnecting = false;
         this._reconnectTimer = null;
+        this._isRebooting = false;
 
         this._setupAutoReconnectListeners();
     }
@@ -88,11 +89,30 @@ class RadioMavlink {
         this._stopWatchdog();
         this._stopRcOverrideLoop();
         this.rcChannels = new Array(8).fill(65535);
-        try {
-            if (this.writer) { await this.writer.close().catch(() => {}); this.writer = null; }
-            if (this.reader) { await this.reader.cancel().catch(() => {}); this.reader.releaseLock(); this.reader = null; }
-            if (this.port) await this.port.close().catch(() => {});
-        } catch (e) {}
+        if (this.reader) {
+            try { await this.reader.cancel().catch(()=>{}); } catch (e) {}
+        }
+        
+        // 2. Tutup Writer
+        if (this.writer) {
+            try { 
+                await this.writer.close().catch(()=>{}); 
+                this.writer.releaseLock();
+            } catch (e) {}
+            this.writer = null;
+        }
+
+        // 3. TUNGGU readLoop selesai melepas lock (Max 1 detik)
+        let maxWait = 20;
+        while (this._isReading && maxWait > 0) {
+            await new Promise(r => setTimeout(r, 50));
+            maxWait--;
+        }
+
+        // 4. Tutup Port secara aman di OS
+        if (this.port) {
+            try { await this.port.close(); } catch (e) {}
+        }
         this.telemetry.connected = false;
         this._streamsRequested = false;
     }
@@ -106,10 +126,6 @@ class RadioMavlink {
         this._scheduleReconnect(1);
     }
 
-    // Gagalkan segera semua promise upload/download mission & fence yang sedang
-    // menunggu, supaya pemanggil dapat error yang jelas ("link putus") alih-alih
-    // menunggu 5-10 detik untuk timeout generik yang menyesatkan ("FC berhenti
-    // meminta item") padahal penyebab aslinya link radio drop/reconnect.
     _rejectPendingTransfers(message) {
         if (this._missionUpload) {
             const state = this._missionUpload;
@@ -151,11 +167,24 @@ class RadioMavlink {
 
     async _attemptReconnect(attempt) {
         if (this._intentionalDisconnect || !this._awaitingReconnect || this._reconnecting) return;
-        if (!this.port) { this._scheduleReconnect(attempt + 1); return; }
+        
         this._reconnecting = true;
         try {
+            if ('serial' in navigator) {
+                const ports = await navigator.serial.getPorts();
+                if (ports.length > 0) {
+                    this.port = ports[0];
+                } else {
+                    throw new Error("Perangkat belum terdeteksi kembali oleh OS.");
+                }
+            }
+
+            if (!this.port) throw new Error("Port tidak valid.");
+
             await this.connect(this._lastBaudRate);
-            console.log('[RadioMavlink] Auto-reconnect berhasil setelah unexpected drop.');
+            console.log('[RadioMavlink] Auto-reconnect berhasil setelah link drop / reboot.');
+            
+            this._isRebooting = false; 
         } catch (e) {
             console.warn(`[RadioMavlink] Auto-reconnect attempt ${attempt} gagal:`, e.message);
             this._reconnecting = false;
@@ -171,12 +200,16 @@ class RadioMavlink {
     }
 
     isLive() {
-    return this.telemetry.connected && (Date.now() - this.lastHeartbeatTime) < this._linkLossTimeoutMs;
+        const timeout = this.isRebooting ? 15000 : this._linkLossTimeoutMs;
+        return this.telemetry.connected && (Date.now() - this.lastHeartbeatTime) < timeout;
     }
-
 
     async connect(baudRate = 57600) {
         if (!this.port) throw new Error('Belum ada port dipilih.');
+        
+        this._intentionalDisconnect = false;
+        this._awaitingReconnect = false;
+
         await this.port.open({ baudRate });
         this._lastBaudRate = baudRate;
         this.writer = this.port.writable.getWriter();
@@ -195,7 +228,9 @@ class RadioMavlink {
         this._watchdogTimer = setInterval(() => {
             if (this.telemetry.connected && !this.isLive()) {
                 console.warn('[RadioMavlink] Heartbeat timeout — link dianggap putus.');
-                this.disconnect().catch(() => {});
+                this._isRebooting = false;
+                this._handleUnexpectedDrop().catch(() => {});
+                // this.disconnect().catch(() => {});
             }
         }, 1000);
     }
@@ -227,18 +262,17 @@ class RadioMavlink {
     }
 
     async disconnect() {
-        this.keepReading = false;
-        this._stopWatchdog();
-        this._stopRcOverrideLoop();
-        this._rejectPendingTransfers('Koneksi radio ditutup -- upload/download dibatalkan.');
-        this.rcChannels = new Array(8).fill(65535);
-        try {
-            if (this.writer) { await this.writer.close().catch(()=>{}); this.writer = null; }
-            if (this.reader) { await this.reader.cancel(); this.reader.releaseLock(); }
-            if (this.port) await this.port.close();
-        } catch (e) {}
-        this.telemetry.connected = false;
-        this._streamsRequested = false;
+       if (this._intentionalDisconnect) return;
+        
+        console.log('[RadioMavlink] Memutuskan koneksi secara manual...');
+        
+        this._intentionalDisconnect = true;
+        this._awaitingReconnect = false;
+        
+        this._rejectPendingTransfers('Koneksi radio ditutup manual -- upload/download dibatalkan.');
+        
+        await this._teardownTransport();
+        
         if (this.onDisconnect) this.onDisconnect();
     }
 
@@ -405,9 +439,6 @@ class RadioMavlink {
         return new Promise((resolve, reject) => {
             const state = { items, resolve, reject, timer: null, resendTimer: null };
             state.resetTimer = () => {
-                // resetTimer dipanggil ulang oleh _handleMissionRequest tiap kali FC
-                // benar2 merespons -- begitu itu terjadi, resend MISSION_COUNT dimatikan
-                // karena handshake sudah jalan.
                 if (state.resendTimer) { clearInterval(state.resendTimer); state.resendTimer = null; }
                 if (state.timer) clearTimeout(state.timer);
                 state.timer = setTimeout(() => {
@@ -421,11 +452,6 @@ class RadioMavlink {
             const countPayload = [count & 0xFF, (count >> 8) & 0xFF, this.targetSystem, this.targetComponent];
             this._sendFrame(44, countPayload, CRC_EXTRA[44]);
 
-            // MISSION_COUNT adalah paket PEMBUKA yang memicu seluruh handshake upload.
-            // Di radio telemetry yang lossy (SiK dkk), kalau paket pertama ini yang
-            // hilang, FC tidak akan pernah kirim MISSION_REQUEST_INT apapun dan kita
-            // cuma diam menunggu sampai timeout tanpa tahu sebabnya. Resend periodik
-            // sampai FC merespons apa saja.
             state.resendTimer = setInterval(() => {
                 if (!this._missionUpload) return;
                 console.warn('[RadioMavlink] uploadMission: belum ada respons FC, resend MISSION_COUNT...');
@@ -635,10 +661,6 @@ class RadioMavlink {
             const countPayload = [0, 0, this.targetSystem, this.targetComponent, MAV_MISSION_TYPE_FENCE];
             this._sendFrame(44, countPayload, CRC_EXTRA[44], true);
 
-            // Untuk count=0, FC langsung MISSION_ACK tanpa minta item apapun -- kalau paket
-            // MISSION_COUNT(0) ini hilang, tidak ada _handleFenceRequest yang akan memanggil
-            // resetTimer(), jadi resend di sini WAJIB ada (beda dgn upload biasa yang punya
-            // banyak item, clearFence cuma 1 paket tunggal untuk seluruh operasi).
             state.resendTimer = setInterval(() => {
                 if (!this._fenceUpload) return;
                 console.warn('[RadioMavlink] clearFence: belum ada respons FC, resend MISSION_COUNT(0)...');
@@ -701,6 +723,12 @@ class RadioMavlink {
         return this.sendCommandLong(176, { p1: MAV_MODE_FLAG_CUSTOM_MODE_ENABLED, p2: modeCode });
     }
     async reboot() {
+        console.log('[Mavlink] reboot');
+        this._isRebooting = true;
+        if (this.telemetry) {
+            this.telemetry.system_status = 'rebooting';
+            if (this.onTelemetry) this.onTelemetry({ ...this.telemetry });
+        }
         return this.sendCommandLong(246, { p1: 1 });
     }
     async setHome(lat, lon, alt = 0) {
@@ -772,7 +800,9 @@ class RadioMavlink {
     }
 
     async _readLoop() {
-        while (this.port.readable && this.keepReading) {
+        this._isReading = true;
+        
+        while (this.port && this.port.readable && this.keepReading) {
             this.reader = this.port.readable.getReader();
             try {
                 while (true) {
@@ -781,17 +811,31 @@ class RadioMavlink {
                     for (const byte of value) this.parser.feedByte(byte);
                 }
             } catch (err) {
-                console.error('[RadioMavlink] Read error:', err);
+                console.error('[RadioMavlink] Read error (kemungkinan USB terputus):', err.message);
+                break;
             } finally {
-                this.reader.releaseLock();
+                if (this.reader) {
+                    this.reader.releaseLock();
+                    this.reader = null;
+                }
             }
         }
+        
+        this._isReading = false;
     }
 
     _handleFrame(msgId, payload, sysid, compid) {
         const isSelf = (sysid === this._gcsSysId && compid === this._gcsCompId);
 
         if (msgId === 0 && !isSelf) {
+            if (this._isRebooting) {
+                console.log(`[RadioMavlink] Heartbeat diterima dari sysid=${sysid}, compid=${compid} -- FC sudah reboot.`);
+                this._isRebooting = false;
+                this._streamsRequested = false;
+                if (this.telemetry) {
+                    this.telemetry.system_status = 'connected';
+                }
+            }
             if (!this._streamsRequested) {
                 console.log(`[RadioMavlink] Heartbeat pertama diterima: sysid=${sysid}, compid=${compid} -- dipakai sebagai target.`);
                 this.targetSystem = sysid;
@@ -835,6 +879,8 @@ class RadioMavlink {
             this._handleStatustext(result);
         } else if (result._kind === 'command_ack') {
             this._handleCommandAck(result.command, result.result);
+        } else if (result._kind === 'command_long') {
+            this._handleCommandLong(result);
         } else if (result._kind === 'param_value') {
             this._handleParamValue(result);
         } else if (result._kind === 'mission_request') {
@@ -888,6 +934,16 @@ class RadioMavlink {
             this._ackWaiters.delete(command);
             clearTimeout(waiter.timer);
             waiter.resolve({ ok: result === 0, result });
+        }
+    }
+
+    _handleCommandLong({ command, param1 }) {
+        const MAV_CMD_ACCELCAL_VEHICLE_POS = 42429;
+        if (command === MAV_CMD_ACCELCAL_VEHICLE_POS) {
+            console.log(`[RadioMavlink] FC minta konfirmasi posisi accel cal #${param1}`);
+            if (this.onAccelCalPosRequest) this.onAccelCalPosRequest(param1);
+        } else {
+            console.log(`[RadioMavlink] COMMAND_LONG diterima dari FC (command=${command}), belum ada handler spesifik -- diabaikan.`);
         }
     }
 

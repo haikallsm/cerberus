@@ -38,7 +38,7 @@
 
     "win": {
       "target": [
-        "portable"
+        "portable",
         "nsis"
       ],
       "icon": "public/assets/main-logo.ico"
