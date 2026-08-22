@@ -195,9 +195,9 @@ html, body{
 
 /* ===== DRONE MARKER ===== */
 .drone-marker {
-    width: 36px;
-    height: 36px;
-    background-image: url('../images/droneoren.png');
+    width: 48px;
+    height: 48px;
+    background-image: url('../images/dronehijau.png');
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center;

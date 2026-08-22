@@ -8,7 +8,7 @@ class RadioMavlink {
         this.telemetry = { connected: false, source: 'radio' };
         this.logSeq = 0;
         this._statustextChunks = {};
-        this.lastHearbeatTime = null;
+        this.lastHeartbeatTime = null;
         this._watchdogTimer = null;
         this._linkLossTimeoutMs = 5000;
 
@@ -47,6 +47,11 @@ class RadioMavlink {
         this._reconnecting = false;
         this._reconnectTimer = null;
         this._isRebooting = false;
+        this._linkReady = false;
+        this._transportOpen = false;
+        this._connectStartedAt = 0;
+        this._magCalTelemetryTimer = null;
+        this._magCalTelemetryPending = false;
 
         this._setupAutoReconnectListeners();
     }
@@ -85,36 +90,9 @@ class RadioMavlink {
     }
 
     async _teardownTransport() {
-        this.keepReading = false;
-        this._stopWatchdog();
-        this._stopRcOverrideLoop();
         this.rcChannels = new Array(8).fill(65535);
-        if (this.reader) {
-            try { await this.reader.cancel().catch(()=>{}); } catch (e) {}
-        }
-        
-        // 2. Tutup Writer
-        if (this.writer) {
-            try { 
-                await this.writer.close().catch(()=>{}); 
-                this.writer.releaseLock();
-            } catch (e) {}
-            this.writer = null;
-        }
-
-        // 3. TUNGGU readLoop selesai melepas lock (Max 1 detik)
-        let maxWait = 20;
-        while (this._isReading && maxWait > 0) {
-            await new Promise(r => setTimeout(r, 50));
-            maxWait--;
-        }
-
-        // 4. Tutup Port secara aman di OS
-        if (this.port) {
-            try { await this.port.close(); } catch (e) {}
-        }
-        this.telemetry.connected = false;
-        this._streamsRequested = false;
+        this._transportOpen = false;
+        try { await window.serialBridge.disconnect(); } catch (e) {}
     }
 
     async _handleUnexpectedDrop() {
@@ -195,42 +173,77 @@ class RadioMavlink {
     }
 
     async requestPort() {
-        this.port = await navigator.serial.requestPort();
-        return this.port;
+        if (!window.serialBridge || typeof window.serialBridge.list !== 'function') {
+        throw new Error('serialBridge tidak tersedia. Cek apakah preload.js berhasil dimuat.');
+        }
+        return await window.serialBridge.list();
     }
 
     isLive() {
-        const timeout = this.isRebooting ? 15000 : this._linkLossTimeoutMs;
+        const timeout = this._isRebooting ? 15000 : this._linkLossTimeoutMs;
         return this.telemetry.connected && (Date.now() - this.lastHeartbeatTime) < timeout;
     }
 
-    async connect(baudRate = 57600) {
-        if (!this.port) throw new Error('Belum ada port dipilih.');
+    async connect(baudRate = 57600, portPath) {
+        if (!portPath) throw new Error('Belum ada port dipilih.');
         
         this._intentionalDisconnect = false;
         this._awaitingReconnect = false;
-
-        await this.port.open({ baudRate });
+        this._linkReady = false;
+        this._transportOpen = false;
+        this.lastHeartbeatTime = null;
         this._lastBaudRate = baudRate;
-        this.writer = this.port.writable.getWriter();
-        this.keepReading = true;
-        this._streamsRequested = false;
-        this.telemetry.connected = true;
-        this.lastHeartbeatTime = Date.now();
-        if (this.onConnect) this.onConnect();
-        this._readLoop();
+        // this.writer = this.port.writable.getWriter();
+        // this.keepReading = true;
+        this.telemetry.connected = false;
+        // this._streamsRequested = false;
+
+        const res = await window.serialBridge.connect(portPath, baudRate);
+        if(!res.ok) throw new Error(`Gagal membuka port serial: ${res.message}`);
+
+        window.serialBridge.onData((bytes) => {
+            for(const byte of bytes) this.parser.feedByte(byte);
+        });
+
+        window.serialBridge.onClosed(() => this._handleUnexpectedDrop());
+        window.serialBridge.onError((msg) => {
+            console.error('[RadioMavlink] Serial error:', msg);
+        });
+
+        this._transportOpen = true;
+        this._connectStartedAt = Date.now();
+
+        console.log(
+            '[RadioMavlink] Serial transport terbuka, menunggu HEARTBEAT FC...'
+        );
+
         this._startWatchdog();
         this._startRcOverrideLoop();
     }
 
     _startWatchdog() {
         this._stopWatchdog();
+
         this._watchdogTimer = setInterval(() => {
-            if (this.telemetry.connected && !this.isLive()) {
-                console.warn('[RadioMavlink] Heartbeat timeout — link dianggap putus.');
+            if (!this._transportOpen) return;
+            if (!this._linkReady) {
+                const elapsed = Date.now() - this._connectStartedAt;
+                if (elapsed > 15000) {
+                    console.warn(
+                        '[RadioMavlink] Tidak ada HEARTBEAT selama 15 detik setelah serial open. Memulai reconnect transport.'
+                    );
+                    this._isRebooting = false;
+                    this._handleUnexpectedDrop().catch(() => {});
+                }
+                return;
+            }
+
+            if (!this.isLive()) {
+                console.warn(
+                    '[RadioMavlink] Heartbeat timeout — link dianggap putus.'
+                );
                 this._isRebooting = false;
                 this._handleUnexpectedDrop().catch(() => {});
-                // this.disconnect().catch(() => {});
             }
         }, 1000);
     }
@@ -261,6 +274,9 @@ class RadioMavlink {
         }
     }
 
+    pauseRcOverride() {this._stopRcOverrideLoop();}
+    resumeRcOverride() {this._startRcOverrideLoop();}
+
     async disconnect() {
        if (this._intentionalDisconnect) return;
         
@@ -277,10 +293,9 @@ class RadioMavlink {
     }
 
     async _sendFrame(msgId, payloadBytes, crcExtra, useV2 = false) {
-        if (!this.writer) return;
         const builder = useV2 ? buildMavlink2Frame : buildMavlink1Frame;
         const frame = builder(this._txSeq++, this._gcsSysId, this._gcsCompId, msgId, payloadBytes, crcExtra);
-        try { await this.writer.write(frame); } catch (e) {}
+        try { await window.serialBridge.send(Array.from(frame)); } catch (e) {}
     }
 
     async requestDataStreams(rateHz = STREAM_RATE_HZ) {
@@ -727,9 +742,17 @@ class RadioMavlink {
         this._isRebooting = true;
         if (this.telemetry) {
             this.telemetry.system_status = 'rebooting';
-            if (this.onTelemetry) this.onTelemetry({ ...this.telemetry });
+            this._emitTelemetrySafe();
         }
-        return this.sendCommandLong(246, { p1: 1 });
+        await this.sendCommandLong(
+            246,
+            { p1: 1 },
+            false
+        );
+        return {
+            ok: true,
+            result: null
+        };
     }
     async setHome(lat, lon, alt = 0) {
         return this.sendCommandLong(179, { p1: 0, p5: lat, p6: lon, p7: alt });
@@ -799,54 +822,101 @@ class RadioMavlink {
         return true;
     }
 
-    async _readLoop() {
-        this._isReading = true;
-        
-        while (this.port && this.port.readable && this.keepReading) {
-            this.reader = this.port.readable.getReader();
-            try {
-                while (true) {
-                    const { value, done } = await this.reader.read();
-                    if (done) break;
-                    for (const byte of value) this.parser.feedByte(byte);
-                }
-            } catch (err) {
-                console.error('[RadioMavlink] Read error (kemungkinan USB terputus):', err.message);
-                break;
-            } finally {
-                if (this.reader) {
-                    this.reader.releaseLock();
-                    this.reader = null;
-                }
-            }
+    _emitTelemetrySafe() {
+        if (!this.onTelemetry) return;
+
+        try {
+            this.onTelemetry({
+                ...this.telemetry
+            });
+        } catch (err) {
+            console.error(
+                '[RadioMavlink] onTelemetry callback error:',
+                err
+            );
         }
-        
-        this._isReading = false;
+    }
+
+    _scheduleMagCalTelemetry() {
+        this._magCalTelemetryPending = true;
+
+        if (this._magCalTelemetryTimer) {
+            return;
+        }
+
+        this._magCalTelemetryTimer = setTimeout(() => {
+            this._magCalTelemetryTimer = null;
+
+            if (!this._magCalTelemetryPending) {
+                return;
+            }
+
+            this._magCalTelemetryPending = false;
+            this._emitTelemetrySafe();
+        }, 150);
     }
 
     _handleFrame(msgId, payload, sysid, compid) {
         const isSelf = (sysid === this._gcsSysId && compid === this._gcsCompId);
 
         if (msgId === 0 && !isSelf) {
-            if (this._isRebooting) {
-                console.log(`[RadioMavlink] Heartbeat diterima dari sysid=${sysid}, compid=${compid} -- FC sudah reboot.`);
-                this._isRebooting = false;
-                this._streamsRequested = false;
-                if (this.telemetry) {
-                    this.telemetry.system_status = 'connected';
-                }
-            }
-            if (!this._streamsRequested) {
-                console.log(`[RadioMavlink] Heartbeat pertama diterima: sysid=${sysid}, compid=${compid} -- dipakai sebagai target.`);
+            const firstHeartbeat = !this._streamsRequested;
+
+            if (firstHeartbeat) {
+                console.log(
+                    `[RadioMavlink] HEARTBEAT diterima: sysid=${sysid}, compid=${compid}`
+                );
+
                 this.targetSystem = sysid;
                 this.targetComponent = compid;
+
                 this._streamsRequested = true;
-                this.requestDataStreams().catch(e => console.warn('[RadioMavlink] requestDataStreams gagal:', e));
+
+                this.requestDataStreams().catch(e => {
+                    console.warn(
+                        '[RadioMavlink] requestDataStreams gagal:',
+                        e
+                    );
+                });
             }
-            if (sysid === this.targetSystem && compid === this.targetComponent) {
+
+            if (
+                sysid === this.targetSystem &&
+                compid === this.targetComponent
+            ) {
+                const wasReady = this._linkReady;
+
                 this.lastHeartbeatTime = Date.now();
+                this._linkReady = true;
+                this._transportOpen = true;
+
+                this.telemetry.connected = true;
+                this.telemetry.system_status = 'connected';
+
+                if (this._isRebooting) {
+                    console.log(
+                        `[RadioMavlink] FC kembali setelah reboot: sysid=${sysid}, compid=${compid}`
+                    );
+
+                    this._isRebooting = false;
+                }
+
+                // onConnect hanya dipanggil setelah heartbeat valid.
+                if (!wasReady && this.onConnect) {
+                    try {
+                        this.onConnect();
+                    } catch (err) {
+                        console.error(
+                            '[RadioMavlink] onConnect callback error:',
+                            err
+                        );
+                    }
+                }
             } else {
-                console.warn(`[RadioMavlink] Heartbeat dari sysid=${sysid}/compid=${compid} diabaikan (target saat ini: ${this.targetSystem}/${this.targetComponent}) -- kemungkinan ada device lain di link yang sama.`);
+                console.warn(
+                    `[RadioMavlink] Heartbeat dari sysid=${sysid}/compid=${compid} diabaikan ` +
+                    `(target saat ini: ${this.targetSystem}/${this.targetComponent})`
+                );
             }
         }
 
@@ -874,7 +944,7 @@ class RadioMavlink {
             delete result._kind;
             Object.assign(this.telemetry, result);
             this.telemetry.connected = true;
-            if (this.onTelemetry) this.onTelemetry({ ...this.telemetry });
+            this._emitTelemetrySafe();
         } else if (result._kind === 'statustext') {
             this._handleStatustext(result);
         } else if (result._kind === 'command_ack') {
@@ -920,11 +990,24 @@ class RadioMavlink {
             this.telemetry.rangefinder_type = RANGEFINDER_TYPE_MAP[result.type] || 'UNKNOWN';
             if (this.onTelemetry) this.onTelemetry({ ...this.telemetry });
         } else if (result._kind === 'mag_cal_progress') {
-            this.telemetry.mag_cal_progress = { id: result.compass_id, pct: result.completion_pct };
-            if (this.onTelemetry) this.onTelemetry({ ...this.telemetry });
+            this.telemetry.mag_cal_progress = {
+                id: result.compass_id,
+                pct: result.completion_pct
+            };
+
+            this._scheduleMagCalTelemetry();
+
         } else if (result._kind === 'mag_cal_report') {
-            this.telemetry.mag_cal_report = { id: result.compass_id, status: result.cal_status, fitness: result.fitness };
-            if (this.onTelemetry) this.onTelemetry({ ...this.telemetry });
+            this.telemetry.mag_cal_report = {
+                id: result.compass_id,
+                status: result.cal_status,
+                fitness: result.fitness
+            };
+            const MAG_CAL_SUCCESS = 4;
+            if(result.cal_status === MAG_CAL_SUCCESS) {
+                window.compassSuccessMask = (this.window.compassSuccessMask || 0) | (1 << result.compass_id);
+            }
+            this._emitTelemetrySafe();
         }
     }
 

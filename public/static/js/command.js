@@ -122,18 +122,25 @@ const commands = {
     },
 
     async startCompassCal() {
-        window.compassSuccessMask = 0; // Reset memori kompas
-        return this._getActiveLink().sendCommandLong(42424, { p3: 1.0 }); // 42424 = START_MAG_CAL
+        window.compassSuccessMask = 0;
+        const link = this._getActiveLink();
+        link.pauseRcOverride();
+        link.rcChannels = new Array(8).fill(65535);
+        return link.sendCommandLong(42424, { p3: 1.0 }); // 42424 = START_MAG_CAL
     },
-
+    
     async cancelCompassCal() {
-        return this._getActiveLink().sendCommandLong(42426, {}); // 42426 = CANCEL_MAG_CAL
+        const link = this._getActiveLink();
+        link.resumeRcOverride();
+        return link.sendCommandLong(42426, {}); // 42426 = CANCEL_MAG_CAL
     },
-
+    
     async acceptCompassCal() {
         const mask = window.compassSuccessMask || 0;
         if (mask === 0) throw new Error("Tidak ada compass yang SUCCESS. Silakan kalibrasi ulang.");
-        return this._getActiveLink().sendCommandLong(42425, { p1: mask }); // 42425 = ACCEPT_MAG_CAL
+        const link = this._getActiveLink();
+        link.resumeRcOverride();
+        return link.sendCommandLong(42425, { p1: mask }); // 42425 = ACCEPT_MAG_CAL
     },
     async uploadFence(points) {
         return this._getActiveLink().uploadFence(points);

@@ -1,7 +1,8 @@
 // main.js (proses utama Electron)
 const { app, BrowserWindow, session, ipcMain } = require('electron');
 const path = require('path');
-
+const { SerialPort } = require('serialport');
+let activeSerialPort = null; 
 const fs = require('fs');
 const dgram = require('dgram'); // Wajib ditambahkan untuk membuka socket UDP
 
@@ -11,8 +12,8 @@ let mainWindow;
 let udpClient = null; // Menyimpan status socket UDP
 
 app.whenReady().then(() => {
-    // === DIAGNOSTIC: pastikan preload.js benar-benar ada di path yang dituju ===
-   const preloadPath = path.join(__dirname, 'public', 'static', 'js', 'preload.js');
+    console.log('[DEBUG] Electron:', process.versions.electron, '| Chromium:', process.versions.chrome);
+    const preloadPath = path.join(__dirname, 'public', 'static', 'js', 'preload.js');
     console.log('[DEBUG] __dirname     =', __dirname);
     console.log('[DEBUG] preloadPath   =', preloadPath);
     console.log('[DEBUG] file exists?  =', fs.existsSync(preloadPath));
@@ -37,25 +38,6 @@ app.whenReady().then(() => {
         console.error('[Electron] Error:', error);
     });
     // ============================================================================
-
-    // Wajib: Electron butuh handler manual buat serial port picker
-    mainWindow.webContents.session.on('select-serial-port', (event, portList, webContents, callback) => {
-        event.preventDefault();
-        if (portList.length === 0) {
-            callback('');
-        } else {
-            callback(portList[0].portId);
-        }
-    });
-
-    mainWindow.webContents.session.setPermissionCheckHandler((webContents, permission) => {
-        return permission === 'serial';
-    });
-
-    mainWindow.webContents.session.setDevicePermissionHandler((details) => {
-        return details.deviceType === 'serial';
-    });
-
     mainWindow.loadFile(path.join(__dirname, 'public/index.html'))
         .catch(err => {
             console.error('[Electron] Gagal load index.html:', err);
@@ -66,6 +48,67 @@ app.whenReady().then(() => {
     });
 });
 
+ipcMain.handle('serial-list', async () => {
+    try {
+        const ports = await SerialPort.list();
+        return ports.map(p => ({ path: p.path, manufacturer: p.manufacturer, vendorId: p.vendorId, productId: p.productId }));
+    } catch (err) {
+        console.error('[Serial Backend] Gagal list port:', err);
+        return [];
+    }
+});
+
+ipcMain.handle('serial-connect', async (event, { path: portPath, baudRate }) => {
+    return new Promise((resolve) => {
+        if (activeSerialPort?.isOpen) {
+            activeSerialPort.close();
+            activeSerialPort = null;
+        }
+        try {
+            activeSerialPort = new SerialPort({ path: portPath, baudRate, autoOpen: false });
+            activeSerialPort.open((err) => {
+                if (err) {
+                    console.error('[Serial Backend] Gagal buka port:', err.message);
+                    return resolve({ ok: false, message: err.message });
+                }
+
+                activeSerialPort.on('data', (chunk) => {
+                    if (mainWindow) mainWindow.webContents.send('serial-data', Array.from(chunk));
+                });
+                activeSerialPort.on('close', () => {
+                    console.log('[Serial Backend] Port tertutup.');
+                    if (mainWindow) mainWindow.webContents.send('serial-closed');
+                });
+                activeSerialPort.on('error', (err) => {
+                    console.error('[Serial Backend] Error:', err.message);
+                    if (mainWindow) mainWindow.webContents.send('serial-error', err.message);
+                });
+
+                console.log(`[Serial Backend] Terbuka di ${portPath} @ ${baudRate}`);
+                resolve({ ok: true });
+            });
+        } catch (err) {
+            resolve({ ok: false, message: err.message });
+        }
+    });
+});
+
+ipcMain.handle('serial-disconnect', async () => {
+    if (activeSerialPort?.isOpen) {
+        return new Promise((resolve) => {
+            activeSerialPort.close(() => { activeSerialPort = null; resolve({ ok: true }); });
+        });
+    }
+    return { ok: true };
+});
+
+ipcMain.on('serial-send', (event, bytes) => {
+    if (activeSerialPort?.isOpen) {
+        activeSerialPort.write(Buffer.from(bytes), (err) => {
+            if (err) console.error('[Serial Backend] Gagal kirim:', err);
+        });
+    }
+});
 // ==========================================================
 // BACKEND UDP HANDLERS (Dikendalikan oleh dgram Node.js)
 // ==========================================================

@@ -45,7 +45,7 @@ const MSG_LENGTHS = {
 };
 
 const REQUESTED_STREAMS = [1, 2, 3, 6, 10, 11, 12];
-const STREAM_RATE_HZ = 5;
+const STREAM_RATE_HZ = 10;
 
 function buildMavlink1Frame(seq, sysid, compid, msgId, payloadBytes, crcExtra) {
     const len = payloadBytes.length;
@@ -281,8 +281,6 @@ const DECODERS = {
     },
     44: (bytes) => {
         const dv = new DataView(new Uint8Array(bytes).buffer);
-        // mission_type cuma ada di MAVLink2; kalau frame v1 (payload 4 byte, tanpa
-        // extension), default MAV_MISSION_TYPE_MISSION=0.
         const missionType = bytes.length > 4 ? bytes[4] : 0;
         return { _kind:'mission_count', count: dv.getUint16(0, true), missionType };
     },

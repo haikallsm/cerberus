@@ -360,7 +360,7 @@ let DEFAULT_FULL_PARAMS = {};
 async function initParamTable() {
     // 1. Load parameter default dari file JSON
     try {
-        const response = await fetch('/static/params.json?v=' + Date.now()); // Anti-cache browser
+        const response = await fetch('./static/params.json?v=' + Date.now()); // Anti-cache browser
         if (response.ok) {
             DEFAULT_FULL_PARAMS = await response.json();
         }

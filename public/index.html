@@ -205,29 +205,36 @@
 
         async function handleSelectRadioPort() {
             if (!window.radioMavlink) { alert('Modul radio-mavlink.js belum termuat.'); return; }
-            if (!('serial' in navigator)) {
-                alert('Browser tidak mendukung Web Serial API. Pakai Chrome/Edge di desktop.');
-                return;
-            }
+            const select = document.getElementById('portSelect');
             try {
-                await window.radioMavlink.requestPort();
-                const select = document.getElementById('portSelect');
-                if (select) select.innerHTML = '<option value="selected" selected>Port radio dipilih</option>';
+                const ports = await window.radioMavlink.requestPort(); // sekarang return array {path, manufacturer, ...}
+                if (!select) return;
+                if (!ports || ports.length === 0) {
+                    select.innerHTML = '<option value="">Tidak ada port terdeteksi</option>';
+                    return;
+                }
+                select.innerHTML = ports.map(p =>
+                    `<option value="${p.path}">${p.path}${p.manufacturer ? ' — ' + p.manufacturer : ''}</option>`
+                ).join('');
             } catch (err) {
-                console.log('Pemilihan port radio dibatalkan:', err); 
+                console.error('Gagal scan port radio:', err);
+                if (select) select.innerHTML = '<option value="">Gagal scan port</option>';
             }
         }
 
         async function connectRadio() {
             const statusEl = document.getElementById('statusText');
-            if (!window.radioMavlink || !window.radioMavlink.port) {
-                alert('Pilih port radio dulu (tombol "Scan" / "Pilih Port").');
+            const portSelect = document.getElementById('portSelect');
+            const selectedPath = portSelect?.value;
+
+            if (!window.radioMavlink || !selectedPath || selectedPath === 'Scanning ports...') {
+                alert('Pilih port radio dulu (tombol "Scan").');
                 return;
             }
             const baud = parseInt(document.getElementById('baudSelect').value, 10);
             statusEl.textContent = 'Connecting radio...';
             try {
-                await window.radioMavlink.connect(baud);
+                await window.radioMavlink.connect(baud, selectedPath);
             } catch (err) {
                 alert('Gagal connect radio: ' + err.message);
             }

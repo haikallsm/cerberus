@@ -70,6 +70,9 @@ function adaptRadioTelemetry(raw) {
 
     if (raw.rc5_in !== undefined) out.rc5_in = raw.rc5_in;
 
+    if (raw.mag_cal_progress !== undefined) out.mag_cal_progress = raw.mag_cal_progress;
+    if (raw.mag_cal_report !== undefined) out.mag_cal_report = raw.mag_cal_report;
+
     return out;
 }
 window.adaptRadioTelemetry = adaptRadioTelemetry;

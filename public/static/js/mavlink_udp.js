@@ -801,10 +801,14 @@ class UdpMavlink {
             
         } else if (result._kind === 'mag_cal_report') {
             this.telemetry.mag_cal_report = { id: result.compass_id, status: result.cal_status, fitness: result.fitness };
-            if (this.onTelemetry) this.onTelemetry({ ...this.telemetry });
+
+            const MAG_CAL_SUCCESS = 4;
+            if (result.cal_status === MAG_CAL_SUCCESS) {
+                window.compassSuccessMask = (window.compassSuccessMask || 0) | (1 << result.compass_id);
+            }
         }
     }
-
+    
     _handleCommandAck(command, result) {
         const waiter = this._ackWaiters.get(command);
         if (waiter) {
