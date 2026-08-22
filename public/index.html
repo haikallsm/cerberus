@@ -164,10 +164,28 @@
 
         }
 
+        function handleAccelCalPosRequest(posNumber) {
+            window.acceptCalStep = posNumber;
+            const frame = document.getElementById('main-frame');
+            if (frame?.contentWindow?.onAccelCalPosPrompt) {
+                frame.contentWindow.onAccelCalPosPrompt(posNumber);
+            }
+        }
+        function handleAccelCalComplete(success) {
+            const frame = document.getElementById('main-frame');
+            if (frame?.contentWindow?.onAccelCalDone) {
+                frame.contentWindow.onAccelCalDone(success);
+            }
+        }
+        
         window.radioMavlink.onConnect = handleLinkConnect;
         window.radioMavlink.onDisconnect = handleLinkDisconnect;
         window.udpMavlink.onConnect = handleLinkConnect;
         window.udpMavlink.onDisconnect = handleLinkDisconnect;
+        window.radioMavlink.onAccelCalPosRequest = handleAccelCalPosRequest;
+        window.radioMavlink.onAccelCalComplete = handleAccelCalComplete;
+        window.udpMavlink.onAccelCalPosRequest = handleAccelCalPosRequest;
+        window.udpMavlink.onAccelCalComplete = handleAccelCalComplete;
 
         function navigateTo(url, el) {
             document.getElementById('main-frame').src = url;

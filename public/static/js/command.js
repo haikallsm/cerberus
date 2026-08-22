@@ -117,8 +117,7 @@ const commands = {
     },
 
     async nextAccelStep() {
-        window.acceptCalStep += 1;
-        return this._getActiveLink().sendCommandAck(window.acceptCalStep, 1);  
+        return this._getActiveLink().sendCommandAck(42429, 0);
     },
 
     async startCompassCal() {

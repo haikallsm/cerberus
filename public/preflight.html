@@ -60,6 +60,7 @@
                     <p>Level your Autopilot to set default accelerometer Min/Max (3 axis).<br>This will ask you to place your autopilot on each edge.</p>
                     <button class="btn-mp" onclick="sendCalibration('accel_3axis')">Calibrate Accel</button>
                     <button class="btn-mp" onclick="sendCalibrationNext()" id="btnAccelNext" style="display:none; background:#ff9800; border-color:#f57c00;">Next (Click when done)</button>
+                    <div id="accelCalPosLabel" style="margin-top:8px; color:#ff9800; font-weight:bold;"></div>
                 </div>
                 
                 <div class="calib-item">
@@ -405,27 +406,31 @@ function updateHealthCards() {
     });
 
     if (telemetryData.mag_cal_progress) {
-        const prog = telemetryData.mag_cal_progress;
-        const inputEl = document.getElementById(`mag${prog.id + 1}_prog`);
-        if (inputEl && inputEl.value !== 'SUCCESS' && inputEl.value !== 'FAILED') {
-            inputEl.value = `${prog.pct}%`;
+        for (const compassId in telemetryData.mag_cal_progress) {
+            const prog = telemetryData.mag_cal_progress[compassId];
+            const inputEl = document.getElementById(`mag${prog.id + 1}_prog`);
+            if (inputEl && inputEl.value !== 'SUCCESS' && inputEl.value !== 'FAILED') {
+                inputEl.value = `${prog.pct}%`;
+            }
         }
     }
 
     if (telemetryData.mag_cal_report) {
-        const rep = telemetryData.mag_cal_report;
-        const inputEl = document.getElementById(`mag${rep.id + 1}_prog`);
-        if (inputEl) {
-            if (rep.status === 4) { // 4 = MAG_CAL_SUCCESS
-                if (inputEl.value !== 'SUCCESS') {
-                    inputEl.value = 'SUCCESS';
-                    window.compassSuccessMask = (window.compassSuccessMask || 0) | (1 << rep.id);
-                    logToConsole(`✓ Compass ${rep.id} SUKSES (fitness: ${rep.fitness.toFixed(2)})`);
-                }
-            } else if (rep.status > 4) { // 5 = FAILED, 6 = BAD_ORIENTATION, 7 = BAD_RADIUS
-                if (inputEl.value !== 'FAILED') {
-                    inputEl.value = 'FAILED';
-                    logToConsole(`✗ Compass ${rep.id} GAGAL (kode: ${rep.status})`);
+        for (const compassId in telemetryData.mag_cal_report) {
+            const rep = telemetryData.mag_cal_report[compassId];
+            const inputEl = document.getElementById(`mag${rep.id + 1}_prog`);
+            if (inputEl) {
+                if (rep.status === 4) { // 4 = MAG_CAL_SUCCESS
+                    if (inputEl.value !== 'SUCCESS') {
+                        inputEl.value = 'SUCCESS';
+                        window.compassSuccessMask = (window.compassSuccessMask || 0) | (1 << rep.id);
+                        logToConsole(`✓ Compass ${rep.id} SUKSES (fitness: ${rep.fitness.toFixed(2)})`);
+                    }
+                } else if (rep.status > 4) { // 5 = FAILED, 6 = BAD_ORIENTATION, 7 = BAD_RADIUS
+                    if (inputEl.value !== 'FAILED') {
+                        inputEl.value = 'FAILED';
+                        logToConsole(`✗ Compass ${rep.id} GAGAL (kode: ${rep.status})`);
+                    }
                 }
             }
         }
@@ -450,6 +455,35 @@ window.updateMavlogUI = function(logItem) {
     }
 };
 
+const ACCELCAL_POS_LABELS = {
+    1: 'LEVEL (mendatar)',
+    2: 'LEFT (miring kiri)',
+    3: 'RIGHT (miring kanan)',
+    4: 'NOSEDOWN (hidung menunduk)',
+    5: 'NOSEUP (hidung mendongak)',
+    6: 'BACK (terbalik/punggung di bawah)'
+};
+
+window.onAccelCalPosPrompt = function(posNumber) {
+    const label = ACCELCAL_POS_LABELS[posNumber] || `posisi #${posNumber}`;
+    logToConsole(`> FC minta posisi ${label} (${posNumber}/6)`);
+
+    // Tampilkan ke UI, bukan cuma console -- INI YANG SELAMA INI HILANG (indikator posisi)
+    const statusEl = document.getElementById('accelCalPosLabel'); // perlu tambah elemen ini di HTML
+    if (statusEl) statusEl.innerText = `Posisi diminta: ${label} (${posNumber}/6)`;
+
+    const btnNext = document.getElementById('btnAccelNext');
+    if (btnNext) btnNext.style.display = 'inline-block';
+};
+
+window.onAccelCalDone = function(success) {
+    logToConsole(success ? '✓ Accel cal SELESAI -- SUCCESS' : '✗ Accel cal SELESAI -- FAILED');
+    const btnNext = document.getElementById('btnAccelNext');
+    if (btnNext) btnNext.style.display = 'none';   // INI YANG SELAMA INI TIDAK PERNAH KE-TRIGGER DENGAN BENAR
+    const statusEl = document.getElementById('accelCalPosLabel');
+    if (statusEl) statusEl.innerText = success ? 'Kalibrasi selesai ✓' : 'Kalibrasi gagal ✗';
+};
+
 function processCalibrationMessages(msgText) {
     const text = msgText.toLowerCase();
     if (text.includes("place vehicle")) {
@@ -459,12 +493,10 @@ function processCalibrationMessages(msgText) {
         else if (text.includes("down")) currentCalibPosition = "nosedown";
         else if (text.includes("up")) currentCalibPosition = "noseup";
         else if (text.includes("back")) currentCalibPosition = "back";
-        const btnNext = document.getElementById('btnAccelNext');
-        if (btnNext) btnNext.style.display = 'inline-block';
     } else if (text.includes("calibration successful") || text.includes("calibration failed")) {
         const btnNext = document.getElementById('btnAccelNext');
         if (btnNext) btnNext.style.display = 'none';
-        currentCalibPosition = ''; 
+        currentCalibPosition = '';
     }
 }
 </script>

@@ -90,8 +90,11 @@ class RadioMavlink {
     }
 
     async _teardownTransport() {
+        this._stopWatchdog();
+        this._stopRcOverrideLoop();
         this.rcChannels = new Array(8).fill(65535);
         this._transportOpen = false;
+        this.telemetry.connected = false;
         try { await window.serialBridge.disconnect(); } catch (e) {}
     }
 
@@ -145,24 +148,29 @@ class RadioMavlink {
 
     async _attemptReconnect(attempt) {
         if (this._intentionalDisconnect || !this._awaitingReconnect || this._reconnecting) return;
-        
+
         this._reconnecting = true;
         try {
-            if ('serial' in navigator) {
-                const ports = await navigator.serial.getPorts();
-                if (ports.length > 0) {
-                    this.port = ports[0];
-                } else {
-                    throw new Error("Perangkat belum terdeteksi kembali oleh OS.");
-                }
+            if (!window.serialBridge || typeof window.serialBridge.list !== 'function') {
+                throw new Error('serialBridge tidak tersedia.');
+            }
+            if (!this._lastPortPath) {
+                throw new Error('Tidak ada portPath tersimpan dari koneksi sebelumnya.');
             }
 
-            if (!this.port) throw new Error("Port tidak valid.");
+            const ports = await window.serialBridge.list();
+            let found = ports.find(p => p.path === this._lastPortPath);
+            if (!found && this._lastVendorId && this._lastProductId) {
+                found = ports.find(p => p.vendorId === this._lastVendorId && p.productId === this._lastProductId);
+            }
+            if (!found) {
+                throw new Error('Perangkat belum terdeteksi kembali oleh OS.');
+            }
 
-            await this.connect(this._lastBaudRate);
+            await this.connect(this._lastBaudRate, found.path);
             console.log('[RadioMavlink] Auto-reconnect berhasil setelah link drop / reboot.');
-            
-            this._isRebooting = false; 
+
+            this._isRebooting = false;
         } catch (e) {
             console.warn(`[RadioMavlink] Auto-reconnect attempt ${attempt} gagal:`, e.message);
             this._reconnecting = false;
@@ -193,10 +201,17 @@ class RadioMavlink {
         this._transportOpen = false;
         this.lastHeartbeatTime = null;
         this._lastBaudRate = baudRate;
-        // this.writer = this.port.writable.getWriter();
-        // this.keepReading = true;
         this.telemetry.connected = false;
-        // this._streamsRequested = false;
+        this._lastPortPath = portPath;
+
+        try {
+            const ports = await window.serialBridge.list();
+            const current = ports.find(p => p.path === portPath);
+            if (current) {
+                this._lastVendorId = current.vendorId;
+                this._lastProductId = current.productId;
+            }
+        } catch (e) {}
 
         const res = await window.serialBridge.connect(portPath, baudRate);
         if(!res.ok) throw new Error(`Gagal membuka port serial: ${res.message}`);
@@ -990,7 +1005,8 @@ class RadioMavlink {
             this.telemetry.rangefinder_type = RANGEFINDER_TYPE_MAP[result.type] || 'UNKNOWN';
             if (this.onTelemetry) this.onTelemetry({ ...this.telemetry });
         } else if (result._kind === 'mag_cal_progress') {
-            this.telemetry.mag_cal_progress = {
+            if (!this.telemetry.mag_cal_progress) this.telemetry.mag_cal_progress = {};
+            this.telemetry.mag_cal_progress[result.compass_id] = {
                 id: result.compass_id,
                 pct: result.completion_pct
             };
@@ -998,14 +1014,17 @@ class RadioMavlink {
             this._scheduleMagCalTelemetry();
 
         } else if (result._kind === 'mag_cal_report') {
-            this.telemetry.mag_cal_report = {
+            if (!this.telemetry.mag_cal_report) this.telemetry.mag_cal_report = {};
+            this.telemetry.mag_cal_report[result.compass_id] = {
                 id: result.compass_id,
                 status: result.cal_status,
                 fitness: result.fitness
             };
             const MAG_CAL_SUCCESS = 4;
             if(result.cal_status === MAG_CAL_SUCCESS) {
-                window.compassSuccessMask = (this.window.compassSuccessMask || 0) | (1 << result.compass_id);
+                window.compassSuccessMask = (window.compassSuccessMask || 0) | (1 << result.compass_id);
+                if (!this.telemetry.mag_cal_progress) this.telemetry.mag_cal_progress = {};
+                this.telemetry.mag_cal_progress[result.compass_id] = { id: result.compass_id, pct: 100 };
             }
             this._emitTelemetrySafe();
         }
@@ -1022,9 +1041,18 @@ class RadioMavlink {
 
     _handleCommandLong({ command, param1 }) {
         const MAV_CMD_ACCELCAL_VEHICLE_POS = 42429;
+        const ACCELCAL_VEHICLE_POS_SUCCESS = 16777215;
+        const ACCELCAL_VEHICLE_POS_FAILED = 16777216;
+
         if (command === MAV_CMD_ACCELCAL_VEHICLE_POS) {
-            console.log(`[RadioMavlink] FC minta konfirmasi posisi accel cal #${param1}`);
-            if (this.onAccelCalPosRequest) this.onAccelCalPosRequest(param1);
+            if (param1 === ACCELCAL_VEHICLE_POS_SUCCESS || param1 === ACCELCAL_VEHICLE_POS_FAILED) {
+                const success = param1 === ACCELCAL_VEHICLE_POS_SUCCESS;
+                console.log(`[RadioMavlink] Accel cal selesai -- status: ${success ? 'SUCCESS' : 'FAILED'}`);
+                if (this.onAccelCalComplete) this.onAccelCalComplete(success);
+            } else {
+                console.log(`[RadioMavlink] FC minta konfirmasi posisi accel cal #${param1}`);
+                if (this.onAccelCalPosRequest) this.onAccelCalPosRequest(param1);
+            }
         } else {
             console.log(`[RadioMavlink] COMMAND_LONG diterima dari FC (command=${command}), belum ada handler spesifik -- diabaikan.`);
         }
