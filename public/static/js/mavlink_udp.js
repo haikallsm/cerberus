@@ -260,12 +260,23 @@ class UdpMavlink {
         console.log(`[UdpMavlink] Streams requested @ ${rateHz}Hz`);
     }
 
-    async sendCommandAck(command, result = 1) {
-        const buf = new ArrayBuffer(3);
+    async sendCommandAck(command, result = 0) {
+        // Struktur penuh COMMAND_ACK (MAVLink2): command(u16) + result(u8) + progress(u8)
+        // + result_param2(i32) + target_system(u8) + target_component(u8) = 10 byte.
+        // target_system/target_component WAJIB diisi benar -- kalau di-trim jadi 0,
+        // FC bisa mengabaikan ACK ini karena dianggap tidak ditujukan untuknya.
+        const buf = new ArrayBuffer(10);
         const dv = new DataView(buf);
-        dv.setUint16(0, command, true);
-        dv.setUint8(2, result);
-        await this._sendFrame(77, Array.from(new Uint8Array(buf)), CRC_EXTRA[77]);
+        dv.setUint16(0, command, true);            // command
+        dv.setUint8(2, result);                    // result (0 = MAV_RESULT_ACCEPTED)
+        dv.setUint8(3, 255);                       // progress -- 255 = N/A
+        dv.setInt32(4, 0, true);                   // result_param2 -- tidak dipakai
+        dv.setUint8(8, this.targetSystem);         // target_system -- WAJIB, bukan 0
+        dv.setUint8(9, this.targetComponent);      // target_component -- WAJIB, bukan 0
+
+        const payload = Array.from(new Uint8Array(buf));
+        await this._sendFrame(77, payload, CRC_EXTRA[77], true); // useV2=true -- WAJIB, target_system/target_component cuma valid di MAVLink v2
+        console.log(`[UdpMavlink] COMMAND_ACK (v2) sent for CMD ${command} -> target_system=${this.targetSystem}, target_component=${this.targetComponent}`);
     }
 
     async sendCommandLong(command, params = {}, waitAck = true, timeout = 3000) {
@@ -796,16 +807,28 @@ class UdpMavlink {
             this.telemetry.rangefinder_type = RANGEFINDER_TYPE_MAP[result.type] || 'UNKNOWN';
             if (this.onTelemetry) this.onTelemetry({ ...this.telemetry });
         } else if (result._kind === 'mag_cal_progress') {
-            this.telemetry.mag_cal_progress = { id: result.compass_id, pct: result.completion_pct };
+            if (!this.telemetry.mag_cal_progress) this.telemetry.mag_cal_progress = {};
+            this.telemetry.mag_cal_progress[result.compass_id] = {
+                id: result.compass_id,
+                pct: result.completion_pct
+            };
             if (this.onTelemetry) this.onTelemetry({ ...this.telemetry });
-            
+
         } else if (result._kind === 'mag_cal_report') {
-            this.telemetry.mag_cal_report = { id: result.compass_id, status: result.cal_status, fitness: result.fitness };
+            if (!this.telemetry.mag_cal_report) this.telemetry.mag_cal_report = {};
+            this.telemetry.mag_cal_report[result.compass_id] = {
+                id: result.compass_id,
+                status: result.cal_status,
+                fitness: result.fitness
+            };
 
             const MAG_CAL_SUCCESS = 4;
             if (result.cal_status === MAG_CAL_SUCCESS) {
                 window.compassSuccessMask = (window.compassSuccessMask || 0) | (1 << result.compass_id);
+                if (!this.telemetry.mag_cal_progress) this.telemetry.mag_cal_progress = {};
+                this.telemetry.mag_cal_progress[result.compass_id] = { id: result.compass_id, pct: 100 };
             }
+            if (this.onTelemetry) this.onTelemetry({ ...this.telemetry });
         }
     }
     
@@ -821,10 +844,10 @@ class UdpMavlink {
     _handleCommandLong({ command, param1 }) {
         const MAV_CMD_ACCELCAL_VEHICLE_POS = 42429;
         if (command === MAV_CMD_ACCELCAL_VEHICLE_POS) {
-            console.log(`[UdpMavlink] FC minta konfirmasi posisi accel cal #${param1}`);
-            if (this.onAccelCalPosRequest) this.onAccelCalPosRequest(param1);
+            console.log(`[UdpMavlink] COMMAND_LONG accelcal diterima dari FC (param1=${param1})`);
+            if (this.onAccelCalPosSignal) this.onAccelCalPosSignal(param1);
         } else {
-            console.log(`[UdpMavlink] COMMAND_LONG diterima dari FC (command=${command}), belum ada handler spesifik -- diabaikan.`);
+            console.log(`[UdpMavlink] COMMAND_LONG diterima dari FC (command=${command}, param1=${param1})`);
         }
     }
 

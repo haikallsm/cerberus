@@ -68,7 +68,7 @@
 const getBaseUrl = () => window.parent.gcsConnection?.baseUrl || 'http://localhost:5000';
 const isConnected = () => {
     if (window.parent && window.parent.mavFeatures) {
-        return window.parent.mavFeatures._radioActive() || window.parent.mavFeatures._piActive();
+        return window.parent.mavFeatures._radioActive() || window.parent.mavFeatures._udpActive();
     }
     return window.parent.gcsConnection?.isConnected || false;
 };
