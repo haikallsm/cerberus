@@ -116,8 +116,8 @@ const commands = {
         return this._getActiveLink().sendCommandLong(241, { p5: 4.0 });
     },
 
-    async nextAccelStep() {
-        return this._getActiveLink().sendCommandAck(42429, 0);
+    async nextAccelStep(posValue) {
+        return this._getActiveLink().sendCommandLong(42429, { p1: posValue });
     },
 
     async startCompassCal() {

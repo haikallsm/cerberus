@@ -323,15 +323,19 @@ class RadioMavlink {
         console.log(`[RadioMavlink] Streams requested @ ${rateHz}Hz`);
     }
 
-    async sendCommandAck(command, result = 1) {
-        const buf = new ArrayBuffer(3);
+    async sendCommandAck(command, result = 0) {
+        const buf = new ArrayBuffer(10);
         const dv = new DataView(buf);
-        dv.setUint16(0, command, true); // MAV_CMD yang di-acknowledge
-        dv.setUint8(2, result);         // 1 = MAV_RESULT_ACCEPTED
-        
+        dv.setUint16(0, command, true);            // command
+        dv.setUint8(2, result);                    // result (0 = MAV_RESULT_ACCEPTED)
+        dv.setUint8(3, 255);                       // progress -- 255 = N/A
+        dv.setInt32(4, 0, true);                   // result_param2 -- tidak dipakai
+        dv.setUint8(8, this.targetSystem);         // target_system -- WAJIB, bukan 0
+        dv.setUint8(9, this.targetComponent);      // target_component -- WAJIB, bukan 0
+
         const payload = Array.from(new Uint8Array(buf));
-        await this._sendFrame(77, payload, CRC_EXTRA[77]);
-        console.log(`[RadioMavlink] COMMAND_ACK sent for CMD ${command}`);
+        await this._sendFrame(77, payload, CRC_EXTRA[77], true);
+        console.log(`[RadioMavlink] COMMAND_ACK sent for CMD ${command} -> target_system=${this.targetSystem}, target_component=${this.targetComponent}`);
     }
 
     async sendCommandLong(command, params = {}, waitAck = true, timeout = 3000) {
@@ -1041,25 +1045,15 @@ class RadioMavlink {
 
     _handleCommandLong({ command, param1 }) {
         const MAV_CMD_ACCELCAL_VEHICLE_POS = 42429;
-        const ACCELCAL_VEHICLE_POS_SUCCESS = 16777215;
-        const ACCELCAL_VEHICLE_POS_FAILED = 16777216;
-
         if (command === MAV_CMD_ACCELCAL_VEHICLE_POS) {
-            if (param1 === ACCELCAL_VEHICLE_POS_SUCCESS || param1 === ACCELCAL_VEHICLE_POS_FAILED) {
-                const success = param1 === ACCELCAL_VEHICLE_POS_SUCCESS;
-                console.log(`[RadioMavlink] Accel cal selesai -- status: ${success ? 'SUCCESS' : 'FAILED'}`);
-                if (this.onAccelCalComplete) this.onAccelCalComplete(success);
-            } else {
-                console.log(`[RadioMavlink] FC minta konfirmasi posisi accel cal #${param1}`);
-                if (this.onAccelCalPosRequest) this.onAccelCalPosRequest(param1);
-            }
+            console.log(`[RadioMavlink] COMMAND_LONG accelcal diterima dari FC (param1=${param1})`);
+            if (this.onAccelCalPosSignal) this.onAccelCalPosSignal(param1);
         } else {
-            console.log(`[RadioMavlink] COMMAND_LONG diterima dari FC (command=${command}), belum ada handler spesifik -- diabaikan.`);
+            console.log(`[RadioMavlink] COMMAND_LONG diterima dari FC (command=${command}, param1=${param1})`);
         }
     }
 
     _handleParamValue({ name, value, paramIndex, paramCount }) {
-        // Waiter tunggal (getParam/setParam)
         const waiter = this._paramWaiters.get(name);
         if (waiter) {
             this._paramWaiters.delete(name);

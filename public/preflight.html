@@ -261,6 +261,7 @@ async function sendCalibration(cmdType) {
         if (cmdType === 'accel_3axis') {
             await mav.startAccel3Axis();
             currentCalibPosition = 'level';
+            window.lastConfirmedAccelPos = 0;   // TAMBAHKAN -- reset supaya posisi #1 pun terhitung "baru"
             document.getElementById('btnAccelNext').style.display = 'inline-block';
         } 
         else if (cmdType === 'accel_level') {
@@ -277,12 +278,16 @@ async function sendCalibration(cmdType) {
 
 async function sendCalibrationNext() {
     const btnNext = document.getElementById('btnAccelNext');
-    if (btnNext) btnNext.style.display = 'none'; 
-
-    logToConsole(`> Mengirim konfirmasi (ACK) untuk langkah ini...`);
+    const posValue = ACCELCAL_POS_VALUES[currentCalibPosition];
+    if (!posValue) {
+        logToConsole('Posisi belum diketahui.');
+        return;
+    }
+    if (btnNext) btnNext.style.display = 'none';
+    window.lastConfirmedAccelPos = posValue;   // TAMBAHKAN -- dipakai filter echo
+    logToConsole(`> Konfirmasi posisi ${currentCalibPosition.toUpperCase()} (${posValue}/6) dikirim ke FC...`);
     try {
-        await window.parent.mavFeatures.nextAccelStep();
-        logToConsole(`System: Posisi dikonfirmasi`);
+        await window.parent.mavFeatures.nextAccelStep(posValue);
     } catch (err) {
         logToConsole(`Error: ${err.message}`);
         if (btnNext) btnNext.style.display = 'inline-block';
@@ -307,10 +312,17 @@ async function sendCompassCalibration(cmdType) {
             logToConsole('System: Compass calibration started');
         } 
         else if (cmdType === 'compass_accept') {
-            await mav.acceptCompassCal();
-            logToConsole('✓ Compass calibration accepted.');
-            const btnReboot = document.getElementById('btnRebootFC');
-            if (btnReboot) btnReboot.style.display = 'inline-block';
+            const btnAccept = document.getElementById('btnCompassAccept');
+            if (btnAccept) btnAccept.disabled = true;
+            const ack = await mav.acceptCompassCal();
+            if (ack && ack.ok) {
+                logToConsole('Compass calibration accepted');
+                const btnReboot = document.getElementById('btnRebootFC');
+                if (btnReboot) btnReboot.style.display = 'inline-block';
+            } else {
+                logToConsole(`Accept GAGAL (${ack ? ack.result : 'unknown'}). Coba lagi.`);
+                if (btnAccept) btnAccept.disabled = false;
+            }
         } 
         else if (cmdType === 'compass_cancel') {
             await mav.cancelCompassCal();
@@ -455,33 +467,31 @@ window.updateMavlogUI = function(logItem) {
     }
 };
 
-const ACCELCAL_POS_LABELS = {
-    1: 'LEVEL (mendatar)',
-    2: 'LEFT (miring kiri)',
-    3: 'RIGHT (miring kanan)',
-    4: 'NOSEDOWN (hidung menunduk)',
-    5: 'NOSEUP (hidung mendongak)',
-    6: 'BACK (terbalik/punggung di bawah)'
-};
+const ACCELCAL_POS_VALUES = { level: 1, left: 2, right: 3, nosedown: 4, noseup: 5, back: 6 };
+const ACCELCAL_POS_LABELS = { 1: 'level', 2: 'left', 3: 'right', 4: 'nosedown', 5: 'noseup', 6: 'back' };
+window.lastConfirmedAccelPos = 0;
 
-window.onAccelCalPosPrompt = function(posNumber) {
-    const label = ACCELCAL_POS_LABELS[posNumber] || `posisi #${posNumber}`;
-    logToConsole(`> FC minta posisi ${label} (${posNumber}/6)`);
+window.onAccelCalPosSignal = function(param1) {
+    const ACCELCAL_SUCCESS = 16777215;
+    const ACCELCAL_FAILED = 16777216;
 
-    // Tampilkan ke UI, bukan cuma console -- INI YANG SELAMA INI HILANG (indikator posisi)
-    const statusEl = document.getElementById('accelCalPosLabel'); // perlu tambah elemen ini di HTML
-    if (statusEl) statusEl.innerText = `Posisi diminta: ${label} (${posNumber}/6)`;
+    if (param1 === ACCELCAL_SUCCESS || param1 === ACCELCAL_FAILED) {
+        logToConsole(param1 === ACCELCAL_SUCCESS ? '✓ Accel cal SELESAI -- SUCCESS' : '✗ Accel cal SELESAI -- FAILED');
+        document.getElementById('btnAccelNext').style.display = 'none';
+        currentCalibPosition = '';
+        return;
+    }
 
-    const btnNext = document.getElementById('btnAccelNext');
-    if (btnNext) btnNext.style.display = 'inline-block';
-};
+    // param1 <= yang barusan kita konfirmasi -> ini cuma ECHO, abaikan (jangan spam tombol)
+    if (param1 <= window.lastConfirmedAccelPos) return;
 
-window.onAccelCalDone = function(success) {
-    logToConsole(success ? '✓ Accel cal SELESAI -- SUCCESS' : '✗ Accel cal SELESAI -- FAILED');
-    const btnNext = document.getElementById('btnAccelNext');
-    if (btnNext) btnNext.style.display = 'none';   // INI YANG SELAMA INI TIDAK PERNAH KE-TRIGGER DENGAN BENAR
-    const statusEl = document.getElementById('accelCalPosLabel');
-    if (statusEl) statusEl.innerText = success ? 'Kalibrasi selesai ✓' : 'Kalibrasi gagal ✗';
+    // param1 lebih besar -> FC benar-benar minta posisi BARU
+    const posName = ACCELCAL_POS_LABELS[param1];
+    if (!posName) return;
+
+    currentCalibPosition = posName;
+    logToConsole(`> FC minta posisi selanjutnya: ${posName.toUpperCase()} (${param1}/6)`);
+    document.getElementById('btnAccelNext').style.display = 'inline-block';
 };
 
 function processCalibrationMessages(msgText) {

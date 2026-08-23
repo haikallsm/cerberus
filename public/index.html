@@ -171,10 +171,11 @@
                 frame.contentWindow.onAccelCalPosPrompt(posNumber);
             }
         }
-        function handleAccelCalComplete(success) {
+
+        function handleAccelCalPosSignal(param1) {
             const frame = document.getElementById('main-frame');
-            if (frame?.contentWindow?.onAccelCalDone) {
-                frame.contentWindow.onAccelCalDone(success);
+            if (frame?.contentWindow?.onAccelCalPosSignal) {
+                frame.contentWindow.onAccelCalPosSignal(param1);
             }
         }
         
@@ -183,9 +184,9 @@
         window.udpMavlink.onConnect = handleLinkConnect;
         window.udpMavlink.onDisconnect = handleLinkDisconnect;
         window.radioMavlink.onAccelCalPosRequest = handleAccelCalPosRequest;
-        window.radioMavlink.onAccelCalComplete = handleAccelCalComplete;
         window.udpMavlink.onAccelCalPosRequest = handleAccelCalPosRequest;
-        window.udpMavlink.onAccelCalComplete = handleAccelCalComplete;
+        window.radioMavlink.onAccelCalPosSignal = handleAccelCalPosSignal;
+        window.udpMavlink.onAccelCalPosSignal = handleAccelCalPosSignal;
 
         function navigateTo(url, el) {
             document.getElementById('main-frame').src = url;
