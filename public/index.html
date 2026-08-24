@@ -328,7 +328,7 @@
                 connectBtn.textContent = connected ? 'Disconnect' : 'Connect';
             } else {
                 const connected = !!(window.udpMavlink && window.udpMavlink.telemetry?.connected);
-                statusEl.textContent = connected ? 'UDP Connected' : 'UDP Disconnected';
+                statusEl.textContent = connected ? 'Connected' : 'Disconnected';
                 connectBtn.textContent = connected ? 'Disconnect' : 'Connect';
             }
         }

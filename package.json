@@ -1,6 +1,6 @@
 {
   "name": "cerberus",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "HAWKEYE Ground Control Station",
   "author": {
     "name": "Hawkeye Development Team",
@@ -24,7 +24,7 @@
   },
   "build": {
     "appId": "com.hawkeyecs",
-    "productName": "Hawkeye",
+    "productName": "cerberus",
     "files": [
       "main.js",
       "public/**/*",
@@ -38,6 +38,12 @@
         "nsis"
       ],
       "icon": "public/assets/main-logo.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "include": "build/installer.nsh"
     },
     "linux": {
       "target": [

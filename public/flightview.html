@@ -885,7 +885,7 @@ window.openVideo = async function() {
                 console.warn("[WebRTC] Koneksi video terputus. Mencoba reconnect dalam 3 detik...");
                 
                 statusText.innerText = 'Connection Lost. Reconnecting...';
-                statusText.style.color = '#ff9800'; // Ubah warna menjadi oranye/kuning
+                statusText.style.color = '#ff9800';
                 
                 if (pc) { 
                     pc.close(); 
