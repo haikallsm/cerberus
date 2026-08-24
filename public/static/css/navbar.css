@@ -21,7 +21,6 @@
     flex-shrink: 0; /* Elemen kontrol kanan tetap dipertahankan ukurannya */
 }
 
-
 .nav-right-container {
     display: flex;
     align-items: center;

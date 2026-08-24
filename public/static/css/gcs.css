@@ -19,19 +19,24 @@ body {
 .navbar {
     display: flex;
     align-items: center;
-    background: rgba(8, 15, 27, 0.92);
-    backdrop-filter: blur(12px);
+
+    /* 1. Ubah alpha dari 0 menjadi misalnya 0.65 agar warna terlihat sedikit */
+    background: rgba(15, 23, 42, 0.027); 
+    /* 2. Tambahkan properti backdrop-filter untuk efek blur */
+    backdrop-filter: blur(10px);
     border-bottom: 1px solid rgba(56, 189, 248, 0.18);
+    border: none;
+    box-shadow: none;
     padding: 0 18px;
+    padding-left: 30px;
     height: 64px;
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
-    z-index: 2000;
-    box-shadow: 0 6px 24px rgba(8, 15, 27, 0.45);
-}
 
+    z-index: 2000;
+}
 .nav-left {
     display: flex;
     align-items: center;
@@ -166,6 +171,9 @@ body {
 
 .leaflet-container {
     background: #0b1726;
+}
+.leaflet-control-zoom {
+   display: none !important; /* Menyembunyikan tombol zoom default Leaflet */
 }
 
 /* ===== MAP CONTAINER ===== */

@@ -158,8 +158,8 @@
 <script src="./static/js/leaflet.js"></script>
 <script>
 // ===== MAP =====
-let map = L.map('map', { zoomControl: true, attributionControl: true }).setView([-7.25, 112.75], 13);
-
+let map = L.map('map', { zoomControl: false, attributionControl: false }).setView([-7.25, 112.75], 13);
+L.control.zoom({position: 'bottomright'}).addTo(map);
 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     attribution: 'Tiles © Esri',
     maxZoom: 19

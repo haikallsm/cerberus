@@ -136,14 +136,21 @@
 	pointer-events: auto;
 	}
 .leaflet-top,
-.leaflet-bottom {
+.leaflet-left{
 	position: absolute;
 	z-index: 1000;
 	pointer-events: none;
 	}
-.leaflet-top {
-	top: 0;
-	}
+/* Memaksa tombol zoom Leaflet ke kanan bawah layar */
+.leaflet-control-zoom {
+    position: fixed !important;
+    bottom: 5px !important;  /* Jarak dari bawah layar */
+    right: 20px !important;   /* Jarak dari kanan layar */
+    top: auto !important;
+    left: auto !important;
+    z-index: 9999 !important; /* Pastikan selalu berada di atas elemen lain */
+    margin: 0 !important;
+}
 .leaflet-right {
 	right: 0;
 	}

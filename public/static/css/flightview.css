@@ -28,7 +28,7 @@ html, body{
     top: 118px; /* digeser dari 78px: menyisakan ruang utk .telem-tabs-header (~40px) di atasnya */
     right: 14px;
     left: auto;
-    height: calc(85vh - 40px); /* dikurangi sebesar ruang yg diambil header, biar tepi bawah panel tidak berubah */
+    height: calc(85vh - 60px); /* dikurangi sebesar ruang yg diambil header, biar tepi bawah panel tidak berubah */
     width: 280px;  /* 10% of window width */
     max-width: 90vw;
     padding: 12px;
