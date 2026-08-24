@@ -42,6 +42,12 @@ function adaptRadioTelemetry(raw) {
     if (raw.altitude !== undefined) out.alt = raw.altitude;
     if (raw.heading !== undefined) out.heading = raw.heading;
 
+    // HOME_POSITION (msg 242) -- dikirim FC saat home berubah (EKF origin set,
+    // arm pertama, dsb) atau saat diminta via MAV_CMD_GET_HOME_POSITION.
+    if (raw.home_lat !== undefined) out.home_lat = raw.home_lat;
+    if (raw.home_lon !== undefined) out.home_lon = raw.home_lon;
+    if (raw.home_alt !== undefined) out.home_alt = raw.home_alt;
+
     // Data Kecepatan HUD (Berasal dari VFR_HUD)
     if (raw.speed !== undefined) out.speed = raw.speed;
     if (raw.climb !== undefined) out.climb = raw.climb;

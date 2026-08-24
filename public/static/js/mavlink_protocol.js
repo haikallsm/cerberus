@@ -17,7 +17,9 @@ const CRC_EXTRA = {
     33: 104,   // GLOBAL_POSITION_INT
     43: 132,   // MISSION_REQUEST_LIST
     44: 221,   // MISSION_COUNT
+    45: 251,   // MISSION_CLEAR_ALL
     47: 153,   // MISSION_ACK
+    242: 104,  // HOME_POSITION
     51: 196,   // MISSION_REQUEST_INT
     40: 230,   // MISSION_REQUEST (legacy)
     65: 118,
@@ -41,11 +43,11 @@ const MSG_LENGTHS = {
     0: 9, 1: 31, 20: 20, 21: 2, 22: 25, 23: 23, 24: 30, 27: 29, 30: 28, 
     33: 28, 40: 4, 43: 3, 44: 5, 47: 4, 51: 5, 65: 42, 66: 6, 70: 18, 
     73: 38, 74: 20, 75: 35, 76: 33, 77: 3, 109: 9, 132: 14, 191: 27, 
-    192: 44, 253: 54, 160: 12, 161: 3
+    192: 44, 253: 54, 160: 12, 161: 3, 45: 2, 242: 60
 };
 
 const REQUESTED_STREAMS = [1, 2, 3, 6, 10, 11, 12];
-const STREAM_RATE_HZ = 10;
+const STREAM_RATE_HZ = 8;
 
 function buildMavlink1Frame(seq, sysid, compid, msgId, payloadBytes, crcExtra) {
     const len = payloadBytes.length;
@@ -214,6 +216,7 @@ function readF32(dv, off) { return dv.getFloat32(off, true); }
 function readU32(dv, off) { return dv.getUint32(off, true); }
 function readI32(dv, off) { return dv.getInt32(off, true); }
 function readU16(dv, off) { return dv.getUint16(off, true); }
+function readI16(dv, off) { return dv.getInt16(off, true); }
 
 const MAV_TYPE_ROVER = 10;
 const MAV_TYPE_COPTER_SET = new Set([2, 13, 14, 19, 20, 21]);
@@ -260,7 +263,12 @@ const DECODERS = {
     },
     33: (bytes) => {
         const dv = new DataView(new Uint8Array(bytes).buffer);
-        return { _kind:'telemetry', latitude: readI32(dv,4)/1e7, longitude: readI32(dv,8)/1e7, altitude: readI32(dv,16)/1000, heading: readU16(dv,26)/100 };
+        const lat = readI32(dv, 4) / 1e7;
+        const lon = readI32(dv, 8) / 1e7;
+        const alt = readI32(dv, 12) / 1000;        
+        const relativeAlt = readI32(dv, 16) / 1000;
+        const heading = readI16(dv, 26) / 100;
+        return { _kind: 'telemetry', latitude: lat, longitude: lon, altitude: alt, relativeAlt, heading };
     },
     74: (bytes) => {
         const dv = new DataView(new Uint8Array(bytes).buffer);
@@ -273,6 +281,15 @@ const DECODERS = {
     40: (bytes) => {
         const dv = new DataView(new Uint8Array(bytes).buffer);
         return { _kind:'mission_request', seq: dv.getUint16(0, true) };
+    },
+    242: (bytes) => {
+        const dv = new DataView(new Uint8Array(bytes).buffer);
+        return {
+            _kind: 'telemetry',
+            home_lat: readI32(dv, 0) / 1e7,
+            home_lon: readI32(dv, 4) / 1e7,
+            home_alt: readI32(dv, 8) / 1000,
+        };
     },
     51: (bytes) => {
         const dv = new DataView(new Uint8Array(bytes).buffer);

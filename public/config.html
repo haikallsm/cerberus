@@ -195,8 +195,19 @@ function refreshPIDUI() {
     let dataFound = false;
     for (const [inputId, paramName] of Object.entries(PID_MAP)) {
         const cell = document.getElementById('val_' + paramName);
-        if (cell) {
-            document.getElementById(inputId).value = parseFloat(cell.innerText);
+        const inputEl = document.getElementById(inputId);
+        
+        if (cell && inputEl) {
+            let rawValue = parseFloat(cell.innerText);
+            let stepStr = inputEl.getAttribute('step') || '1';
+            let decimals = 0;
+            if (stepStr.includes('.')) {
+                decimals = stepStr.split('.')[1].length;
+            }
+            
+            let formattedValue = parseFloat(rawValue.toFixed(decimals));
+            inputEl.value = formattedValue;
+            inputEl.dataset.original = formattedValue;
             dataFound = true;
         }
     }

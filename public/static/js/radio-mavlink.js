@@ -45,9 +45,8 @@ class RadioMavlink {
         this._intentionalDisconnect = false;
         this._awaitingReconnect = false;
         this._reconnecting = false;
-        this._reconnectTimer = null;
         this._isRebooting = false;
-        this._linkReady = false;
+        this._missionBusy = false; // true selama uploadMission/downloadMission -- FC bisa stall EEPROM write & telat kirim heartbeat, watchdog jangan false-trigger disconnect
         this._transportOpen = false;
         this._connectStartedAt = 0;
         this._magCalTelemetryTimer = null;
@@ -188,7 +187,7 @@ class RadioMavlink {
     }
 
     isLive() {
-        const timeout = this._isRebooting ? 15000 : this._linkLossTimeoutMs;
+        const timeout = (this._isRebooting || this._missionBusy) ? 15000 : this._linkLossTimeoutMs;
         return this.telemetry.connected && (Date.now() - this.lastHeartbeatTime) < timeout;
     }
 
@@ -321,6 +320,20 @@ class RadioMavlink {
             await new Promise(r => setTimeout(r, 50));
         }
         console.log(`[RadioMavlink] Streams requested @ ${rateHz}Hz`);
+    }
+
+    // MAV_CMD_GET_HOME_POSITION (410) -- FC hanya broadcast HOME_POSITION saat berubah
+    // (mis. setelah EKF origin di-set / GPS fix pertama), jadi GCS wajib minta aktif
+    // supaya home marker langsung terisi begitu link connect, bukan menunggu event.
+    // Fire-and-forget: hasilnya masuk lewat DECODERS[242] -> this.telemetry.home_lat/lon/alt,
+    // jadi tidak perlu await ack di sini.
+    async requestHomePosition() {
+        try {
+            await this.sendCommandLong(410, {}, false);
+            console.log('[RadioMavlink] MAV_CMD_GET_HOME_POSITION dikirim');
+        } catch (e) {
+            console.warn('[RadioMavlink] Gagal minta HOME_POSITION:', e);
+        }
     }
 
     async sendCommandAck(command, result = 0) {
@@ -465,12 +478,27 @@ class RadioMavlink {
         });
     }
 
+    // Catatan: count boleh 0 (mis. user cuma mau hapus mission di FC lewat UI upload).
+    // Protocol-layer tidak boleh berhenti cuma karena list kosong -- kalau count=0,
+    // FC (ArduPilot) langsung balas MISSION_ACK tanpa minta item apa pun, jadi alur
+    // resend-MISSION_COUNT + tunggu MISSION_ACK di bawah ini otomatis menangani kasus itu.
     async uploadMission(items, timeout = 10000) {
         const count = items.length;
-        if (count === 0) throw new Error('Mission kosong, tidak ada yang di-upload');
         if (this._missionUpload) throw new Error('Upload mission sedang berlangsung, tunggu selesai');
 
-        return new Promise((resolve, reject) => {
+        // Selama transfer mission: (1) longgarkan watchdog heartbeat (FC bisa stall
+        // sejenak saat nulis EEPROM utk CLEAR_ALL+COUNT+item, itu normal, bukan link putus),
+        // (2) pause RC_CHANNELS_OVERRIDE loop (kirim tiap 150ms) supaya tidak berebut
+        // bandwidth radio 115200 baud dengan paket mission protocol & heartbeat.
+        this._missionBusy = true;
+        this.pauseRcOverride();
+
+        // MISSION_CLEAR_ALL dulu supaya state mission lama di FC ke-reset bersih
+        // sebelum COUNT baru dikirim (best-effort, tidak menunggu ACK-nya sendiri --
+        // MISSION_COUNT yang menyusul tetap jadi penentu hasil akhir via MISSION_ACK).
+        await this._sendFrame(45, [this.targetSystem, this.targetComponent], CRC_EXTRA[45]);
+
+        const p = new Promise((resolve, reject) => {
             const state = { items, resolve, reject, timer: null, resendTimer: null };
             state.resetTimer = () => {
                 if (state.resendTimer) { clearInterval(state.resendTimer); state.resendTimer = null; }
@@ -491,6 +519,11 @@ class RadioMavlink {
                 console.warn('[RadioMavlink] uploadMission: belum ada respons FC, resend MISSION_COUNT...');
                 this._sendFrame(44, countPayload, CRC_EXTRA[44]);
             }, 1500);
+        });
+
+        return p.finally(() => {
+            this._missionBusy = false;
+            this.resumeRcOverride();
         });
     }
 
@@ -516,6 +549,17 @@ class RadioMavlink {
 
     async downloadMission(timeout = 5000, maxRetries = 3) {
         console.log('[RadioMavlink] downloadMission: mengirim MISSION_REQUEST_LIST...');
+        this._missionBusy = true;
+        this.pauseRcOverride();
+        try {
+            return await this._downloadMissionInner(timeout, maxRetries);
+        } finally {
+            this._missionBusy = false;
+            this.resumeRcOverride();
+        }
+    }
+
+    async _downloadMissionInner(timeout, maxRetries) {
         let count;
         try {
             count = await new Promise((resolve, reject) => {
@@ -897,6 +941,7 @@ class RadioMavlink {
                         e
                     );
                 });
+                this.requestHomePosition();
             }
 
             if (

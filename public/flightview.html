@@ -878,7 +878,27 @@ window.openVideo = async function() {
         };
         pc = new RTCPeerConnection(config);
         pc.addEventListener('iceconnectionstatechange', () => console.log("[WebRTC] ICE iceConnection State:", pc.iceConnectionState));
-        pc.addEventListener('connectionstatechange', () => console.log("[WebRTC] Connection State:", pc.connectionState));
+        pc.addEventListener('connectionstatechange', () => {
+            console.log("[WebRTC] Connection State:", pc.connectionState);
+            
+            if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+                console.warn("[WebRTC] Koneksi video terputus. Mencoba reconnect dalam 3 detik...");
+                
+                statusText.innerText = 'Connection Lost. Reconnecting...';
+                statusText.style.color = '#ff9800'; // Ubah warna menjadi oranye/kuning
+                
+                if (pc) { 
+                    pc.close(); 
+                    pc = null; 
+                }
+                
+                setTimeout(() => {
+                    if (modal.style.display === 'block') {
+                        window.openVideo(); 
+                    }
+                }, 3000);
+            }
+        });
         pc.addEventListener('track', (evt) => console.log('[WebRTC] track diterima! kind:', evt.track.kind, '| jumlah streams:', evt.streams.length));
         pc.addEventListener('icecandidate', (event) => {
             if (event.candidate) {
