@@ -11,9 +11,10 @@
 
 <body style="background: transparent;">
 
-<div class="main" style="margin-left: 0;"> <!-- Hilangkan margin kiri navbar -->
+<!-- Tambahkan margin-top: 0 agar peta naik ke balik navbar -->
+<div class="main" style="margin-left: 0; margin-top: 0; height: 100%;"> <!-- Hilangkan margin kiri navbar -->
     <div id="map"></div>
-    <div class="sidebar">
+    <div class="sidebar" style="padding-top: 80px;">
         <div class="sidebar-header">Mission Planner</div>
         <div class="command-bar">
             <button onclick="setCommand('HOME')" id="btn-home">Home</button>
