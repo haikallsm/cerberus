@@ -193,10 +193,8 @@
             document.querySelectorAll('.nav-left a').forEach(a => a.classList.remove('active'));
             if(el) el.classList.add('active');
             const camBtn = document.getElementById('nav-camera');
-            if (url === '/flightview.html') {
-                camBtn.style.display = 'inline-block';
-            } else {
-                camBtn.style.display = 'none';
+            if (camBtn) {
+                camBtn.style.display = (url === './flightview.html') ? 'inline-block' : 'none';
             }
         }
 

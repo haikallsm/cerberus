@@ -140,6 +140,16 @@
                 <div class="console-box" id="calibConsole">
                     System ready. Connect to start calibration...<br>
                 </div>
+
+                <!-- Pengaturan Jaringan (dipindah dari setup.html, halaman terpisah dihapus) -->
+                <div class="calib-group" style="margin-top:16px;">
+                    <h4>Pengaturan Jaringan (Video Stream)</h4>
+                    <div class="calib-item">
+                        <p>IP Raspberry Pi (Backend) untuk menghubungkan Video Stream.</p>
+                        <input type="text" id="raspiIpInput" class="gcs-input" placeholder="Contoh: 192.168.1.100" value="127.0.0.1">
+                        <button class="btn-mp" onclick="saveRaspiIP()">Simpan IP RasPi</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -151,10 +161,38 @@ let lastCalibMsgTime = 0;
 let currentCalibPosition = '';
 let safetyIsOff = false; 
 
-const getBaseUrl = () => window.parent.gcsConnection?.baseUrl || 'http://localhost:5000';
+// Pengaturan Jaringan RasPi (dipindah dari setup.html) -- restore IP tersimpan ke input.
+// Script ini sudah ada di akhir <body>, elemen sudah pasti ada di DOM, tidak perlu DOMContentLoaded.
+(function restoreRaspiIP() {
+    const savedUrl = localStorage.getItem('raspyUrl');
+    if (savedUrl) {
+        const ipOnly = savedUrl.replace('http://', '').replace(':5000', '');
+        const input = document.getElementById('raspiIpInput');
+        if (input) input.value = ipOnly;
+    }
+})();
+
+function saveRaspiIP() {
+    const ip = document.getElementById('raspiIpInput').value.trim();
+    if (!ip) {
+        alert('Harap masukkan IP!');
+        return;
+    }
+    const url = `http://${ip}:5000`;
+    localStorage.setItem('raspyUrl', url);
+    alert('IP Backend/RasPi berhasil diatur ke: ' + url);
+}
+
+// Ikut fix yang sama seperti di mission.html: gcsConnection sudah tidak punya baseUrl
+// (backend Flask/RasPi untuk telemetry sudah retired), tapi IP RasPi untuk video stream
+// masih relevan -- baca langsung dari localStorage yang diisi saveRaspiIP() di bawah.
+const getBaseUrl = () => localStorage.getItem('raspyUrl') || 'http://localhost:5000';
 const isConnected = () => {
     if (window.parent && window.parent.mavFeatures) {
-        return window.parent.mavFeatures._radioActive() || window.parent.mavFeatures._piActive();
+        // _piActive() sudah tidak ada di window.mavFeatures (=window.commands) sejak
+        // migrasi ke arsitektur client-side radio/UDP -- ganti ke _udpActive(),
+        // sama seperti fix yang sudah diterapkan di mission.html
+        return window.parent.mavFeatures._radioActive() || window.parent.mavFeatures._udpActive();
     }
     return false;
 };

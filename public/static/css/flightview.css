@@ -154,43 +154,112 @@ html, body{
     height: 14px;
 }
 
+/* ===== FLOATING MAP TOOLS ===== */
+.map-tools {
+    position: absolute;
+    top: 70px;
+    left: 14px;
+    z-index: 3200;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.map-tool-btn {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    background: rgba(0, 0, 0, 0.78);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+    transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+    backdrop-filter: blur(3px);
+}
+
+.map-tool-btn:hover {
+    transform: scale(1.06);
+    background: rgba(15, 15, 15, 0.92);
+}
+
+.map-tool-btn:active {
+    transform: scale(0.96);
+}
+
+.map-tool-btn.active {
+    background: rgba(0, 188, 212, 0.92);
+    border-color: #e0f7fa;
+}
+
+.map-tool-btn svg {
+    width: 23px;
+    height: 23px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
 /* ===== VIDEO MODAL ===== */
 .video-modal {
     display: none;
-    bottom: 10px;
-    left:10px;
-    width: 320px;
-    height: 180px;
-    background: black;
+    position: fixed;
+    left: 70px;
+    bottom: 18px;
+    width: 360px;
+    height: 202px;
+    background: #050505;
     border-radius: 12px;
-    overflow:hidden;
+    overflow: hidden;
     z-index: 3000;
-    box-shadow: 0 0 10px rgba(0,0,0,0.6);
-    position:fixed;
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.video-modal.is-open {
+    display: block;
 }
 
 .video-content {
     width: 100%;
     height: 100%;
     position: relative;
-
 }
 
 .video-content video {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    display: block;
 }
 
-.close-btn {
+.video-close-btn {
     position: absolute;
-    top: 8px;
-    right: 12px;
-    font-size: 24px;
+    top: 6px;
+    right: 7px;
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.58);
     color: white;
     cursor: pointer;
     z-index: 10;
-    text-shadow: 0 0 5px rgba(0,0,0,0.7);
+    font-size: 22px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.video-close-btn:hover {
+    background: rgba(0, 0, 0, 0.85);
 }
 
 /* ===== DRONE MARKER ===== */
@@ -214,19 +283,71 @@ html, body{
 
 .mavlink-log-panel {
     position: absolute;
-    top: 78px;
-    left: 14px;
-    width: 340px;
-    height: 200px;
-    background: rgba(10, 15, 25, 0.85);
-    border: none;
-    border-radius: 10px;
-    z-index: 1000;
+    top: 70px;
+    left: 70px;
+    width: 360px;
+    height: 230px;
+    box-sizing: border-box;
+    background: rgba(10, 15, 25, 0.30);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    z-index: 3100;
     display: flex;
     flex-direction: column;
-    padding: 12px;
-    box-shadow: none;
+    padding: 10px;
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateX(-10px);
+    transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s ease;
+    backdrop-filter: blur(5px);
+}
+
+.mavlink-log-panel.is-open {
     pointer-events: auto;
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(0);
+}
+
+.floating-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 28px;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+
+.floating-panel-title {
+    color: #00bcd4;
+    font-size: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.floating-panel-close {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.floating-panel-close:hover {
+    background: rgba(255,255,255,0.16);
 }
 
 #mavlinkLogContent {
@@ -242,8 +363,8 @@ html, body{
 /* Warna teks berdasarkan severity (tingkat keparahan dari MAVLink) */
 .log-sev-0, .log-sev-1, .log-sev-2 { color: #ff4757; font-weight: bold; } /* Emergency/Critical */
 .log-sev-3, .log-sev-4 { color: #ffa502; } /* Warning/Error */
-.log-sev-5, .log-sev-6 { color: #2ed573; } /* Notice/Info */
-.log-sev-7 { color: #a4b0be; } /* Debug */
+.log-sev-5, .log-sev-6 { color: #00cc00; } /* Notice/Info */
+.log-sev-7 { color: #ffff; } /* Debug */
 
 /* Percantik scrollbar khusus untuk log */
 #mavlinkLogContent::-webkit-scrollbar {

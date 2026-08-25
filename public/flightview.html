@@ -139,17 +139,39 @@
         </div>
     </div>
 
-    <div id="mavlinkLogPanel" class="mavlink-log-panel">
-        <div style="font-size: 10px; color: #00bcd4; padding-bottom: 6px; font-weight: bold; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 8px;"></div>
+    <!-- MAP FLOATING TOOLS -->
+    <div id="mapTools" class="map-tools" aria-label="Flight View tools">
+        <button id="cameraToolBtn" class="map-tool-btn" type="button"
+                onclick="toggleVideoPanel()" title="Camera" aria-label="Camera">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M8 7.5 9.5 5h5L16 7.5H19A2 2 0 0 1 21 9.5v8A2 2 0 0 1 19 19.5H5A2 2 0 0 1 3 17.5v-8A2 2 0 0 1 5 7.5h3Z"/>
+                <circle cx="12" cy="13.5" r="3.5"/>
+            </svg>
+        </button>
+
+        <button id="logToolBtn" class="map-tool-btn" type="button"
+                onclick="toggleMavlinkLog()" title="Message Log" aria-label="Message Log" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 5.5h14A2 2 0 0 1 21 7.5v9A2 2 0 0 1 19 18.5H9l-4.5 3v-3.2A2 2 0 0 1 3 16.5v-9A2 2 0 0 1 5 5.5Z"/>
+                <path d="M7 9.5h10M7 13h7"/>
+            </svg>
+        </button>
+    </div>
+
+    <div id="mavlinkLogPanel" class="mavlink-log-panel" aria-hidden="true">
+        <div class="floating-panel-header">
+            <div class="floating-panel-title">Message Log</div>
+            <button class="floating-panel-close" type="button" onclick="closeMavlinkLog()" title="Close message log" aria-label="Close message log">&times;</button>
+        </div>
         <div id="mavlinkLogContent"></div>
     </div>
 
 </div>
 
 <!-- VIDEO POPUP -->
-<div id="videoModal" class="video-modal">
+<div id="videoModal" class="video-modal" aria-hidden="true">
     <div class="video-content">
-        <span class="close-btn" onclick="closeVideo()">&times;</span>
+        <button class="video-close-btn" type="button" onclick="closeVideo()" title="Close camera" aria-label="Close camera">&times;</button>
         <video id="webrtc-video" playsinline muted autoplay></video>
         <div id="webrtc-status" class="webrtc-status">Connecting...</div>
     </div>
@@ -450,7 +472,7 @@ function logLocalFeedback(text, severity = 6) {
     const msgDiv = document.createElement('div');
     msgDiv.className = `log-sev-${severity}`;
     msgDiv.style.marginBottom = "3px";
-    msgDiv.innerHTML = `<span style="color:#747d8c;">[${timeStr}]</span> ${safeText}`;
+    msgDiv.innerHTML = `<span style="color:#0000;">[${timeStr}]</span> ${safeText}`;
 
     logContent.appendChild(msgDiv);
     if (logContent.childElementCount > 200) logContent.removeChild(logContent.firstChild);
@@ -767,7 +789,7 @@ window.updateMavlogUI = function(logItem) {
     const msgDiv = document.createElement('div');
     msgDiv.className = `log-sev-${logItem.severity ?? 6}`;
     msgDiv.style.marginBottom = "3px";
-    msgDiv.innerHTML = `<span style="color:#747d8c;">[${timeStr}]</span> ${safeText}`;
+    msgDiv.innerHTML = `<span style="color:#ffff;">[${timeStr}]</span> ${safeText}`;
     
     logContent.appendChild(msgDiv);
     
@@ -856,6 +878,39 @@ document.addEventListener('mousemove', e => {
 
 document.addEventListener('mouseup', () => isDragging = false);
 
+// ===== FLOATING MAP TOOLS =====
+const mavlinkLogPanel = document.getElementById('mavlinkLogPanel');
+const logToolBtn = document.getElementById('logToolBtn');
+
+window.toggleMavlinkLog = function() {
+    if (!mavlinkLogPanel) return;
+    const isOpen = mavlinkLogPanel.classList.toggle('is-open');
+    mavlinkLogPanel.setAttribute('aria-hidden', String(!isOpen));
+    if (logToolBtn) logToolBtn.setAttribute('aria-expanded', String(isOpen));
+};
+
+window.closeMavlinkLog = function() {
+    if (!mavlinkLogPanel) return;
+    mavlinkLogPanel.classList.remove('is-open');
+    mavlinkLogPanel.setAttribute('aria-hidden', 'true');
+    if (logToolBtn) logToolBtn.setAttribute('aria-expanded', 'false');
+};
+
+function updateCameraButtonState(isOpen) {
+    const btn = document.getElementById('cameraToolBtn');
+    if (!btn) return;
+    btn.classList.toggle('active', isOpen);
+    btn.setAttribute('aria-pressed', String(isOpen));
+}
+
+window.toggleVideoPanel = function() {
+    const modal = document.getElementById('videoModal');
+    if (!modal) return;
+    const isOpen = modal.classList.contains('is-open');
+    if (isOpen) closeVideo();
+    else openVideo();
+};
+
 // ===== VIDEO STREAMING (WebRTC) =====
 let pc = null;
 window.openVideo = async function() {
@@ -864,6 +919,9 @@ window.openVideo = async function() {
     const videoElement = document.getElementById('webrtc-video');
 
     modal.style.display = 'block';
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    updateCameraButtonState(true);
     statusText.innerText = 'Connecting Video...';
     statusText.style.color = '#00bcd4';
 
@@ -980,7 +1038,13 @@ window.openVideo = async function() {
 }
 
 window.closeVideo = function() {
-    document.getElementById('videoModal').style.display = 'none';
+    const modal = document.getElementById('videoModal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.remove('is-open');
+        modal.setAttribute('aria-hidden', 'true');
+    }
+    updateCameraButtonState(false);
     const videoElement = document.getElementById('webrtc-video');
     if (videoElement.srcObject) {
         videoElement.srcObject.getTracks().forEach(track => track.stop());
