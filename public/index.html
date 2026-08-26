@@ -49,18 +49,40 @@
         window.udpMavlink = new UdpMavlink();
 
         window.mavFeatures = window.commands;
+        window.gcsState = {safety: {off: false}, armed: false};
+        window.gcsConnection.logHistory = [];
+        window.gcsConnection.logSeq = 0;
+        window.gcsConnection.addLog = function (
+            text,
+            severity = 6,
+            source = 'GCS'
+        ) {
+            const logItem = {
+                seq: ++window.gcsConnection.logSeq,
+                text: String(text),
+                severity,
+                source,
+                server_time: Date.now() / 1000
+            };
+
+            window.gcsConnection.logHistory.push(logItem);
+            if (window.gcsConnection.logHistory.length > 500) {
+                window.gcsConnection.logHistory.shift();
+            }
+
+            return logItem;
+        };
+        
 
         let iframeReady = false;
 
         function routeTelemetry(raw) {
             const adaptedData = window.adaptRadioTelemetry(raw);
 
-            // Simpan ke "Otak Utama" (Global Store) agar tab Mission & Preflight tidak buta
             if (window.gcsConnection && window.gcsConnection.telemetry) {
                 window.gcsConnection.telemetry.updateFromApi(adaptedData);
             }
 
-            // Dorong ke Iframe UI yang sedang aktif (Flight View)
             const frame = document.getElementById('main-frame');
             if (frame?.contentWindow?.updateTelemetryUI) {
                 frame.contentWindow.updateTelemetryUI(adaptedData);
@@ -78,8 +100,16 @@
         }
 
         function routeMavlog(logItem) {
-            pushLogHistory(logItem);
-            if (!iframeReady) return; // akan ke-replay via replayLogHistory() begitu iframe selesai load
+            if (!logItem) return;
+            window.gcsConnection?.addLog(
+                logItem.text,
+                logItem.severity ?? 6,
+                logItem.source ?? 'FC'
+            );
+            if (!iframeReady) {
+                logQueue.push(logItem);
+                return;
+            }
             const frame = document.getElementById('main-frame');
             if (frame?.contentWindow?.updateMavlogUI) {
                 frame.contentWindow.updateMavlogUI(logItem);

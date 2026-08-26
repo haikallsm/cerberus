@@ -14,7 +14,12 @@ const commands = {
     },
 
     async armDisarm(arm) {
-        return this._getActiveLink().armDisarm(arm);
+        const ack = await this._getActiveLink().armDisarm(arm);
+        if(ack && ack.ok) {
+            if (window.gcsState) {
+                window.gcsState.armed = !!arm;
+            }
+        } return ack;
     },
 
     async reboot() {
@@ -42,9 +47,16 @@ const commands = {
             p4: 0.0
         });
 
-        if (!ack.ok) {
+        if (!ack || !ack.ok) {
             console.error("[Command] Safety Switch Failed", ack);
+            return ack;
         }
+
+        if(window.gcsState?.safety) {
+            window.gcsState.safety.off = !turnOn;
+        }
+
+        console.log("[Command] Safety Switch:", window.gcsState?.safety?.off ? "OFF" : "ON");
         return ack;
     },
 

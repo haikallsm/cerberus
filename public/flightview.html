@@ -111,17 +111,14 @@
             </div>
 
             <div class="action-grid">
-                <button class="action-btn btn-arm" onclick="doAction('arm')">ARM</button>
-                <button class="action-btn btn-disarm" onclick="doAction('disarm')">DISARM</button>
-                <button class="action-btn" onclick="doAction('takeoff')">TAKEOFF</button>
-                
-                <button class="action-btn btn-warning" onclick="doAction('safety_off')">SAFETY OFF</button>
-                <button class="action-btn btn-disarm" onclick="doAction('safety_on')">SAFETY ON</button>
-                <button class="action-btn" onclick="doAction('land')">LAND</button>
-                
+                <button id="armToggleBtn" class="action-btn btn-disarm" onclick="toggleArm()">DISARM</button>
+                <button id="safetyToggleBtn" class="action-btn btn-warning" onclick="toggleSS()">SAFETY ON</button>
                 <button class="action-btn btn-danger" onclick="doAction('reboot')">REBOOT</button>
                 <button class="action-btn btn-rover" onclick="doAction('rover')">ROVER</button>
                 <button class="action-btn btn-copter" onclick="doAction('copter')">COPTER</button>
+                
+                <button class="action-btn" onclick="doAction('takeoff')">TAKEOFF</button>
+                <button class="action-btn" onclick="doAction('land')">LAND</button>
                 <button class="action-btn btn-rtl" onclick="doAction('rtl')">RTL</button>
             </div>
 
@@ -464,6 +461,9 @@ function switchTelemPage(pageId, btnElement) {
 }
 
 function logLocalFeedback(text, severity = 6) {
+    if(window.parent?.gcsConnection?.addLog){
+        window.parent.gcsConnection.addLog(text, severity, 'GCS');
+    }
     const logContent = document.getElementById('mavlinkLogContent');
     if (!logContent) return;
     if (logContent.innerHTML.includes('Menunggu pesan')) logContent.innerHTML = '';
@@ -473,7 +473,7 @@ function logLocalFeedback(text, severity = 6) {
     const msgDiv = document.createElement('div');
     msgDiv.className = `log-sev-${severity}`;
     msgDiv.style.marginBottom = "3px";
-    msgDiv.innerHTML = `<span style="color:#0000;">[${timeStr}]</span> ${safeText}`;
+    msgDiv.innerHTML = `<span style="color:#ffff;">[${timeStr}]</span> ${safeText}`;
 
     logContent.appendChild(msgDiv);
     if (logContent.childElementCount > 200) logContent.removeChild(logContent.firstChild);
@@ -500,6 +500,155 @@ function logAckResult(actionLabel, ack) {
     }
 }
 
+
+async function toggleArm() {
+    if (!window.parent.commands) {
+        alert("Sistem command belum termuat.");
+        return;
+    }
+
+    const isLive =
+        window.parent.commands._radioActive() ||
+        window.parent.commands._udpActive();
+
+    if (!isLive) {
+        alert("Gagal: Tidak ada koneksi aktif ke Drone.");
+        return;
+    }
+
+    const btn = document.getElementById('armToggleBtn');
+
+    if (btn) {
+        btn.disabled = true;
+    }
+
+    try {
+        const currentArmed =
+            !!window.parent.gcsState?.armed;
+
+        const targetArmed = !currentArmed;
+        const ack =
+            await window.parent.commands.armDisarm(
+                targetArmed
+            );
+
+        if (!ack || !ack.ok) {
+            logAckResult(
+                targetArmed ? 'ARM' : 'DISARM',
+                ack
+            );
+            return;
+        }
+        updateArmButton();
+        logAckResult(
+            targetArmed ? 'ARM' : 'DISARM',
+            ack
+        );
+        console.log('[ARM TOGGLE]', targetArmed ? 'ARMED' : 'DISARMED');
+    } catch (e) {
+        console.error('[ARM TOGGLE] Error:', e);
+        alert(`Gagal mengubah ARM State: ${e.message}`);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+        }
+    }
+}
+
+function updateArmButton() {
+    const btn = document.getElementById('armToggleBtn');
+    if(!btn) return;
+    const isArmed = !!window.parent.gcsState?.armed;
+    if(btn) {
+        btn.innerText = isArmed ? 'ARMED' : 'DISARMED';
+        btn.classList.toggle('btn-disarm', !isArmed);
+        btn.classList.toggle('btn-arm', isArmed);
+    }
+}
+
+async function toggleSS() {
+    if (!window.parent.commands) {
+        alert("Sistem command belum termuat.");
+        return;
+    }
+
+    const isLive =
+        window.parent.commands._radioActive() ||
+        window.parent.commands._udpActive();
+
+    if (!isLive) {
+        alert("Gagal: Tidak ada koneksi aktif ke Drone.");
+        return;
+    }
+
+    const btn = document.getElementById('safetyToggleBtn');
+
+    if (btn) {
+        btn.disabled = true;
+    }
+
+    try {
+        const currentSafetyOff =
+            !!window.parent.gcsState?.safety?.off;
+
+        const targetSafetyOff = !currentSafetyOff;
+        const targetTurnOn = !targetSafetyOff;
+        console.log(
+            '[Safety Toggle]',
+            'current =',
+            currentSafetyOff ? 'OFF' : 'ON',
+            'target =',
+            targetSafetyOff ? 'OFF' : 'ON'
+        );
+
+        const ack =
+            await window.parent.commands.setSafetySwitch(
+                targetTurnOn
+            );
+
+        if (!ack || !ack.ok) {
+            logAckResult(
+                targetSafetyOff
+                    ? 'SAFETY OFF'
+                    : 'SAFETY ON',
+                ack
+            );
+            return;
+        }
+        updateSafetyButton();
+        logAckResult(
+            targetSafetyOff
+                ? 'SAFETY OFF'
+                : 'SAFETY ON',
+            ack
+        );
+
+    } catch (e) {
+        console.error('[Safety Toggle] Error:', e);
+        alert(`Gagal mengubah Safety Switch: ${e.message}`);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+        }
+    }
+}
+
+function updateSafetyButton() {
+    const btn = document.getElementById('safetyToggleBtn');
+    if(!btn) return;
+    const safetyOff = !!window.parent.gcsState?.safety?.off;
+    if(btn) {
+        btn.innerText = safetyOff ? 'SAFETY OFF' : 'SAFETY ON';
+        btn.classList.toggle('btn-warning', safetyOff);
+        btn.classList.toggle('btn-disarm', !safetyOff);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    updateArmButton();
+    updateSafetyButton();
+});
+
 async function doAction(action) {
     if (!window.parent.commands) {
         alert("Sistem command belum termuat.");
@@ -524,18 +673,6 @@ async function doAction(action) {
             case 'disarm': {
                 const ack = await window.parent.commands.armDisarm(false);
                 logAckResult('DISARM', ack);
-                break;
-            }
-            case 'safety_on': {
-                const ack = await window.parent.commands.setSafetySwitch(true);
-                logAckResult('SAFETY SWITCH ON', ack);
-                console.log("Safety Switch ON (SAFE)");
-                break;
-            }
-            case 'safety_off': {
-                const ack = await window.parent.commands.setSafetySwitch(false);
-                logAckResult('SAFETY SWITCH OFF', ack);
-                console.log("Safety Switch OFF (LIVE)");
                 break;
             }
             case 'reboot': {
