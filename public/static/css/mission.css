@@ -9,7 +9,7 @@ html, body {
 }
 
 .main {
-                 /* Memberikan ruang agar tidak tertutup navbar */
+    margin-top: 0;             /* Memberikan ruang agar tidak tertutup navbar */
     height: 100vh;   /* Mengunci tinggi agar pas menyentuh batas bawah layar laptop */
     display: flex; 
     position: relative;
