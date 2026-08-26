@@ -9,7 +9,7 @@ html, body {
 }
 
 .main {
-    margin-top: 0;             /* Memberikan ruang agar tidak tertutup navbar */
+                 /* Memberikan ruang agar tidak tertutup navbar */
     height: 100vh;   /* Mengunci tinggi agar pas menyentuh batas bawah layar laptop */
     display: flex; 
     position: relative;
@@ -417,7 +417,7 @@ html, body {
 /* ===== POLYGON MENU CONTROL (MISSION PLANNER STYLE) ===== */
 .leaflet-control-polygon-container {
     position: relative;
-    margin-top: 10px !important;
+    margin-top: 80px !important;
 }
 .leaflet-control-polygon-btn {
     width: 32px;
