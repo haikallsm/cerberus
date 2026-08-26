@@ -1,36 +1,344 @@
-.setup-container { max-width: 900px; margin: 80px auto 20px; padding: 0 20px; margin-bottom: 50px; }
-.setup-card { background: #1a1a1a; border: 1px solid #333; border-radius: 10px; padding: 30px; margin-bottom: 20px; transition: all 0.3s; }
-.setup-card:hover { border-color: #00bcd4; box-shadow: 0 0 20px rgba(0, 188, 212, 0.1); }
-.setup-title { font-size: 24px; color: #00bcd4; margin-bottom: 30px; font-weight: bold; }
+.main {
+    margin-top: 60px;
+    padding: 20px;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    position: relative;
+    z-index: 1;
+}
 
-/* Class baru pindahan dari inline style */
-.ip-section { margin-bottom: 20px; }
+.health-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 30px;
+}
 
-.form-group { margin-bottom: 20px; }
-.form-group label { display: block; margin-bottom: 8px; color: #00bcd4; font-weight: 600; font-size: 13px; text-transform: uppercase; }
-.form-group input { width: 100%; background: #252525; color: #ccc; border: 1px solid #444; padding: 12px; border-radius: 6px; font-size: 14px; outline: none; }
-.form-group input:focus { border-color: #00bcd4; box-shadow: 0 0 10px rgba(0, 188, 212, 0.2); }
-.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+.health-card {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 10px;
+    padding: 15px;
+    transition: border-color 0.3s;
+}
 
-.button-group { display: flex; gap: 10px; margin-top: 30px; }
-.btn { flex: 1; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; text-transform: uppercase; }
-.btn-primary { background: #00bcd4; color: black; }
-.btn-primary:hover { background: #00acc1; }
-.btn-primary:disabled { background: #666; cursor: not-allowed; }
-.btn-secondary { background: #444; color: #ccc; }
-.btn-secondary:hover { background: #555; }
+.health-card:hover {
+    border-color: #00bcd4;
+}
 
-.status-info { margin-top: 20px; padding: 15px; background: #0a0a0a; border-left: 4px solid #00bcd4; border-radius: 4px; display: none; }
-.status-info.show { display: block; }
-.status-info.success { border-left-color: #4caf50; background: #0a2d0a; color: #4caf50; }
-.status-info.error { border-left-color: #f44336; background: #2d0a0a; color: #f44336; }
-.status-info.info { border-left-color: #2196f3; background: #0a1a2d; color: #2196f3; }
+.health-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
 
-.test-section { margin-top: 20px; padding: 20px; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; }
-.test-section h3 { color: #00bcd4; margin-top: 0; }
-.test-item { padding: 10px 0; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #333; }
-.test-item:last-child { border-bottom: none; }
+.health-title {
+    font-size: 12px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
 
-.status-dot { width: 12px; height: 12px; border-radius: 50%; background: #666; flex-shrink: 0; }
-.status-dot.ok { background: #4caf50; }
-.status-dot.error { background: #f44336; }
+.health-value {
+    font-size: 24px;
+    font-weight: bold;
+    color: #00e5ff;
+}
+
+.health-detail {
+    font-size: 11px;
+    color: #888;
+    margin-top: 5px;
+}
+
+.calibration-container {
+    display: grid;
+    grid-template-columns: 3fr 1.2fr;
+    gap: 50px;
+    margin-top: 25px;
+    align-items: start;
+}
+
+.calibration-section-left{
+    width: 100%;
+    padding: 20px;
+}
+.calibration-section-right {
+    width: 100%;
+    max-width: 420px;
+    justify-self: end;
+    padding: 20px;
+}
+
+@media (max-width: 900px) {
+    .calibration-container {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .calibration-section-left,
+    .calibration-section-right {
+        width: 100%;
+    }
+}
+
+.status-badge {
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.status-badge.armed {
+    background: #4caf50;
+    color: white;
+}
+
+.status-badge.disarmed {
+    background: #f44336;
+    color: white;
+}
+
+.status-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    animation: pulse 2s infinite;
+}
+
+.status-dot.ok {
+    background: #4caf50;
+}
+
+.status-dot.warning {
+    background: #ff9800;
+}
+
+.status-dot.error {
+    background: #f44336;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+.health-value.critical {
+    color: #f44336;
+}
+
+.health-value.warning {
+    color: #ff9800;
+}
+
+.data-source {
+    font-size: 10px;
+    color: #666;
+    margin-top: 2px;
+}
+
+.refresh-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: #4caf50;
+    border-radius: 50%;
+    margin-left: 5px;
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+.calibration-title {
+    color: #00bcd4;
+    font-weight: bold;
+    font-size: 16px;
+    border-bottom: 1px solid #333;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+    text-transform: uppercase;
+}
+
+.calib-group h4 {
+    color: #fff;
+    margin: 15px 0 10px 0;
+    font-size: 14px;
+}
+
+.calib-item {
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px dashed #2a2a2a;
+}
+.calib-item:last-child { border-bottom: none; }
+
+.calib-item p {
+    font-size: 12px;
+    color: #aaa;
+    margin: 0 0 10px 0;
+    line-height: 1.5;
+}
+
+.btn-mp {
+    background: #4caf50; /* Warna Hijau khas Mission Planner */
+    color: white;
+    border: 1px solid #388e3c;
+    padding: 6px 15px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: bold;
+    border-radius: 3px;
+}
+.btn-mp:hover { background: #66bb6a; }
+
+.btn-mp-cancel {
+    background: #555;
+    border-color: #444;
+}
+.btn-mp-cancel:hover { background: #666; }
+
+.calib-split-layout {
+    display: flex;
+    gap: 25px;
+    margin-top: 10px;
+}
+
+.calib-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.calib-btn-group {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.mag-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.mag-row span {
+    width: 45px;
+    font-size: 12px;
+    color: #ccc;
+}
+
+.mag-input {
+    flex: 1;
+    background: #222;
+    border: 1px solid #444;
+    padding: 6px;
+    color: #00bcd4;
+    font-size: 12px;
+    font-weight: bold;
+    border-radius: 3px;
+}
+
+.console-box {
+    background: #000;
+    border: 1px solid #444;
+    height: 120px;
+    overflow-y: auto;
+    padding: 10px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 10px;
+    color: #00e676;
+    border-radius: 3px;
+}
+
+.btn-reboot-fc {
+    background: #e53935;
+    color: white;
+    border: 1px solid #c62828;
+    width: 100%;
+    padding: 10px 15px;
+    font-size: 13px;
+    font-weight: bold;
+    border-radius: 4px;
+    margin-top: 15px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.btn-reboot-fc:hover {
+    background: #ef5350;
+    box-shadow: 0 4px 10px rgba(229, 57, 53, 0.3);
+    transform: translateY(-1px);
+}
+
+.btn-reboot-fc:active {
+    transform: translateY(1px);
+    background: #c62828;
+}
+
+/* === ACTION ROW (baris perintah) === */
+.action-row {
+    display: grid;
+    grid-template-columns: 1fr 90px;
+    gap: 10px;
+    margin-bottom: 10px;
+    align-items: center;
+}
+
+.action-select {
+    width: 100%;
+    padding: 8px 12px;
+    background: #1a1a1a;
+    color: #fff;
+    border: 1px solid #444;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+    box-sizing: border-box;
+}
+
+.action-select:focus {
+    outline: none;
+    border-color: #00bcd4;
+}
+
+.btn-action {
+    width: 100%;
+    padding: 8px;
+    background: #00bcd4;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: bold;
+}
+
+.btn-action:hover {
+    background: #00e5ff;
+    box-shadow: 0 0 8px rgba(0, 188, 212, 0.4);
+}
+
+.arm-status-row .status-badge {
+    display: inline-block;
+    padding: 8px 20px;
+    font-size: 16px;
+    border-radius: 6px;
+}
+
+.arm-status-row {
+    display: flex;
+    text-align: center;
+    align-items: center;
+    justify-content: flex-start; /* rata kiri */
+    gap: 15px;
+    margin-bottom: 15px;
+}

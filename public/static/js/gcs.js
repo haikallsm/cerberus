@@ -82,4 +82,4 @@ function adaptRadioTelemetry(raw) {
     return out;
 }
 window.adaptRadioTelemetry = adaptRadioTelemetry;
-window.gcsConnection = { telemetry: new GCSTelemetry() };
+window.gcsConnection = { telemetry: new GCSTelemetry(), logHistory: [] };

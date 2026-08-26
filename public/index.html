@@ -50,8 +50,7 @@
 
         window.mavFeatures = window.commands;
 
-        let iframeReady = false;          
-        const logQueue = [];
+        let iframeReady = false;
 
         function routeTelemetry(raw) {
             const adaptedData = window.adaptRadioTelemetry(raw);
@@ -68,11 +67,19 @@
             }
         }
 
-        function routeMavlog(logItem) {
-            if (!iframeReady) {
-                logQueue.push(logItem);
-                return;
+        const MAVLOG_HISTORY_MAX = 500;
+        function pushLogHistory(logItem) {
+            if (!window.gcsConnection) return;
+            if (!Array.isArray(window.gcsConnection.logHistory)) window.gcsConnection.logHistory = [];
+            window.gcsConnection.logHistory.push(logItem);
+            if (window.gcsConnection.logHistory.length > MAVLOG_HISTORY_MAX) {
+                window.gcsConnection.logHistory.shift();
             }
+        }
+
+        function routeMavlog(logItem) {
+            pushLogHistory(logItem);
+            if (!iframeReady) return; // akan ke-replay via replayLogHistory() begitu iframe selesai load
             const frame = document.getElementById('main-frame');
             if (frame?.contentWindow?.updateMavlogUI) {
                 frame.contentWindow.updateMavlogUI(logItem);
@@ -95,14 +102,6 @@
                 frame.addEventListener('load', function() {
                     iframeReady = true;
                     console.log('Iframe ready');
-                    
-                    // Kirim semua log yang tertunda setelah iframe siap
-                    while (logQueue.length > 0) {
-                        const queued = logQueue.shift();
-                        if (frame.contentWindow && typeof frame.contentWindow.updateMavlogUI === 'function') {
-                            frame.contentWindow.updateMavlogUI(queued);
-                        }
-                    }
                 });
             }
 
