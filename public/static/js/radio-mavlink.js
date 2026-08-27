@@ -65,8 +65,8 @@ class RadioMavlink {
             return false;
         }
         try {
-            const ports = await window.serialBrigde.list();
-            if (!port || ports.length === 0) {
+            const ports = await window.serialBridge.list();
+            if (!ports || ports.length === 0) {
                 console.warn('[RadioMavlink] Tidak ada port serial yang tersedia'); 
                 return false;
             };
@@ -1173,7 +1173,7 @@ class RadioMavlink {
         if (waiter) {
             this._ackWaiters.delete(command);
             clearTimeout(waiter.timer);
-            waiter.resolve({ ok: result === 0, result });
+            waiter.resolve({ ok: result === 0, result, message: mavResultMessage(result) });
         }
     }
 

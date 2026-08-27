@@ -96,10 +96,14 @@
 <script src="./static/js/leaflet.js"></script>
 <script>
 // ===== HELPER KONEKSI PARENT =====
-const getBaseUrl = () => window.parent.gcsConnection?.baseUrl || 'http://localhost:5000';
+// gcsConnection.baseUrl tidak pernah ada di gcs.js (backend Flask/RasPi utk telemetry
+// sudah retired) -- kalau perlu base URL video/RasPi, itu di localStorage 'raspyUrl'
+// (lihat preflight.html), bukan di sini. Dibiarkan localhost:5000 sbg fallback aman.
+const getBaseUrl = () => localStorage.getItem('raspyUrl') || 'http://localhost:5000';
 const isConnected = () => {
     if (window.parent && window.parent.mavFeatures) {
-        return window.parent.mavFeatures._radioActive() || window.parent.mavFeatures._piActive();
+        // _piActive() sudah tidak ada di window.mavFeatures sejak migrasi ke radio/UDP
+        return window.parent.mavFeatures._radioActive() || window.parent.mavFeatures._udpActive();
     }
     return window.parent.gcsConnection?.isConnected || false;
 };
@@ -189,7 +193,7 @@ function updateMapPath() {
         else fullTrajectory.push([waypoints[i].lat, waypoints[i].lon]);
         
         const wp = waypoints[i];
-        const color = wp.command === 'HOME' ? '#ffeb3b' : (i === 0 ? '#4caf50' : '#00bcd4');
+        const color = wp.command === 'HOME' ? (wp.homeSource === 'confirmed' ? '#ffeb3b' : '#ff9800') : (i === 0 ? '#4caf50' : '#00bcd4');
         
         const marker = L.circleMarker([wp.lat, wp.lon], { radius: 7, fillColor: color, color: '#fff', weight: 2, fillOpacity: 1 }).addTo(map);
         marker.bindTooltip(`<b>${wp.command === 'HOME' ? 'H' : i}</b>`, { permanent: true, direction: 'center', className: 'wp-text-label' });
@@ -254,6 +258,8 @@ function moveDown(index) {
 }
 
 function removeWaypoint(index) {
+    if (index < 0 || index >= waypoints.length) return;
+    if (waypoints[index].command === 'HOME') return;
     waypoints.splice(index, 1);
     reindexWaypoints(); renderWaypoints(); updateMapPath(); saveWaypointsLocal();
 }
@@ -286,8 +292,6 @@ function saveMission() {
     const a = document.createElement('a');
     a.href = url; a.download = 'mission.json'; a.click();
 }
-
-
 
 function saveWaypointsLocal() { localStorage.setItem('hawkeye_mission', JSON.stringify(waypoints)); }
 
@@ -411,9 +415,6 @@ window.clearFenceEverywhere = async function() {
     } catch (e) { console.warn("Gagal hapus di FC:", e); }
 }
 
-// ===== WAYPOINT AREA (KONVERSI POLYGON GEOFENCE -> SCAN WAYPOINTS) =====
-// Proyeksi equirectangular sederhana: lat/lon <-> meter lokal relatif terhadap satu titik acuan.
-// Cukup akurat untuk area geofence berukuran ratusan meter - beberapa km (skala misi drone).
 const EARTH_RADIUS_M = 6371000;
 
 function llToLocalXY(lat, lon, refLat, refLon) {
@@ -439,7 +440,6 @@ function polygonCentroidLl(vertices) {
     return { lat: sumLat / vertices.length, lon: sumLon / vertices.length };
 }
 
-// Cari titik potong garis horizontal (di y tertentu) dengan semua sisi polygon (dalam koordinat lokal/rotasi).
 function intersectionsAtY(poly, y) {
     const xs = [];
     const n = poly.length;
@@ -454,9 +454,6 @@ function intersectionsAtY(poly, y) {
     return xs;
 }
 
-// Hasilkan titik-titik lat/lon pola boustrophedon (zig-zag) yang meng-cover seluruh area polygon geofence.
-// spacingM  = jarak antar baris scan (meter)
-// angleDeg  = sudut sapuan; null/undefined = otomatis mengikuti sisi terpanjang polygon
 function generateScanWaypoints(spacingM, angleDeg) {
     if (fenceVertices.length < 3) return [];
 
@@ -478,7 +475,6 @@ function generateScanWaypoints(spacingM, angleDeg) {
         angleRad = bestAngle;
     }
 
-    // Rotasi polygon supaya sisi sapuan menjadi horizontal, agar sweep tinggal iterasi nilai y.
     const rotPoly = xy.map(p => rotatePoint(p, -angleRad));
     const ys = rotPoly.map(p => p.y);
     const yMin = Math.min(...ys), yMax = Math.max(...ys);
@@ -505,8 +501,6 @@ function generateScanWaypoints(spacingM, angleDeg) {
     });
 }
 
-// Masukkan titik-titik hasil scan sebagai waypoint misi biasa (command WAYPOINT),
-// sehingga otomatis kompatibel dengan uploadMissionToFC() / readMissionFromFC() yang sudah ada.
 function addScanAreaToMission(spacingM, altitude, angleDeg, replaceExisting) {
     const pts = generateScanWaypoints(spacingM, angleDeg);
     if (pts.length === 0) {
@@ -700,15 +694,18 @@ function trackDronePosition() {
             updateDroneMarker(telemetry.lat, telemetry.lon, telemetry.heading || 0);
         }
 
+        // HOME_POSITION (msg 242) dari FC -- ini sumber CONFIRMED, satu-satunya yang aman
+        // dijadikan dasar upload home ke FC (lihat guard di uploadMissionToFC() di bawah).
         if (telemetry.home_lat !== undefined && isValidCoordinate(telemetry.home_lat, telemetry.home_lon)) {
             let homeIndex = waypoints.findIndex(wp => wp.command === 'HOME');
             if (homeIndex === -1) {
-                waypoints.unshift({ id: 0, command: 'HOME', lat: telemetry.home_lat, lon: telemetry.home_lon, alt: telemetry.home_alt || 0 });
+                waypoints.unshift({ id: 0, command: 'HOME', lat: telemetry.home_lat, lon: telemetry.home_lon, alt: telemetry.home_alt || 0, homeSource: 'confirmed' });
                 reindexWaypoints(); renderWaypoints(); updateMapPath(); saveWaypointsLocal();
-            } else if (!isValidCoordinate(waypoints[homeIndex].lat, waypoints[homeIndex].lon)) {
+            } else if (!isValidCoordinate(waypoints[homeIndex].lat, waypoints[homeIndex].lon) || waypoints[homeIndex].homeSource !== 'confirmed') {
                 waypoints[homeIndex].lat = telemetry.home_lat;
                 waypoints[homeIndex].lon = telemetry.home_lon;
                 waypoints[homeIndex].alt = telemetry.home_alt || 0;
+                waypoints[homeIndex].homeSource = 'confirmed';
                 renderWaypoints(); updateMapPath(); saveWaypointsLocal();
             }
         }
@@ -739,29 +736,29 @@ async function uploadMissionToFC() {
         const originalText = btn.innerText;
         btn.innerText = 'Uploading...'; btn.disabled = true;
 
-        // --- MENCEGAH WAYPOINT 1 DIMAKAN FC ---
         const hasHome = waypoints.length > 0 && waypoints[0].command === 'HOME';
         if (!hasHome) {
             let autoLat, autoLon;
 
-            // PRIORITAS 1: Geser 3 meter dari Waypoint 1 (kurangi 0.00003 derajat)
             if (waypoints.length > 0 && isValidCoordinate(waypoints[0].lat, waypoints[0].lon)) {
                 autoLat = waypoints[0].lat - 0.00003;
                 autoLon = waypoints[0].lon - 0.00003;
             } else {
-                // Prioritas Cadangan jika tidak ada Waypoint yang valid
                 const tel = window.parent?.gcsConnection?.telemetry?.data;
                 if (tel && isValidCoordinate(tel.home_lat, tel.home_lon)) {
                     autoLat = tel.home_lat; autoLon = tel.home_lon;
-                } else if (tel && isValidCoordinate(tel.lat, tel.lon)) {
+                } else if (tel && isValidCoordinate(tel.lat, tel.lon) && (tel.gps_fix_type || 0) >= 3) {
                     autoLat = tel.lat; autoLon = tel.lon;
                 } else {
                     const center = map.getCenter();
                     autoLat = center.lat; autoLon = center.lng;
+                    if (!confirm('Tidak ada GPS fix valid dan tidak ada HOME_POSITION dari FC. HOME akan dibuat dari titik tengah peta (BUKAN posisi asli) -- lanjutkan upload?')) {
+                        btn.innerText = originalText; btn.disabled = false;
+                        return;
+                    }
                 }
             }
 
-            // Sisipkan HOME ke urutan paling atas di UI
             waypoints.unshift({
                 id: 0, command: 'HOME', lat: autoLat, lon: autoLon, alt: 0,
                 p1: 0, p2: 0, p3: 0, p4: 0
@@ -780,7 +777,7 @@ async function uploadMissionToFC() {
             else if (wp.command === 'LAND') mavCmd = 21;
 
             return {
-                frame: 0, // MAV_FRAME_GLOBAL
+                frame: 3, // MAV_FRAME_GLOBAL
                 command: mavCmd,
                 param1: wp.p1 || 0,
                 param2: wp.p2 || 0,
@@ -841,7 +838,7 @@ async function readMissionFromFC() {
                         homeLat = hometerakhir.lat; homeLon = hometerakhir.lon; 
                     } else if (tel && isValidCoordinate(tel.home_lat, tel.home_lon)) {
                         homeLat = tel.home_lat; homeLon = tel.home_lon; 
-                    } else if (tel && isValidCoordinate(tel.lat, tel.lon)) {
+                    } else if (tel && isValidCoordinate(tel.lat, tel.lon) && (tel.gps_fix_type || 0) >= 3) {
                         homeLat = tel.lat; homeLon = tel.lon; 
                     } else {
                         const center = map.getCenter();
