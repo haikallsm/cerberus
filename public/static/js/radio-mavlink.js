@@ -21,7 +21,6 @@ class RadioMavlink {
         this._streamsRequested = false;
         this._lastBaudRate = 57600;
 
-        // Waiters untuk command/param/mission
         this._ackWaiters = new Map();
         this._paramWaiters = new Map();      // untuk getParam/setParam (key: nama param)
         this._paramListWaiters = [];         // untuk getAllParams
@@ -51,19 +50,55 @@ class RadioMavlink {
         this._connectStartedAt = 0;
         this._magCalTelemetryTimer = null;
         this._magCalTelemetryPending = false;
-
+        this._removeSerialDataListener = null;
+        this._removeSerialClosedListener = null;
+        this._removeSerialErrorListener = null;
+        this._handlingUnexpectedDrop = false;
         this._setupAutoReconnectListeners();
     }
 
     async tryAutoReconnect(baudRate = 57600) {
-        if (!('serial' in navigator)) return false;
+         if (!window.serialBridge || typeof window.serialBridge.list !== 'function') {
+            console.warn(
+                '[RadioMavlink] serialBridge tidak tersedia.'
+            );
+            return false;
+        }
         try {
-            const ports = await navigator.serial.getPorts();
-            if (ports.length === 0) return false;
-            this.port = ports[0];
-            await this.connect(baudRate);
+            const ports = await window.serialBrigde.list();
+            if (!port || ports.length === 0) {
+                console.warn('[RadioMavlink] Tidak ada port serial yang tersedia'); 
+                return false;
+            };
+            let found = null
+            if (this._lastPortPath) {
+                found = ports.find(
+                    p => p.path === this._lastPortPath
+                );
+            }
+            if (!found && this._lastVendorId && this._lastProductId) {
+                found = ports.find(
+                    p =>
+                        p.vendorId === this._lastVendorId &&
+                        p.productId === this._lastProductId
+                );
+            }
+            if (!found) {
+                if (!this._lastPortPath && ports.length === 1) {
+                    found = ports[0];
+                } else {
+                    console.warn(
+                        '[RadioMavlink] Port FC sebelumnya tidak ditemukan.'
+                    );
+
+                    return false;
+                }
+            }
+            console.log('[RadioMavlink] Mencoba auto-reconnect ke:', found.path);
+            await this.connect(baudRate,found.path);
             console.log('[RadioMavlink] Auto-reconnect berhasil.');
             return true;
+
         } catch (e) {
             console.warn('[RadioMavlink] Auto-reconnect gagal:', e.message);
             return false;
@@ -91,6 +126,18 @@ class RadioMavlink {
     async _teardownTransport() {
         this._stopWatchdog();
         this._stopRcOverrideLoop();
+        if (this._removeSerialDataListener) {
+            this._removeSerialDataListener();
+            this._removeSerialDataListener = null;
+        }
+        if (this._removeSerialClosedListener) {
+            this._removeSerialClosedListener();
+            this._removeSerialClosedListener = null;
+        }
+        if (this._removeSerialErrorListener) {
+            this._removeSerialErrorListener();
+            this._removeSerialErrorListener = null;
+        }
         this.rcChannels = new Array(8).fill(65535);
         this._transportOpen = false;
         this.telemetry.connected = false;
@@ -98,12 +145,20 @@ class RadioMavlink {
     }
 
     async _handleUnexpectedDrop() {
-        if (this._intentionalDisconnect) return; // safety guard, harusnya tak pernah kena
-        this._rejectPendingTransfers('Link radio terputus (unexpected drop) -- upload/download dibatalkan.');
-        await this._teardownTransport();
+        if (this._intentionalDisconnect) return;
+        if (this._handlingUnexpectedDrop) {console.warn('[RadioMavlink] Unexpected Drop dipanggil berulang, abaikan'); return;}
+        this._handlingUnexpectedDrop = true;
         this._awaitingReconnect = true;
-        if (this.onDisconnect) this.onDisconnect();
-        this._scheduleReconnect(1);
+        try {
+            this._rejectPendingTransfers('Link radio terputus (unexpected drop) -- upload/download dibatalkan.');
+            if (this.onDisconnect) this.onDisconnect();
+            await this._teardownTransport();
+            this._scheduleReconnect(1);
+        } catch (e) {
+            console.error('[RadioMavlink] Error saat handleUnexpectedDrop:', e);
+        } finally {
+            this._handlingUnexpectedDrop = false;
+        }        
     }
 
     _rejectPendingTransfers(message) {
@@ -169,7 +224,6 @@ class RadioMavlink {
             await this.connect(this._lastBaudRate, found.path);
             console.log('[RadioMavlink] Auto-reconnect berhasil setelah link drop / reboot.');
 
-            this._isRebooting = false;
         } catch (e) {
             console.warn(`[RadioMavlink] Auto-reconnect attempt ${attempt} gagal:`, e.message);
             this._reconnecting = false;
@@ -199,6 +253,7 @@ class RadioMavlink {
         this._linkReady = false;
         this._transportOpen = false;
         this.lastHeartbeatTime = null;
+        this._streamsRequested = false;
         this._lastBaudRate = baudRate;
         this.telemetry.connected = false;
         this._lastPortPath = portPath;
@@ -215,14 +270,55 @@ class RadioMavlink {
         const res = await window.serialBridge.connect(portPath, baudRate);
         if(!res.ok) throw new Error(`Gagal membuka port serial: ${res.message}`);
 
-        window.serialBridge.onData((bytes) => {
-            for(const byte of bytes) this.parser.feedByte(byte);
-        });
+        // window.serialBridge.onData((bytes) => {
+        //     for(const byte of bytes) this.parser.feedByte(byte);
+        // });
 
-        window.serialBridge.onClosed(() => this._handleUnexpectedDrop());
-        window.serialBridge.onError((msg) => {
-            console.error('[RadioMavlink] Serial error:', msg);
-        });
+        // window.serialBridge.onClosed(() => this._handleUnexpectedDrop());
+        // window.serialBridge.onError((msg) => {
+        //     console.error('[RadioMavlink] Serial error:', msg);
+        // });
+        if(this._removeSerialDataListener) {
+            this._removeSerialDataListener();
+            this._removeSerialDataListener = null;
+        }
+        if (this._removeSerialClosedListener) {
+            this._removeSerialClosedListener();
+            this._removeSerialClosedListener = null;
+        }
+
+        if (this._removeSerialErrorListener) {
+            this._removeSerialErrorListener();
+            this._removeSerialErrorListener = null;
+        }
+        this._removeSerialDataListener =
+            window.serialBridge.onData((bytes) => {
+                for (const byte of bytes) {
+                    this.parser.feedByte(byte);
+                }
+            });
+
+        this._removeSerialClosedListener =
+            window.serialBridge.onClosed(() => {
+                if (this._intentionalDisconnect) {
+                    return;
+                }
+
+                this._handleUnexpectedDrop().catch((err) => {
+                    console.error(
+                        '[RadioMavlink] Unexpected drop handler error:',
+                        err
+                    );
+                });
+            });
+
+        this._removeSerialErrorListener =
+            window.serialBridge.onError((msg) => {
+                console.error(
+                    '[RadioMavlink] Serial error:',
+                    msg
+                );
+            });
 
         this._transportOpen = true;
         this._connectStartedAt = Date.now();
@@ -322,11 +418,6 @@ class RadioMavlink {
         console.log(`[RadioMavlink] Streams requested @ ${rateHz}Hz`);
     }
 
-    // MAV_CMD_GET_HOME_POSITION (410) -- FC hanya broadcast HOME_POSITION saat berubah
-    // (mis. setelah EKF origin di-set / GPS fix pertama), jadi GCS wajib minta aktif
-    // supaya home marker langsung terisi begitu link connect, bukan menunggu event.
-    // Fire-and-forget: hasilnya masuk lewat DECODERS[242] -> this.telemetry.home_lat/lon/alt,
-    // jadi tidak perlu await ack di sini.
     async requestHomePosition() {
         try {
             await this.sendCommandLong(410, {}, false);
@@ -932,10 +1023,12 @@ class RadioMavlink {
 
                 this.targetSystem = sysid;
                 this.targetComponent = compid;
-
                 this._streamsRequested = true;
-
-                this.requestDataStreams().catch(e => {
+                this.requestDataStreams()
+                .then(() => {
+                    console.log('[RadioMavlink] requestDataStreams done');
+                })
+                .catch(e => {
                     console.warn(
                         '[RadioMavlink] requestDataStreams gagal:',
                         e
@@ -949,11 +1042,9 @@ class RadioMavlink {
                 compid === this.targetComponent
             ) {
                 const wasReady = this._linkReady;
-
                 this.lastHeartbeatTime = Date.now();
                 this._linkReady = true;
                 this._transportOpen = true;
-
                 this.telemetry.connected = true;
                 this.telemetry.system_status = 'connected';
 
@@ -961,11 +1052,9 @@ class RadioMavlink {
                     console.log(
                         `[RadioMavlink] FC kembali setelah reboot: sysid=${sysid}, compid=${compid}`
                     );
-
                     this._isRebooting = false;
                 }
 
-                // onConnect hanya dipanggil setelah heartbeat valid.
                 if (!wasReady && this.onConnect) {
                     try {
                         this.onConnect();
@@ -1177,10 +1266,6 @@ class RadioMavlink {
             return;
         }
 
-        // Pesan chunked: text.length < 50 = sinyal akhir sequence (sesuai konvensi
-        // MAVLink STATUSTEXT chunking). Tapi ini bisa gagal kalau chunk terakhir
-        // pas 50 char, atau ada chunk yang hilang di link radio -> pakai idle-timeout
-        // sebagai safety net supaya buffer tidak nyangkut selamanya.
         let entry = this._statustextChunks[msgId];
         if (!entry) {
             entry = { chunks: {}, severity, timer: null };
@@ -1203,8 +1288,6 @@ class RadioMavlink {
         if (text.length < 50) {
             flush();
         } else {
-            // Safety net: kalau tidak ada chunk berikutnya dalam 800ms, paksa flush
-            // apa adanya (mencegah pesan SAR hilang total kalau chunk terakhir hilang).
             entry.timer = setTimeout(flush, 800);
         }
     }

@@ -11,8 +11,20 @@ contextBridge.exposeInMainWorld('serialBridge', {
         ipcRenderer.on('serial-data', listener);
         return () => ipcRenderer.removeListener('serial-data', listener);
     },
-    onClosed: (callback) => ipcRenderer.on('serial-closed', callback),
-    onError: (callback) => ipcRenderer.on('serial-error', (_e, msg) => callback(msg)),
+    onClosed: (callback) => {
+        const listener = () => callback();
+        ipcRenderer.on('serial-closed', listener);
+        return () => {
+            ipcRenderer.removeListener('serial-closed', listener);
+        }
+    },
+    onError: (callback) => {
+        const listener = (_e, msg) => callback(msg);
+        ipcRenderer.on('serial-error', listener);
+        return () => {
+            ipcRenderer.removeListener('serial-error', listener);
+        };
+    },
 });
 
 contextBridge.exposeInMainWorld('udpBridge', {

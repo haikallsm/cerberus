@@ -141,12 +141,12 @@ body {
 }
 
 .navbar button.connected {
-    background: #f44336;
+    background: #4caf50;
     color: white;
 }
 
 .navbar button.connected:hover {
-    background: #d32f2f;
+    background: #4caf50;
 }
 
 #statusText {

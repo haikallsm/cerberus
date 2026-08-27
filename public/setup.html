@@ -3,157 +3,220 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Setup - HAWKEYE</title>
+<title>Preflight - HAWKEYE</title>
 <link rel="stylesheet" href="./static/css/gcs.css"/>
 <link rel="stylesheet" href="./static/css/setup.css"/>
 </head>
 
 <body style="background: transparent;">
-
-<div class="main" style="margin-left: 0; width: 100%; box-sizing: border-box;"> <!-- Hilangkan margin kiri navbar -->
-    <div class="health-grid">
-        <div class="health-card">
-            <div class="health-header">
-                <div class="health-title">GPS</div>
-                <div class="status-dot ok" id="gpsStatus"></div>
+    <div class="main preflight-shell">
+    <section class="health-strip" aria-label="Vehicle health">
+        <article class="health-card">
+            <div class="health-card-top">
+                <span class="health-title">GPS</span>
+                <span class="status-dot error" id="gpsStatus"></span>
             </div>
             <div class="health-value" id="gpsSats">0</div>
-            <div class="health-detail">Satellites &middot; HDOP: <span id="gpsHdop">--</span></div>
-        </div>
+            <div class="health-meta"><span>Satellites</span><span>HDOP <b id="gpsHdop">--</b></span></div>
+            <div class="health-state" id="gpsStateText">NO FIX</div>
+        </article>
 
-        <div class="health-card">
-            <div class="health-header">
-                <div class="health-title">Compass</div>
-                <div class="status-dot ok" id="compassStatus"></div>
+        <article class="health-card">
+            <div class="health-card-top">
+                <span class="health-title">COMPASS</span>
+                <span class="status-dot error" id="compassStatus"></span>
             </div>
-            <div class="health-value" id="compassHealth">Wait</div>
-            <div class="health-detail">Status: <span id="compassInterf">--</span></div>
-        </div>
+            <div class="health-value" id="compassHealth">WAIT</div>
+            <div class="health-meta"><span>Field</span><span id="compassInterf">--</span></div>
+            <div class="health-state" id="compassStateText">CHECK SENSOR</div>
+        </article>
 
-        <div class="health-card">
-            <div class="health-header">
-                <div class="health-title">RC5 Input</div>
-                <div class="status-dot ok" id="rc5Status"></div>
+        <article class="health-card">
+            <div class="health-card-top">
+                <span class="health-title">RC5 INPUT</span>
+                <span class="status-dot warning" id="rc5Status"></span>
             </div>
             <div class="health-value" id="rc5Health">0</div>
-            <div class="health-detail">PWM Value</div>
-        </div>
+            <div class="health-meta"><span>PWM</span><span>Channel 5</span></div>
+            <div class="health-state" id="rc5StateText">NO INPUT</div>
+        </article>
 
-        <div class="health-card">
-            <div class="health-header">
-                <div class="health-title">Gyroscope</div>
-                <div class="status-dot ok" id="gyroStatus"></div>
+        <article class="health-card">
+            <div class="health-card-top">
+                <span class="health-title">GYROSCOPE</span>
+                <span class="status-dot error" id="gyroStatus"></span>
             </div>
-            <div class="health-value" id="gyroHealth">0.0, 0.0, 0.0</div>
-            <div class="health-detail">deg/s (X, Y, Z)</div>
-        </div>
-    </div>
-    
-    <div class="calibration-container">
-        <div class="calibration-section-left">
-            <div class="calibration-title">Sensor Calibration</div>
-    
-            <div class="calib-group">
-                <h4>Accelerometer Calibration</h4>
-                
-                <div class="calib-item">
-                    <p>Level your Autopilot to set default accelerometer Min/Max (3 axis).<br>This will ask you to place your autopilot on each edge.</p>
-                    <button class="btn-mp" onclick="sendCalibration('accel_3axis')">Calibrate Accel</button>
-                    <button class="btn-mp" onclick="sendCalibrationNext()" id="btnAccelNext" style="display:none; background:#ff9800; border-color:#f57c00;">Next (Click when done)</button>
-                    <div id="accelCalPosLabel" style="margin-top:8px; color:#ff9800; font-weight:bold;"></div>
+            <div class="health-value health-value-gyro" id="gyroHealth">0.0, 0.0, 0.0</div>
+            <div class="health-meta"><span>X / Y / Z</span><span>deg/s</span></div>
+            <div class="health-state" id="gyroStateText">WAITING</div>
+        </article>
+    </section>
+
+    <main class="preflight-grid">
+        <section class="workspace-column">
+            <div class="section-heading">
+                <div>
+                    <span class="section-kicker">CALIBRATION</span>
                 </div>
-                
-                <div class="calib-item">
-                    <p>Level your Autopilot to set default accelerometer offsets (1 axis/AHRS trims).<br>This requires you to place your autopilot flat and level.</p>
-                    <button class="btn-mp" onclick="sendCalibration('accel_level')">Calibrate Level</button>
-                </div>
-                
-                <div class="calib-item">
-                    <p>Level your Autopilot to set default accelerometer scale factors for level flight (1 axis).<br>This requires you to place your autopilot flat and level.</p>
-                    <button class="btn-mp" onclick="sendCalibration('accel_simple')">Simple Accel Cal</button>
-                </div>
+                <span class="section-note">Perform calibration while vehicle is stationary and safe.</span>
             </div>
-    
-            <div class="calib-group">
-                <h4>Onboard Mag Calibration</h4>
-                
-                <div class="calib-split-layout">
-                    <div class="calib-column">
-                        <div class="calib-btn-group">
-                            <button class="btn-mp" onclick="sendCompassCalibration('compass_start')">Start</button>
-                            <button class="btn-mp btn-mp-cancel" onclick="sendCompassCalibration('compass_accept')" id="btnCompassAccept" disabled>Accept</button>
-                            <button class="btn-mp btn-mp-cancel" onclick="sendCompassCalibration('compass_cancel')">Cancel</button>
-                        </div>
-    
-                        <div class="mag-row">
-                            <span>Mag 1</span>
-                            <input type="text" class="mag-input" id="mag1_prog" value="0%" readonly>
-                        </div>
-                        <div class="mag-row">
-                            <span>Mag 2</span>
-                            <input type="text" class="mag-input" id="mag2_prog" value="0%" readonly>
-                        </div>
-                        <div class="mag-row">
-                            <span>Mag 3</span>
-                            <input type="text" class="mag-input" id="mag3_prog" value="0%" readonly>
-                        </div>
+
+            <article class="panel calibration-panel">
+                <div class="panel-header">
+                    <div>
+                        <h3>Accelerometer</h3>
+                        <p>Calibrate axis limits, level and scale for stable flight.</p>
                     </div>
                 </div>
-            </div>
-        </div>
-        <div class="calibration-section-right">
-            <div class="calib-column">
-                <div class="action-row">
-                    <select id="cmdSelect" class="action-select">
-                        <option value="arm">ARM</option>
-                        <option value="disarm">DISARM</option>
-                        <option value="safety_off">SAFETY OFF</option>
-                        <option value="safety_on">SAFETY ON</option>
-                        <option value="reboot">REBOOT</option>
-                        <option value="takeoff">TAKEOFF</option>
-                        <option value="land">LAND</option>
-                        <option value="rtl">RTL</option>
-                        <option value="rover">ROVER</option>
-                        <option value="copter">COPTER</option>
-                    </select>
-                    <button class="btn-action" onclick="doAction(document.getElementById('cmdSelect').value)">Action</button>
+
+                <div class="calibration-options">
+                    <div class="calibration-option">
+                        <div class="option-copy">
+                            <strong>3-Axis Calibration</strong>
+                            <span>Set default accelerometer min/max across all axes. The FC will request six vehicle orientations.</span>
+                        </div>
+                        <div class="option-actions">
+                            <button class="btn-primary btn-mp" onclick="sendCalibration('accel_3axis')">START</button>
+                            <button class="btn-next btn-mp" onclick="sendCalibrationNext()" id="btnAccelNext" style="display:none;">NEXT</button>
+                        </div>
+                        <div id="accelCalPosLabel" class="calibration-step-hint"></div>
+                    </div>
+
+                    <div class="calibration-option">
+                        <div class="option-copy">
+                            <strong>Level Calibration</strong>
+                            <span>Set AHRS level/trims. Keep the autopilot flat and level.</span>
+                        </div>
+                        <button class="btn-primary btn-mp" onclick="sendCalibration('accel_level')">START</button>
+                    </div>
+
+                    <div class="calibration-option">
+                        <div class="option-copy">
+                            <strong>Simple Calibration</strong>
+                            <span>Set accelerometer scale factors for level flight.</span>
+                        </div>
+                        <button class="btn-primary btn-mp" onclick="sendCalibration('accel_simple')">START</button>
+                    </div>
+                </div>
+            </article>
+
+            <article class="panel calibration-panel compass-panel">
+                <div class="panel-header">
+                    <div>
+                        <h3>Compass</h3>
+                        <p>Onboard magnetometer calibration and quality checks.</p>
+                    </div>
                 </div>
 
-                <!-- BARIS 2: Flight Mode (Stabilize, AltHold, Loiter, Guided, Auto) -->
-                <div class="action-row">
-                    <select id="modeSelect" class="action-select">
-                        <option value="0">STABILIZE</option>
-                        <option value="2">ALT_HOLD</option>
-                        <option value="3">AUTO</option>
-                        <option value="4">GUIDED</option>
-                        <option value="5">LOITER</option>
-                    </select>
-                    <button class="btn-action" onclick="doAction('setmode')">Set Mode</button>
+                <div class="compass-controls">
+                    <div class="button-row">
+                        <button class="btn-primary btn-mp" onclick="sendCompassCalibration('compass_start')">START</button>
+                        <button class="btn-secondary btn-mp btn-mp-cancel" onclick="sendCompassCalibration('compass_accept')" id="btnCompassAccept" disabled>ACCEPT</button>
+                        <button class="btn-ghost btn-mp btn-mp-cancel" onclick="sendCompassCalibration('compass_cancel')">CANCEL</button>
+                    </div>
+                    <div class="compass-status-line"><span>Calibration output</span><span id="compassCalStatusText">READY</span></div>
                 </div>
 
-                <!-- ARM/DISARM Status Badge -->
-                <div class="arm-status-row">
+                <div class="mag-progress-list">
+                    <div class="mag-progress-row">
+                        <div class="mag-progress-label"><span>MAG 1</span><strong id="mag1_prog_text">0%</strong></div>
+                        <div class="mag-progress-track"><div class="mag-progress-fill" id="mag1_prog_bar" style="width:0%"></div></div>
+                        <input type="hidden" class="mag-input" id="mag1_prog" value="0%">
+                    </div>
+                    <div class="mag-progress-row">
+                        <div class="mag-progress-label"><span>MAG 2</span><strong id="mag2_prog_text">0%</strong></div>
+                        <div class="mag-progress-track"><div class="mag-progress-fill" id="mag2_prog_bar" style="width:0%"></div></div>
+                        <input type="hidden" class="mag-input" id="mag2_prog" value="0%">
+                    </div>
+                    <div class="mag-progress-row">
+                        <div class="mag-progress-label"><span>MAG 3</span><strong id="mag3_prog_text">0%</strong></div>
+                        <div class="mag-progress-track"><div class="mag-progress-fill" id="mag3_prog_bar" style="width:0%"></div></div>
+                        <input type="hidden" class="mag-input" id="mag3_prog" value="0%">
+                    </div>
+                </div>
+            </article>
+        </section>
+
+        <aside class="sidebar-column">
+            <section class="panel control-panel">
+                <div class="panel-header compact">
+                    <div>
+                        <span class="section-kicker">CONTROL</span>
+                    </div>
+                </div>
+
+                <div class="control-block">
+                    <div class="control-label">COMMAND</div>
+                    <div class="control-row">
+                        <select id="cmdSelect" class="action-select">
+                            <option value="arm">ARM</option>
+                            <option value="disarm">DISARM</option>
+                            <option value="safety_off">SAFETY OFF</option>
+                            <option value="safety_on">SAFETY ON</option>
+                            <option value="reboot">REBOOT</option>
+                            <option value="takeoff">TAKEOFF</option>
+                            <option value="land">LAND</option>
+                            <option value="rtl">RTL</option>
+                            <option value="rover">ROVER</option>
+                            <option value="copter">COPTER</option>
+                        </select>
+                        <button class="btn-action" onclick="doAction(document.getElementById('cmdSelect').value)">EXECUTE</button>
+                    </div>
+                </div>
+
+                <div class="control-block">
+                    <div class="control-label">FLIGHT MODE</div>
+                    <div class="control-row">
+                        <select id="modeSelect" class="action-select">
+                            <option value="0">STABILIZE</option>
+                            <option value="2">ALT_HOLD</option>
+                            <option value="3">AUTO</option>
+                            <option value="4">GUIDED</option>
+                            <option value="5">LOITER</option>
+                        </select>
+                        <button class="btn-action" onclick="doAction('setmode')">SET</button>
+                    </div>
+                </div>
+
+                <div class="state-card">
+                    <div class="state-card-header"><span>ARM STATE</span><span class="state-dot" id="armStateDot"></span></div>
                     <div class="status-badge disarmed" id="armStatusBadge">DISARMED</div>
                 </div>
 
-                <!-- Console Box -->
+                <div class="state-grid">
+                    <div class="mini-state"><span>SAFETY</span><strong id="setupSafetyState">SAFE</strong></div>
+                    <div class="mini-state"><span>MODE</span><strong id="setupModeState">STABILIZE</strong></div>
+                </div>
+            </section>
+
+            <section class="panel event-panel">
+                <div class="panel-header compact">
+                    <div>
+                        <h3>Message Log</h3>
+                    </div>
+                </div>
                 <div class="console-box" id="calibConsole">
                     System ready. Connect to start calibration...<br>
                 </div>
+            </section>
 
-                <!-- Pengaturan Jaringan (dipindah dari setup.html, halaman terpisah dihapus) -->
-                <div class="calib-group" style="margin-top:16px;">
-                    <h4>Pengaturan Jaringan (Video Stream)</h4>
-                    <div class="calib-item">
-                        <p>IP Raspberry Pi (Backend) untuk menghubungkan Video Stream.</p>
-                        <input type="text" id="raspiIpInput" class="gcs-input" placeholder="Contoh: 192.168.1.100" value="127.0.0.1">
-                        <button class="btn-mp" onclick="saveRaspiIP()">Simpan IP RasPi</button>
+            <section class="panel network-panel">
+                <div class="panel-header compact">
+                    <div>
+                        <h3>Video Stream</h3>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
+                <p class="network-description">IP address for the video stream.</p>
+                <div class="network-row">
+                    <input type="text" id="raspiIpInput" class="gcs-input" placeholder="192.168.1.100" value="127.0.0.1">
+                    <button class="btn-primary btn-mp" onclick="saveRaspiIP()">SAVE</button>
+                </div>
+            </section>
+        </aside>
+    </main>
 </div>
+
+v>
 
 <script>
 let telemetryData = {};
@@ -199,16 +262,57 @@ const isConnected = () => {
 
 function updateArmStatusUI() {
     const badge = document.getElementById('armStatusBadge');
-    const btnArm = document.getElementById('btnArm');
-    const btnDisarm = document.getElementById('btnDisarm');
+    const armDot = document.getElementById('armStateDot');
     if (!badge) return;
 
     const isArmed = !!telemetryData.is_armed;
     badge.innerText = isArmed ? 'ARMED' : 'DISARMED';
     badge.className = 'status-badge ' + (isArmed ? 'armed' : 'disarmed');
 
-    if (btnArm) btnArm.disabled = isArmed;
-    if (btnDisarm) btnDisarm.disabled = !isArmed;
+    if (armDot) {
+        armDot.style.background = isArmed ? '#43d17d' : '#ef5350';
+    }
+}
+
+function updatePreflightHeader() {
+    const dot = document.getElementById('headerConnectionDot');
+    const text = document.getElementById('headerConnectionText');
+    const setupSafety = document.getElementById('setupSafetyState');
+    const setupMode = document.getElementById('setupModeState');
+
+    const connected = isConnected();
+    if (dot) dot.className = 'status-dot ' + (connected ? 'ok' : 'error');
+    if (text) text.textContent = connected ? 'CONNECTED' : 'DISCONNECTED';
+
+    const safetyOff = !!window.parent?.gcsState?.safety?.off;
+    if (setupSafety) {
+        setupSafety.textContent = safetyOff ? 'LIVE' : 'SAFE';
+        setupSafety.style.color = safetyOff ? '#ffb74d' : '#79e082';
+    }
+
+    const mode = telemetryData.flight_mode || document.getElementById('modeSelect')?.selectedOptions?.[0]?.text || 'STABILIZE';
+    if (setupMode) setupMode.textContent = mode;
+}
+
+function updateHealthStateUI() {
+    const gpsState = document.getElementById('gpsStateText');
+    const compassState = document.getElementById('compassStateText');
+    const rc5State = document.getElementById('rc5StateText');
+    const gyroState = document.getElementById('gyroStateText');
+
+    const gpsFix = telemetryData.gps_fix_type || 0;
+    const sats = telemetryData.satellites_visible || 0;
+    const rc5 = telemetryData.rc5_in || 0;
+
+    if (gpsState) gpsState.textContent = gpsFix >= 2 ? '3D FIX' : (sats >= 4 ? 'WEAK FIX' : 'NO FIX');
+    if (compassState) compassState.textContent = (Number(telemetryData.mag_field) || 0) > 0 ? 'HEALTHY' : 'CHECK SENSOR';
+    if (rc5State) rc5State.textContent = rc5 > 0 ? 'INPUT ACTIVE' : 'NO INPUT';
+    if (gyroState) gyroState.textContent = telemetryData.gyro_x !== undefined ? 'HEALTHY' : 'WAITING';
+}
+
+function clearSetupConsole() {
+    const consoleBox = document.getElementById('calibConsole');
+    if (consoleBox) consoleBox.innerHTML = '';
 }
 
 async function doAction(action) {
@@ -348,6 +452,8 @@ async function sendCompassCalibration(cmdType) {
             resetMagProgressUI();
             await mav.startCompassCal();
             logToConsole('System: Compass calibration started');
+            const statusEl = document.getElementById('compassCalStatusText');
+            if (statusEl) statusEl.textContent = 'IN PROGRESS';
         } 
         else if (cmdType === 'compass_accept') {
             const btnAccept = document.getElementById('btnCompassAccept');
@@ -365,6 +471,8 @@ async function sendCompassCalibration(cmdType) {
         else if (cmdType === 'compass_cancel') {
             await mav.cancelCompassCal();
             logToConsole('System: Compass calibration cancelled');
+            const statusEl = document.getElementById('compassCalStatusText');
+            if (statusEl) statusEl.textContent = 'READY';
             resetMagProgressUI();
         }
     } catch (err) {
@@ -409,11 +517,7 @@ function updateHealthCards() {
     
     const rc5 = telemetryData.rc5_in || 0;
     const rc5Status = document.getElementById('rc5Status');
-    if (rc5 > 0) {
-        rc5Status.className = 'status-dot ok';
-    } else {
-        rc5Status.className = 'status-dot warning';
-    }
+    rc5Status.className = rc5 > 0 ? 'status-dot ok' : 'status-dot warning';
     document.getElementById('rc5Health').innerText = rc5;
 
     const gyroX = telemetryData.gyro_x || 0;
@@ -422,46 +526,33 @@ function updateHealthCards() {
     
     const gyroStatus = document.getElementById('gyroStatus');
     gyroStatus.className = telemetryData.gyro_x !== undefined ? 'status-dot ok' : 'status-dot error';
-    
     document.getElementById('gyroHealth').innerText = `${gyroX.toFixed(1)}, ${gyroY.toFixed(1)}, ${gyroZ.toFixed(1)}`;
-    document.querySelector('#gyroHealth + .health-detail').innerText = `deg/s (X, Y, Z)`;
 
     const magField = telemetryData.mag_field || 0;
     const compassStatus = document.getElementById('compassStatus');
-    
     if (magField > 0) {
         compassStatus.className = 'status-dot ok';
         document.getElementById('compassHealth').innerText = 'GOOD';
-        document.getElementById('compassHealth').style.color = '#00e5ff';
+        document.getElementById('compassHealth').style.color = '#00d7ff';
         document.getElementById('compassInterf').innerText = 'Normal';
     } else {
         compassStatus.className = 'status-dot error';
         document.getElementById('compassHealth').innerText = 'BAD';
-        document.getElementById('compassHealth').style.color = '#f44336';
+        document.getElementById('compassHealth').style.color = '#ff7b76';
         document.getElementById('compassInterf').innerText = 'Check Sensor';
     }
-
-    const systemStatus = telemetryData.system_status || 'UNKNOWN';
-    const allOk = systemStatus === 'OK' || systemStatus === 'STANDBY';
-    
-    ['compass', 'rc5', 'gyro'].forEach(sensor => {
-        const statusDot = document.getElementById(sensor + 'Status');
-        if (statusDot) {
-            if (allOk) {
-                statusDot.className = 'status-dot ok';
-            } else if (statusDot.className !== 'status-dot warning') {
-                statusDot.className = 'status-dot error';
-            }
-        }
-    });
 
     if (telemetryData.mag_cal_progress) {
         for (const compassId in telemetryData.mag_cal_progress) {
             const prog = telemetryData.mag_cal_progress[compassId];
-            const inputEl = document.getElementById(`mag${prog.id + 1}_prog`);
-            if (inputEl && inputEl.value !== 'SUCCESS' && inputEl.value !== 'FAILED') {
-                inputEl.value = `${prog.pct}%`;
-            }
+            const index = Number(prog.id) + 1;
+            const inputEl = document.getElementById(`mag${index}_prog`);
+            const textEl = document.getElementById(`mag${index}_prog_text`);
+            const barEl = document.getElementById(`mag${index}_prog_bar`);
+            const pct = Math.max(0, Math.min(100, Number(prog.pct) || 0));
+            if (inputEl && inputEl.value !== 'SUCCESS' && inputEl.value !== 'FAILED') inputEl.value = `${pct}%`;
+            if (textEl) textEl.textContent = `${pct}%`;
+            if (barEl) barEl.style.width = `${pct}%`;
         }
     }
 
@@ -470,15 +561,20 @@ function updateHealthCards() {
             const rep = telemetryData.mag_cal_report[compassId];
             const inputEl = document.getElementById(`mag${rep.id + 1}_prog`);
             if (inputEl) {
+                const textEl = document.getElementById(`mag${rep.id + 1}_prog_text`);
+                const barEl = document.getElementById(`mag${rep.id + 1}_prog_bar`);
                 if (rep.status === 4) { // 4 = MAG_CAL_SUCCESS
                     if (inputEl.value !== 'SUCCESS') {
                         inputEl.value = 'SUCCESS';
+                        if (textEl) textEl.textContent = 'SUCCESS';
+                        if (barEl) barEl.style.width = '100%';
                         window.compassSuccessMask = (window.compassSuccessMask || 0) | (1 << rep.id);
                         logToConsole(`✓ Compass ${rep.id} SUKSES (fitness: ${rep.fitness.toFixed(2)})`);
                     }
                 } else if (rep.status > 4) { // 5 = FAILED, 6 = BAD_ORIENTATION, 7 = BAD_RADIUS
                     if (inputEl.value !== 'FAILED') {
                         inputEl.value = 'FAILED';
+                        if (textEl) textEl.textContent = 'FAILED';
                         logToConsole(`✗ Compass ${rep.id} GAGAL (kode: ${rep.status})`);
                     }
                 }
@@ -489,6 +585,9 @@ function updateHealthCards() {
             btnAccept.disabled = false;
         }
     }
+    updateHealthStateUI();
+    updatePreflightHeader();
+
     if (telemetryData.status === 'disconnected' || telemetryData.system_status === 'disconnected') {
         document.getElementById('gpsStatus').className = 'status-dot error';
         document.getElementById('gpsSats').innerText = '0';
@@ -547,6 +646,10 @@ function processCalibrationMessages(msgText) {
         currentCalibPosition = '';
     }
 }
+document.addEventListener('DOMContentLoaded', () => {
+    updatePreflightHeader();
+    updateHealthStateUI();
+});
 </script>
 </body>
 </html>
