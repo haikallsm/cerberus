@@ -421,6 +421,7 @@ window.updateTelemetryUI = function(data) {
             displayType = 'COPTER';
         }
     }
+    window.currentVehicleType = displayType;
 
     const vehicleTypeEl = document.getElementById('vehicleType');
     if (vehicleTypeEl) {
@@ -961,18 +962,39 @@ function updateMap(data) {
 
     const heading = Number.isFinite(data.heading) ? data.heading : 0;
     
+    const vType = window.currentVehicleType || 'COPTER';
+    const markerImage = (vType === 'ROVER') ? '../assets/rover.jpg' : '../assets/drone.png';
+    const markerHtml = `<img src="${markerImage}" style="width: 36px; height: 36px; transform: rotate(${heading}deg); object-fit: contain; border-radius: 5px;">`;
+
+
+    // if (!droneMarker) {
+    //     const droneIcon = L.divIcon({
+    //         html: `<div class="drone-marker" style="transform: rotate(${heading}deg);"></div>`,
+    //         iconSize: [36, 36], iconAnchor: [18, 18], className: 'drone-icon'
+    //     });
+    //     droneMarker = L.marker([lat, lon], { icon: droneIcon, zIndexOffset: 500, title: 'Drone Position' })
+    //         .bindPopup(`<b>Drone</b><br>Lat: ${lat.toFixed(6)}<br>Lon: ${lon.toFixed(6)}<br>Alt: ${(Number(data.alt)||0).toFixed(1)}m<br>Heading: ${heading.toFixed(0)}°<br>Speed: ${(Number(data.speed)||0).toFixed(1)} m/s`)
+    //         .addTo(map);
+    // } else {
+    //     droneMarker.setLatLng([lat, lon]);
+    //     const icon = droneMarker.getIcon();
+    //     icon.options.html = `<div class="drone-marker" style="transform: rotate(${heading}deg);"></div>`;
+    //     droneMarker.setIcon(icon);
+    // }
     if (!droneMarker) {
         const droneIcon = L.divIcon({
-            html: `<div class="drone-marker" style="transform: rotate(${heading}deg);"></div>`,
-            iconSize: [36, 36], iconAnchor: [18, 18], className: 'drone-icon'
+            html: markerHtml, // Gunakan markerHtml yang berisi tag <img>
+            iconSize: [36, 36], 
+            iconAnchor: [18, 18], 
+            className: 'drone-icon-custom' 
         });
-        droneMarker = L.marker([lat, lon], { icon: droneIcon, zIndexOffset: 500, title: 'Drone Position' })
-            .bindPopup(`<b>Drone</b><br>Lat: ${lat.toFixed(6)}<br>Lon: ${lon.toFixed(6)}<br>Alt: ${(Number(data.alt)||0).toFixed(1)}m<br>Heading: ${heading.toFixed(0)}°<br>Speed: ${(Number(data.speed)||0).toFixed(1)} m/s`)
+        droneMarker = L.marker([lat, lon], { icon: droneIcon, zIndexOffset: 500, title: 'Vehicle Position' })
+            .bindPopup(`<b>Vehicle</b><br>Lat: ${lat.toFixed(6)}<br>Lon: ${lon.toFixed(6)}<br>Alt: ${(Number(data.alt)||0).toFixed(1)}m<br>Heading: ${heading.toFixed(0)}°<br>Speed: ${(Number(data.speed)||0).toFixed(1)} m/s`)
             .addTo(map);
     } else {
         droneMarker.setLatLng([lat, lon]);
         const icon = droneMarker.getIcon();
-        icon.options.html = `<div class="drone-marker" style="transform: rotate(${heading}deg);"></div>`;
+        icon.options.html = markerHtml; // Update gambar saat mode berubah
         droneMarker.setIcon(icon);
     }
 
