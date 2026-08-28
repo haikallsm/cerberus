@@ -253,7 +253,7 @@
             if (!window.radioMavlink) { alert('Modul radio-mavlink.js belum termuat.'); return; }
             const select = document.getElementById('portSelect');
             try {
-                const ports = await window.radioMavlink.requestPort(); // sekarang return array {path, manufacturer, ...}
+                const ports = await window.radioMavlink.requestPort();
                 if (!select) return;
                 if (!ports || ports.length === 0) {
                     select.innerHTML = '<option value="">Tidak ada port terdeteksi</option>';

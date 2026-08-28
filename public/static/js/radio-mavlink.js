@@ -1,5 +1,9 @@
 class RadioMavlink {
     constructor() {
+        this._useWebSerial = !window.serialBridge && ('serial' in navigator);
+        this._webSerialCache = new Map();
+        this._webSerialWriter = null;
+
         this.port = null;
         this.reader = null;
         this.keepReading = false;
@@ -56,14 +60,99 @@ class RadioMavlink {
         this._handlingUnexpectedDrop = false;
         this._setupAutoReconnectListeners();
     }
+    // JANGAN DIHAPUS
+    // ini yang bisa di electron
+    // async tryAutoReconnect(baudRate = 57600) {
+    //     if (this._useWebSerial) {
+    //         try {
+    //             const ports = await navigator.serial.getPorts();
+    //             if (!ports || ports.length === 0) return false;
+    //             this.port = ports[0];
+    //             const info = await this.port.getInfo();
+    //             const pathName = `WebSerial_${info.usbVendorId || 'Auto'}_${info.usbProductId || 'Port'}`;
+    //             this._webSerialCache.set(pathName, this.port);
+    //             console.log('[RadioMavlink] Mencoba auto-reconnect ke:', pathName);
+    //             await this.connect(baudRate, pathName);
+    //             return true;
+    //         } catch (e) { return false; }
+    //     }
+    //      if (!window.serialBridge || typeof window.serialBridge.list !== 'function') {
+    //         console.warn('[RadioMavlink] serialBridge tidak tersedia.');
+    //         return false;
+    //     }
+    //     try {
+    //         const ports = await window.serialBrigde.list();
+    //         if (!port || ports.length === 0) {
+    //             console.warn('[RadioMavlink] Tidak ada port serial yang tersedia'); 
+    //             return false;
+    //         };
+    //         let found = null
+    //         if (this._lastPortPath) {
+    //             found = ports.find(
+    //                 p => p.path === this._lastPortPath
+    //             );
+    //         }
+    //         if (!found && this._lastVendorId && this._lastProductId) {
+    //             found = ports.find(
+    //                 p =>
+    //                     p.vendorId === this._lastVendorId &&
+    //                     p.productId === this._lastProductId
+    //             );
+    //         }
+    //         if (!found) {
+    //             if (!this._lastPortPath && ports.length === 1) {
+    //                 found = ports[0];
+    //             } else {
+    //                 console.warn(
+    //                     '[RadioMavlink] Port FC sebelumnya tidak ditemukan.'
+    //                 );
+
+    //                 return false;
+    //             }
+    //         }
+    //         console.log('[RadioMavlink] Mencoba auto-reconnect ke:', found.path);
+    //         await this.connect(baudRate,found.path);
+    //         console.log('[RadioMavlink] Auto-reconnect berhasil.');
+    //         return true;
+
+    //     } catch (e) {
+    //         console.warn('[RadioMavlink] Auto-reconnect gagal:', e.message);
+    //         return false;
+    //     }
+    // }
 
     async tryAutoReconnect(baudRate = 57600) {
-         if (!window.serialBridge || typeof window.serialBridge.list !== 'function') {
-            console.warn(
-                '[RadioMavlink] serialBridge tidak tersedia.'
-            );
+        if (this._useWebSerial) {
+            try {
+                const ports = await navigator.serial.getPorts();
+                if (!ports || ports.length === 0) return false;
+                
+                // Cari port terakhir yang dipakai, atau gunakan port pertama yang tersedia
+                let found = null;
+                if (this.port && ports.includes(this.port)) {
+                    found = this.port;
+                } else if (ports.length > 0) {
+                    found = ports[0];
+                }
+                
+                if (found) {
+                    this.port = found;
+                    const info = this.port.getInfo();
+                    const pathName = `WebSerial_${info.usbVendorId || 'Auto'}_${info.usbProductId || 'Port'}`;
+                    this._webSerialCache.set(pathName, this.port);
+                    console.log('[RadioMavlink] Mencoba auto-reconnect ke Web Serial:', pathName);
+                    await this.connect(baudRate, pathName);
+                    return true;
+                }
+                return false;
+            } catch (e) { return false; }
+        }
+
+        if (!window.serialBridge || typeof window.serialBridge.list !== 'function') {
+            console.warn('[RadioMavlink] serialBridge tidak tersedia.');
             return false;
         }
+
         try {
             const ports = await window.serialBridge.list();
             if (!ports || ports.length === 0) {
@@ -72,30 +161,21 @@ class RadioMavlink {
             };
             let found = null
             if (this._lastPortPath) {
-                found = ports.find(
-                    p => p.path === this._lastPortPath
-                );
+                found = ports.find(p => p.path === this._lastPortPath);
             }
             if (!found && this._lastVendorId && this._lastProductId) {
-                found = ports.find(
-                    p =>
-                        p.vendorId === this._lastVendorId &&
-                        p.productId === this._lastProductId
-                );
+                found = ports.find(p => p.vendorId === this._lastVendorId && p.productId === this._lastProductId);
             }
             if (!found) {
                 if (!this._lastPortPath && ports.length === 1) {
                     found = ports[0];
                 } else {
-                    console.warn(
-                        '[RadioMavlink] Port FC sebelumnya tidak ditemukan.'
-                    );
-
+                    console.warn('[RadioMavlink] Port FC sebelumnya tidak ditemukan.');
                     return false;
                 }
             }
             console.log('[RadioMavlink] Mencoba auto-reconnect ke:', found.path);
-            await this.connect(baudRate,found.path);
+            await this.connect(baudRate, found.path);
             console.log('[RadioMavlink] Auto-reconnect berhasil.');
             return true;
 
@@ -126,22 +206,36 @@ class RadioMavlink {
     async _teardownTransport() {
         this._stopWatchdog();
         this._stopRcOverrideLoop();
-        if (this._removeSerialDataListener) {
-            this._removeSerialDataListener();
-            this._removeSerialDataListener = null;
-        }
-        if (this._removeSerialClosedListener) {
-            this._removeSerialClosedListener();
-            this._removeSerialClosedListener = null;
-        }
-        if (this._removeSerialErrorListener) {
-            this._removeSerialErrorListener();
-            this._removeSerialErrorListener = null;
+        if (this._useWebSerial) {
+            this.keepReading = false;
+            if (this.reader) {
+                try { await this.reader.cancel(); } catch (e) {}
+            }
+            if (this._webSerialWriter) {
+                try { await this._webSerialWriter.releaseLock(); } catch (e) {}
+                this._webSerialWriter = null;
+            }
+            if (this.port) {
+                try { await this.port.close(); } catch (e) {console.warn('[RadioMavlink] Peringatan saat close port:', e);}
+            }
+        } else {
+            if (this._removeSerialDataListener) {
+                this._removeSerialDataListener();
+                this._removeSerialDataListener = null;
+            }
+            if (this._removeSerialClosedListener) {
+                this._removeSerialClosedListener();
+                this._removeSerialClosedListener = null;
+            }
+            if (this._removeSerialErrorListener) {
+                this._removeSerialErrorListener();
+                this._removeSerialErrorListener = null;
+            }
+            try { await window.serialBridge.disconnect(); } catch (e) {}
         }
         this.rcChannels = new Array(8).fill(65535);
         this._transportOpen = false;
         this.telemetry.connected = false;
-        try { await window.serialBridge.disconnect(); } catch (e) {}
     }
 
     async _handleUnexpectedDrop() {
@@ -200,10 +294,68 @@ class RadioMavlink {
         this._reconnectTimer = setTimeout(() => this._attemptReconnect(attempt), delayMs);
     }
 
+    // JANGAN DIHAPUS
+    // ini yang bisa di electron
+    // async _attemptReconnect(attempt) {
+    //     if (this._intentionalDisconnect || !this._awaitingReconnect || this._reconnecting) return;
+
+    //     this._reconnecting = true;
+    //     try {
+    //         if (!window.serialBridge || typeof window.serialBridge.list !== 'function') {
+    //             throw new Error('serialBridge tidak tersedia.');
+    //         }
+    //         if (!this._lastPortPath) {
+    //             throw new Error('Tidak ada portPath tersimpan dari koneksi sebelumnya.');
+    //         }
+
+    //         const ports = await window.serialBridge.list();
+    //         let found = ports.find(p => p.path === this._lastPortPath);
+    //         if (!found && this._lastVendorId && this._lastProductId) {
+    //             found = ports.find(p => p.vendorId === this._lastVendorId && p.productId === this._lastProductId);
+    //         }
+    //         if (!found) {
+    //             throw new Error('Perangkat belum terdeteksi kembali oleh OS.');
+    //         }
+
+    //         await this.connect(this._lastBaudRate, found.path);
+    //         console.log('[RadioMavlink] Auto-reconnect berhasil setelah link drop / reboot.');
+
+    //     } catch (e) {
+    //         console.warn(`[RadioMavlink] Auto-reconnect attempt ${attempt} gagal:`, e.message);
+    //         this._reconnecting = false;
+    //         this._scheduleReconnect(attempt + 1);
+    //         return;
+    //     }
+    //     this._reconnecting = false;
+    // }
+
     async _attemptReconnect(attempt) {
         if (this._intentionalDisconnect || !this._awaitingReconnect || this._reconnecting) return;
 
         this._reconnecting = true;
+
+        // --- Perbaikan: Pastikan jika ini Web Serial, maka JANGAN panggil serialBridge ---
+        if (this._useWebSerial) {
+            try {
+                const ports = await navigator.serial.getPorts();
+                let found = null;
+                if (this.port && ports.includes(this.port)) found = this.port;
+                else if (ports.length > 0) found = ports[0];
+                
+                if (!found) throw new Error('Perangkat Web Serial belum terdeteksi kembali.');
+                this.port = found;
+                await this.connect(this._lastBaudRate, this._lastPortPath);
+                console.log('[RadioMavlink] Auto-reconnect Web Serial berhasil.');
+                this._reconnecting = false;
+                return; // Berhenti di sini, jangan lanjutkan ke blok Electron!
+            } catch(e) {
+                console.warn(`[RadioMavlink] Auto-reconnect Web Serial attempt ${attempt} gagal:`, e.message);
+                this._reconnecting = false;
+                this._scheduleReconnect(attempt + 1);
+                return;
+            }
+        }
+
         try {
             if (!window.serialBridge || typeof window.serialBridge.list !== 'function') {
                 throw new Error('serialBridge tidak tersedia.');
@@ -234,6 +386,18 @@ class RadioMavlink {
     }
 
     async requestPort() {
+        if (this._useWebSerial) {
+            try {
+                const port = await navigator.serial.requestPort();
+                const info = port.getInfo();
+                const pathName = `WebSerial_${info.usbVendorId || 'Unknown'}_${info.usbProductId || 'Port'}`;
+                this._webSerialCache.set(pathName, port);
+                return [{ path: pathName, manufacturer: 'Browser Web API' }];
+            } catch (e) {
+                console.warn('[RadioMavlink] Web Serial ditolak/dibatalkan user:', e);
+                return [];
+            }
+        }
         if (!window.serialBridge || typeof window.serialBridge.list !== 'function') {
         throw new Error('serialBridge tidak tersedia. Cek apakah preload.js berhasil dimuat.');
         }
@@ -258,6 +422,47 @@ class RadioMavlink {
         this.telemetry.connected = false;
         this._lastPortPath = portPath;
 
+        if (this._useWebSerial) {
+            this.port = this._webSerialCache.get(portPath);
+            if (!this.port) {
+                const ports = await navigator.serial.getPorts();
+                if (ports.length > 0) {
+                    this.port = ports[0];
+                    this._webSerialCache.set(portPath, this.port);
+                } else {
+                    throw new Error('Web Serial Port tidak ditemukan di memori.');
+                }
+            }
+            try {
+                await this.port.open({ baudRate });
+            } catch (e) {
+                if (e.name !== 'InvalidStateError' && !e.message.includes('already open')) {
+                    throw e;
+                }
+                console.log('[RadioMavlink] Port sudah terbuka, melanjutkan koneksi...');
+            }
+            if (!this._webSerialWriter) {
+                try {
+                    this._webSerialWriter = this.port.writable.getWriter();
+                } catch (e) {
+                    console.warn('[RadioMavlink] Writer terkunci, mencoba mereset...', e);
+                }
+            }
+            if (!this.keepReading) {
+                this.keepReading = true;
+                this._readLoop();
+            }
+            this._transportOpen = true;
+            this._connectStartedAt = Date.now();
+            this._startWatchdog();
+            this._startRcOverrideLoop();
+            return;
+        }
+
+        if (!window.serialBridge) {
+            throw new Error("Sistem mendeteksi bukan Web Serial (mungkin karena tidak HTTPS), tetapi modul Electron juga tidak ditemukan.");
+        }
+
         try {
             const ports = await window.serialBridge.list();
             const current = ports.find(p => p.path === portPath);
@@ -270,14 +475,6 @@ class RadioMavlink {
         const res = await window.serialBridge.connect(portPath, baudRate);
         if(!res.ok) throw new Error(`Gagal membuka port serial: ${res.message}`);
 
-        // window.serialBridge.onData((bytes) => {
-        //     for(const byte of bytes) this.parser.feedByte(byte);
-        // });
-
-        // window.serialBridge.onClosed(() => this._handleUnexpectedDrop());
-        // window.serialBridge.onError((msg) => {
-        //     console.error('[RadioMavlink] Serial error:', msg);
-        // });
         if(this._removeSerialDataListener) {
             this._removeSerialDataListener();
             this._removeSerialDataListener = null;
@@ -330,6 +527,51 @@ class RadioMavlink {
         this._startWatchdog();
         this._startRcOverrideLoop();
     }
+
+    // JANGAN HAPUS async _readLoop()
+    // FUNCTION INI KETIKA DINYALAKAN APP TIDAK BISA CONNECT, BEGITU SEBALIKNYA KETIKA INI DIMATIKAN WEBSITE TIDAK BISA CONNECT
+    // JIKA INGIN MELAKUKAN PERUBAHAN PADA WEBSITE DAN HARUS DEPLOY MAKA NYALAKAN DULU FUNCTION INI AGAR BISA CONNECT WEBSITENYA
+    // JIKA INGIN MELAKUKAN BUILD APLIKASI MAKA FUNCTION INI HARUS DIMATIKAN AGAR APLIKASI BISA CONNECT KE SERIAL PORT
+    // async _readLoop() {
+    //     if (!this.port || !this.port.readable) {
+    //         console.warn('[RadioMavlink] Web Serial readable stream tidak tersedia.');
+    //         this.keepReading = false;
+    //         return;
+    //     }
+
+    //     while (this.keepReading && this.port && this.port.readable) {
+    //         try {
+    //             this.reader = this.port.readable.getReader();
+
+    //             while (this.keepReading) {
+    //                 const { value, done } = await this.reader.read();
+
+    //                 if (done) {
+    //                     break;
+    //                 }
+
+    //                 if (value) {
+    //                     for (const byte of value) {
+    //                         this.parser.feedByte(byte);
+    //                     }
+    //                 }
+    //             }
+
+    //         } catch (e) {
+    //             if (this.keepReading) {
+    //                 console.error('[RadioMavlink] Web Serial read error:', e);
+    //             }
+    //         } finally {
+    //             if (this.reader) {
+    //                 try {
+    //                     this.reader.releaseLock();
+    //                 } catch (e) {}
+
+    //                 this.reader = null;
+    //             }
+    //         }
+    //     }
+    // }
 
     _startWatchdog() {
         this._stopWatchdog();
@@ -405,7 +647,22 @@ class RadioMavlink {
     async _sendFrame(msgId, payloadBytes, crcExtra, useV2 = false) {
         const builder = useV2 ? buildMavlink2Frame : buildMavlink1Frame;
         const frame = builder(this._txSeq++, this._gcsSysId, this._gcsCompId, msgId, payloadBytes, crcExtra);
-        try { await window.serialBridge.send(Array.from(frame)); } catch (e) {}
+        // try { await window.serialBridge.send(Array.from(frame)); } catch (e) {}
+        try {
+            if (this._useWebSerial) {
+                if (!this._webSerialWriter) {
+                    throw new Error('Web Serial writer belum tersedia.');
+                }
+
+                await this._webSerialWriter.write(frame);
+                return;
+            }
+
+            await window.serialBridge.send(Array.from(frame));
+
+        } catch (e) {
+            console.error('[RadioMavlink] Gagal mengirim MAVLink frame:', e);
+        }
     }
 
     async requestDataStreams(rateHz = STREAM_RATE_HZ) {
