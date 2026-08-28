@@ -872,8 +872,13 @@ async function readMissionFromFC() {
             }
         });
 
-        waypoints = [fcHome, ...loadedWaypoints];
-        
+        if (items.length === 0) {
+            alert('Tidak ada mission di FC (0 item).');
+            btn.innerText = originalText; btn.disabled = false;
+            return;
+        }
+
+        waypoints = fcHome ? [fcHome, ...loadedWaypoints] : loadedWaypoints;
         reindexWaypoints(); renderWaypoints(); updateMapPath(); saveWaypointsLocal();
 
         alert('Mission loaded from FC! (' + items.length + ' items)');
@@ -893,7 +898,7 @@ async function updateMissionStatus() {
         return;
     }
     
-    statusEl.innerText = `Connected (${waypoints.filter(wp => wp.command !== 'HOME').length} items)`;
+    statusEl.innerText = `Connected (${waypoints.filter(wp => wp && wp.command !== 'HOME').length} items)`;
     statusEl.style.color = '#00bcd4';
 }
 
