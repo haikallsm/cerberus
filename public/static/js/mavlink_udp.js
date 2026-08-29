@@ -1,3 +1,17 @@
+// const MAV_RESULT_MESSAGES = {
+//     0: 'ACCEPTED',
+//     1: 'TEMPORARILY_REJECTED',
+//     2: 'DENIED',
+//     3: 'UNSUPPORTED',
+//     4: 'FAILED',
+//     5: 'IN_PROGRESS',
+//     6: 'CANCELLED'
+// };
+
+// function mavResultMessage(result) {
+//     return MAV_RESULT_MESSAGES[result] ?? `UNKNOWN (${result})`;
+// }
+
 class UdpMavlink {
     constructor() {
         this.parser = new MavlinkFrameParser((msgId, payload, sysid, compid) => this._handleFrame(msgId, payload, sysid, compid));
@@ -33,6 +47,7 @@ class UdpMavlink {
         this._fenceUpload = null;
         this._fenceCountWaiter = null;
         this._fenceItemWaiter = null;
+        this._homePositionWaiters = [];
 
         this.onTelemetry = null;
         this.onMavlog = null;
@@ -43,7 +58,6 @@ class UdpMavlink {
         this._awaitingReconnect = false;
         this._reconnecting = false;
         this._reconnectTimer = null;
-        
     }
 
     isLive() {
@@ -672,7 +686,126 @@ class UdpMavlink {
         return this.sendCommandLong(176, { p1: MAV_MODE_FLAG_CUSTOM_MODE_ENABLED, p2: modeCode });
     }
     async reboot() { return this.sendCommandLong(246, { p1: 1 }); }
-    async setHome(lat, lon, alt = 0) { return this.sendCommandLong(179, { p1: 0, p5: lat, p6: lon, p7: alt }); }
+    _isValidCoordinate(lat, lon) {
+        return Number.isFinite(lat) && Number.isFinite(lon) &&
+            (Math.abs(lat) > 0.0001 || Math.abs(lon) > 0.0001) &&
+            Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
+    }
+
+    _hasGoodGpsFix(minFixType = 3) {
+        const fix = Number(this.telemetry?.gps_fix_type || 0);
+        return fix >= minFixType;
+    }
+
+    _distanceMeters(lat1Deg, lon1Deg, lat2Deg, lon2Deg) {
+        const R = 6371000;
+        const lat1 = lat1Deg * Math.PI / 180, lon1 = lon1Deg * Math.PI / 180;
+        const lat2 = lat2Deg * Math.PI / 180, lon2 = lon2Deg * Math.PI / 180;
+        const dLat = lat2 - lat1, dLon = lon2 - lon1;
+        const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    _waitForHomePositionMatch(target, timeoutMs = 5000, toleranceM = 8) {
+        return new Promise((resolve) => {
+            const deadline = Date.now() + timeoutMs;
+            const waiter = { target, toleranceM, deadline, resolve, timer: null };
+            waiter.timer = setTimeout(() => {
+                this._homePositionWaiters = this._homePositionWaiters.filter(w => w !== waiter);
+                resolve({ ok: false, reason: 'timeout_home_position' });
+            }, timeoutMs);
+            this._homePositionWaiters.push(waiter);
+        });
+    }
+
+    _notifyHomePosition(lat, lon, alt) {
+        if (!this._homePositionWaiters.length) return;
+        const now = Date.now();
+        const pending = [...this._homePositionWaiters];
+        for (const w of pending) {
+            if (now > w.deadline) continue;
+            if (!this._isValidCoordinate(lat, lon)) continue;
+            
+            if (!w.target) {
+                clearTimeout(w.timer);
+                this._homePositionWaiters = this._homePositionWaiters.filter(x => x !== w);
+                w.resolve({ ok: true, lat, lon, alt, distanceM: null });
+                continue;
+            }
+            
+            const d = this._distanceMeters(lat, lon, w.target.lat, w.target.lon);
+            if (d <= w.toleranceM) {
+                clearTimeout(w.timer);
+                this._homePositionWaiters = this._homePositionWaiters.filter(x => x !== w);
+                w.resolve({ ok: true, lat, lon, alt, distanceM: d });
+            }
+        }
+    }
+
+    async setHome(lat = null, lon = null, alt = 0, opts = {}) {
+        const timeoutAckMs = opts.timeoutAckMs ?? 4000;
+        const timeoutHomeMs = opts.timeoutHomeMs ?? 7000;
+        const toleranceM = opts.toleranceM ?? 12;
+        const refreshIntervalMs = opts.refreshIntervalMs ?? 800;
+        const minFixType = opts.minFixType ?? 3;
+        
+        const mode = opts.mode ?? 'auto';
+        const enforceGpsGuard = opts.enforceGpsGuard ?? true;
+
+        const hasCoord = this._isValidCoordinate(lat, lon);
+        const gpsGood = this._hasGoodGpsFix(minFixType);
+
+        let p1, p5 = 0, p6 = 0, p7 = alt || 0;
+        let expectTarget = null;
+
+        if (mode === 'explicit') {
+            if (!hasCoord) return { ok: false, message: 'Mode explicit but lat/lon invalid.' };
+            if (enforceGpsGuard && !gpsGood) return { ok: false, message: `GPS fix belum memenuhi syarat (fix_type=${this.telemetry?.gps_fix_type || 0}, min=${minFixType}) untuk explicit set home.` };
+            p1 = 0; p5 = lat; p6 = lon;
+            expectTarget = { lat, lon, alt: p7 };
+        } else if (mode === 'current') {
+            p1 = 1;
+        } else {
+            if (hasCoord && (!enforceGpsGuard || gpsGood)) {
+                p1 = 0; p5 = lat; p6 = lon;
+                expectTarget = { lat, lon, alt: p7 };
+            } else {
+                p1 = 1;
+            }
+        }
+
+        const ack = await this.sendCommandLong(179, { p1, p5, p6, p7 }, true, timeoutAckMs);
+        if (!ack || !ack.ok) return { ok: false, result: ack?.result ?? null, message: ack?.message || 'Set home command not acknowledged' };
+
+        let waiterPromise;
+        if (expectTarget) {
+            waiterPromise = this._waitForHomePositionMatch(expectTarget, timeoutHomeMs, toleranceM);
+        } else {
+            waiterPromise = new Promise((resolve) => {
+                const started = Date.now();
+                const timer = setTimeout(() => {
+                    this._homePositionWaiters = this._homePositionWaiters.filter(w => w !== waiter);
+                    resolve({ ok: false, reason: 'timeout_home_position' });
+                }, timeoutHomeMs);
+                const waiter = { target: null, toleranceM: null, deadline: started + timeoutHomeMs, resolve: (v) => { clearTimeout(timer); resolve(v); }, timer };
+                this._homePositionWaiters.push(waiter);
+            });
+        }
+
+        this.requestHomePosition().catch(() => {});
+        const poll = setInterval(() => { this.requestHomePosition().catch(() => {}); }, refreshIntervalMs);
+
+        const confirmed = await waiterPromise;
+        clearInterval(poll);
+
+        if (!confirmed.ok) return { ok: false, message: 'Set home ACK diterima, tapi HOME_POSITION konfirmasi belum masuk (timeout).' };
+
+        return {
+            ok: true, result: ack.result,
+            message: `Home position confirmed by FC (mode=${p1 === 1 ? 'current/no-gps-fallback' : 'explicit'})`,
+            home: { lat: confirmed.lat, lon: confirmed.lon, alt: confirmed.alt }, distanceM: confirmed.distanceM
+        };
+    }
     async reposition(lat, lon, alt = null) {
         const targetAlt = (alt !== null && !Number.isNaN(alt)) ? alt : (Number(this.telemetry.altitude) || 0);
         return this.sendCommandLong(192, { p1: -1, p4: NaN, p5: lat, p6: lon, p7: targetAlt });
@@ -762,6 +895,9 @@ class UdpMavlink {
             delete result._kind;
             Object.assign(this.telemetry, result);
             this.telemetry.connected = true;
+            if (Number.isFinite(result.home_lat) && Number.isFinite(result.home_lon)) {
+                this._notifyHomePosition(result.home_lat, result.home_lon, result.home_alt);
+            }
             if (this.onTelemetry) this.onTelemetry({ ...this.telemetry });
         } else if (result._kind === 'statustext') {
             this._handleStatustext(result);
@@ -837,7 +973,7 @@ class UdpMavlink {
         if (waiter) {
             this._ackWaiters.delete(command);
             clearTimeout(waiter.timer);
-            waiter.resolve({ ok: result === 0, result });
+            waiter.resolve({ ok: result === 0, result, message: mavResultMessage(result) });
         }
     }
 

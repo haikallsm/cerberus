@@ -190,6 +190,96 @@ window.addEventListener('resize', () => map.invalidateSize());
 let lastLogTime = null;
 let droneMarker = null;
 
+// ===== FLIGHT VIEW WAYPOINT RENDERING =====
+let missionMarkers = [];
+let missionPolyline = null;
+
+function calculateFlightSmoothTrajectory(wp1, wp2, stepMeters = 15) {
+    const R = 6371000;
+    const lat1 = wp1.lat * Math.PI / 180, lon1 = wp1.lon * Math.PI / 180;
+    const lat2 = wp2.lat * Math.PI / 180, lon2 = wp2.lon * Math.PI / 180;
+    const dLat = lat2 - lat1, dLon = lon2 - lon1;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon/2)**2;
+    const totalDistance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+    const points = [];
+    if (totalDistance <= stepMeters) { points.push([wp2.lat, wp2.lon]); return points; }
+    const numSteps = Math.floor(totalDistance / stepMeters);
+    for (let i = 0; i <= numSteps; i++) {
+        const fraction = i / numSteps;
+        points.push([wp1.lat + (wp2.lat - wp1.lat) * fraction, wp1.lon + (wp2.lon - wp1.lon) * fraction]);
+    }
+    return points;
+}
+
+window.loadAndRenderMissionOnFlightView = function() {
+    if (!map) return;
+
+    // 1. Bersihkan marker lama
+    missionMarkers.forEach(m => { if (map.hasLayer(m)) map.removeLayer(m); });
+    missionMarkers = [];
+    if (missionPolyline && map.hasLayer(missionPolyline)) {
+        map.removeLayer(missionPolyline);
+        missionPolyline = null;
+    }
+
+    // 2. Ambil data dari localStorage
+    const saved = localStorage.getItem('hawkeye_mission');
+    if (!saved) return;
+
+    try {
+        const waypoints = JSON.parse(saved);
+        if (!Array.isArray(waypoints) || waypoints.length === 0) return;
+
+        let fullTrajectory = [];
+        for (let i = 0; i < waypoints.length; i++) {
+            const wp = waypoints[i];
+            if (!wp || typeof wp.lat !== 'number' || typeof wp.lon !== 'number') continue;
+
+            if (i > 0) {
+                fullTrajectory = fullTrajectory.concat(calculateFlightSmoothTrajectory(waypoints[i-1], wp));
+            } else {
+                fullTrajectory.push([wp.lat, wp.lon]);
+            }
+
+            const isHome = wp.command === 'HOME';
+            const color = isHome ? '#ffeb3b' : (i === 1 ? '#4caf50' : '#00bcd4');
+
+            const marker = L.circleMarker([wp.lat, wp.lon], {
+                radius: 6,
+                fillColor: color,
+                color: '#ffffff',
+                weight: 2,
+                fillOpacity: 0.9,
+                zIndexOffset: 300
+            }).addTo(map);
+
+            marker.bindTooltip(`<b>${isHome ? 'H' : i}</b>`, {
+                permanent: true,
+                direction: 'center',
+                className: 'wp-text-label'
+            });
+
+            marker.bindPopup(`<b>${wp.command} #${isHome ? 'HOME' : i}</b><br>Alt: ${wp.alt || 0}m<br>Lat: ${wp.lat.toFixed(6)}<br>Lon: ${wp.lon.toFixed(6)}`);
+            missionMarkers.push(marker);
+        }
+
+        if (fullTrajectory.length > 1) {
+            missionPolyline = L.polyline(fullTrajectory, {
+                color: '#ff9800',
+                weight: 2.5,
+                opacity: 0.85,
+                dashArray: '5, 5'
+            }).addTo(map);
+        }
+    } catch (e) {
+        console.warn("[FlightView] Gagal merender rute mission:", e);
+    }
+};
+
+// Panggil sekarang setelah map dipastikan sudah terbuat
+loadAndRenderMissionOnFlightView();
+
 // ===== ARTIFICIAL HORIZON =====
 const gyroCanvas = document.getElementById('gyroCanvas');
 const gyroCtx = gyroCanvas.getContext('2d');
@@ -961,44 +1051,31 @@ function updateMap(data) {
     }
 
     const heading = Number.isFinite(data.heading) ? data.heading : 0;
-    
+
     const vType = window.currentVehicleType || 'COPTER';
-    const markerImage = (vType === 'ROVER') ? '../assets/rover.jpg' : '../assets/drone.png';
-    const markerHtml = `<img src="${markerImage}" style="width: 36px; height: 36px; transform: rotate(${heading}deg); object-fit: contain; border-radius: 5px;">`;
+    const modeClass = (vType === 'ROVER') ? 'mode-rover' : 'mode-copter'; // gambar per-mode diambil dari CSS (.vehicle-marker.mode-xxx), bukan hardcode <img src>
 
-
-    // if (!droneMarker) {
-    //     const droneIcon = L.divIcon({
-    //         html: `<div class="drone-marker" style="transform: rotate(${heading}deg);"></div>`,
-    //         iconSize: [36, 36], iconAnchor: [18, 18], className: 'drone-icon'
-    //     });
-    //     droneMarker = L.marker([lat, lon], { icon: droneIcon, zIndexOffset: 500, title: 'Drone Position' })
-    //         .bindPopup(`<b>Drone</b><br>Lat: ${lat.toFixed(6)}<br>Lon: ${lon.toFixed(6)}<br>Alt: ${(Number(data.alt)||0).toFixed(1)}m<br>Heading: ${heading.toFixed(0)}°<br>Speed: ${(Number(data.speed)||0).toFixed(1)} m/s`)
-    //         .addTo(map);
-    // } else {
-    //     droneMarker.setLatLng([lat, lon]);
-    //     const icon = droneMarker.getIcon();
-    //     icon.options.html = `<div class="drone-marker" style="transform: rotate(${heading}deg);"></div>`;
-    //     droneMarker.setIcon(icon);
-    // }
     if (!droneMarker) {
         const droneIcon = L.divIcon({
-            html: markerHtml, // Gunakan markerHtml yang berisi tag <img>
-            iconSize: [36, 36], 
-            iconAnchor: [18, 18], 
-            className: 'drone-icon-custom' 
+            html: `<div class="vehicle-marker ${modeClass}" style="transform: rotate(${heading}deg);"></div>`,
+            iconSize: [36, 36],
+            iconAnchor: [18, 18],
+            className: 'drone-icon-custom'
         });
         droneMarker = L.marker([lat, lon], { icon: droneIcon, zIndexOffset: 500, title: 'Vehicle Position' })
             .bindPopup(`<b>Vehicle</b><br>Lat: ${lat.toFixed(6)}<br>Lon: ${lon.toFixed(6)}<br>Alt: ${(Number(data.alt)||0).toFixed(1)}m<br>Heading: ${heading.toFixed(0)}°<br>Speed: ${(Number(data.speed)||0).toFixed(1)} m/s`)
             .addTo(map);
     } else {
         droneMarker.setLatLng([lat, lon]);
-        const icon = droneMarker.getIcon();
-        icon.options.html = markerHtml; // Update gambar saat mode berubah
-        droneMarker.setIcon(icon);
+        const inner = droneMarker.getElement()?.querySelector('.vehicle-marker');
+        if (inner) {
+            inner.classList.remove('mode-copter', 'mode-rover');
+            inner.classList.add(modeClass);
+            inner.style.transform = `rotate(${heading}deg)`;
+        }
     }
 
-    const lineLengthMeters = 300; // Panjang garis simulasi (dalam meter)
+    const lineLengthMeters = 300; 
     const latRad = lat * Math.PI / 180;
     const headingRad = heading * Math.PI / 180;
     const lat2 = lat + (lineLengthMeters * Math.cos(headingRad)) / 111320;

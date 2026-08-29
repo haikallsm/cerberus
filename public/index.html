@@ -349,18 +349,33 @@
             const connectBtn = document.getElementById('connectBtn');
             if (!statusEl || !connectBtn) return;
 
+            let connected = false;
             if (type === 'serial') {
-                const connected = !!(window.radioMavlink && window.radioMavlink.telemetry?.connected);
-                statusEl.textContent = connected ? 'Connected' : 'Disconnected';
-                statusEl.style.color = connected ? '#4caf50' : '#f44336';
-                connectBtn.textContent = connected ? 'Disconnect' : 'Connect';
+                connected = !!(window.radioMavlink && window.radioMavlink.telemetry?.connected);
             } else {
-                const connected = !!(window.udpMavlink && window.udpMavlink.telemetry?.connected);
-                statusEl.textContent = connected ? 'Connected' : 'Disconnected';
-                statusEl.style.color = connected ? '#4caf50' : '#f44336';
-                connectBtn.textContent = connected ? 'Disconnect' : 'Connect';
+                connected = !!(window.udpMavlink && window.udpMavlink.telemetry?.connected);
             }
 
+            // Update teks
+            statusEl.textContent = connected ? 'Connected' : 'Disconnected';
+            connectBtn.textContent = connected ? 'Disconnect' : 'Connect';
+
+            // Update warna teks, background, dan border secara bersamaan
+            if (connected) {
+                statusEl.style.color = '#4caf50';
+                statusEl.style.backgroundColor = 'rgba(76, 175, 80, 0.15)'; // Hijau transparan
+                statusEl.style.borderColor = '#4caf50';
+                
+                statusEl.classList.remove('disconnected');
+                statusEl.classList.add('connected');
+            } else {
+                statusEl.style.color = '#f44336';
+                statusEl.style.backgroundColor = 'rgba(244, 67, 54, 0.15)'; // Merah transparan
+                statusEl.style.borderColor = '#f44336';
+                
+                statusEl.classList.remove('connected');
+                statusEl.classList.add('disconnected');
+            }
         }
 
         setInterval(updateNavbarStatus, 5000);

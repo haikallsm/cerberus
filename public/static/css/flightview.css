@@ -18,10 +18,12 @@ html, body{
 
 /* UI layout: map full background; telemetry panel docked top-right */
 #map, .leaflet-container {
-    width: 100% !important;
+    width: 100% !important;F
     height: 100% !important;
     flex: 1;
 }
+
+
 
 .telemetry-panel {
     position: absolute;
@@ -262,18 +264,38 @@ html, body{
     background: rgba(0, 0, 0, 0.85);
 }
 
-/* ===== DRONE MARKER ===== */
-.drone-marker {
-    width: 48px;
-    height: 48px;
-    background-image: url('../images/dronehijau.png');
+/* ===== WAYPOINT LABEL (Menghilangkan kotak putih bawaan Leaflet) ===== */
+.leaflet-tooltip.wp-text-label {
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    color: #000;
+    font-size: 11px;
+    padding: 0;
+}
+
+/* Hilangkan tanda panah (segitiga kecil) di pinggir tooltip */
+.leaflet-tooltip.wp-text-label::before {
+    display: none;
+}
+
+.vehicle-marker {
+    width: 36px;
+    height: 36px;
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center;
-    transform: rotate(0deg);
+    border-radius: 5px;
+    transition: transform 0.2s ease-out; /* smooth saat heading berubah */
     animation: drone-pulse 1s infinite;
-    transition: transform 0.2s ease-out;
-    animation: drone-pulse 1s infinite;
+}
+
+.vehicle-marker.mode-copter {
+    background-image: url('../images/dronehijau.png');
+}
+
+.vehicle-marker.mode-rover {
+    background-image: url('../images/rover.png');
 }
 
 @keyframes drone-pulse {

@@ -22,6 +22,17 @@
             <button onclick="setCommand('LOITER')" id="btn-loiter">Loiter</button>
             <button onclick="setCommand('RTL')" id="btn-rtl">RTL</button>
             <button onclick="setCommand('LAND')" id="btn-land">Land</button>
+            <!-- DEFAULT PARAMS BAR -->
+            <div style="display: flex; gap: 8px; padding: 8px 12px; background: rgba(0,0,0,0.3); border-bottom: 1px solid #333; font-size: 11px; align-items: center;">
+                <div style="flex: 1; display: flex; align-items: center; gap: 4px;">
+                    <label style="color: #aaa;">Def Alt (m):</label>
+                    <input type="number" id="defaultAltInput" value="30" min="0" max="1000" style="width: 50px; padding: 3px; background: #222; border: 1px solid #555; color: #00bcd4; font-weight: bold; border-radius: 3px;">
+                </div>
+                <div style="flex: 1; display: flex; align-items: center; gap: 4px;">
+                    <label style="color: #aaa;">Def Rad (m):</label>
+                    <input type="number" id="defaultRadiusInput" value="2" min="0" max="500" style="width: 50px; padding: 3px; background: #222; border: 1px solid #555; color: #00bcd4; font-weight: bold; border-radius: 3px;">
+                </div>
+            </div>
         </div>
         <div class="stats-bar">
             <div>Waypoints: <span id="wpCount">0</span></div>
@@ -88,10 +99,39 @@
         </div>
         <div class="modal-footer">
             <button class="secondary" onclick="closeScanAreaModal()">Batal</button>
-            <button class="primary" onclick="confirmGenerateScanArea()">Generate</button>
+            <button class="primary" onclick="confirmGenerateScanArea()">Pilih Start di Peta</button>
         </div>
     </div>
 </div>
+<!-- <div id="scanAreaModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">Generate Waypoint Area (Scan)</div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label for="scanSpacingInput">Jarak antar baris scan (meter)</label>
+                <input type="number" id="scanSpacingInput" min="1" step="1" value="20">
+            </div>
+            <div class="form-group">
+                <label for="scanAltitudeInput">Ketinggian scan (meter)</label>
+                <input type="number" id="scanAltitudeInput" min="1" step="1" value="30">
+            </div>
+            <div class="form-group">
+                <label for="scanAngleInput">Sudut sapuan (derajat, kosongkan = otomatis)</label>
+                <input type="number" id="scanAngleInput" step="1" placeholder="Auto">
+            </div>
+            <div class="form-group">
+                <label style="display:flex; align-items:center; gap:6px; font-weight:normal;">
+                    <input type="checkbox" id="scanReplaceInput" style="width:auto;">
+                    Ganti waypoint misi yang ada (selain HOME)
+                </label>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="secondary" onclick="closeScanAreaModal()">Batal</button>
+            <button class="primary" onclick="confirmGenerateScanArea()">Generate</button>
+        </div>
+    </div>
+</div> -->
 
 <script src="./static/js/leaflet.js"></script>
 <script>
@@ -132,11 +172,50 @@ function setCommand(cmd) {
     if (activeBtn) activeBtn.classList.add('active');
 }
 
+// function addWaypoint(lat, lon) {
+//     const wp = {
+//         id: waypoints.length, command: currentCommand, lat: lat, lon: lon,
+//         alt: currentCommand === 'HOME' ? 0 : (currentCommand === 'TAKEOFF' ? 20 : 30),
+//         p1: 0, p2: 0, p3: currentCommand === 'LOITER' ? 15 : 0, p4: 0
+//     };
+
+//     if (currentCommand === 'HOME') {
+//         waypoints = waypoints.filter(item => item.command !== 'HOME');
+//         waypoints.unshift(wp);
+//     } else {
+//         waypoints.push(wp);
+//     }
+    
+//     reindexWaypoints(); renderWaypoints(); updateMapPath(); saveWaypointsLocal();
+// }
 function addWaypoint(lat, lon) {
+    // 1. Baca nilai default dari input atau gunakan fallback bawaan
+    const defaultAlt = parseFloat(document.getElementById('defaultAltInput')?.value) || 30;
+    const defaultRadius = parseFloat(document.getElementById('defaultRadiusInput')?.value) || 2;
+
+    // 2. Tentukan Altitude & Param2 (Acceptance Radius) / Param3 (Loiter Radius)
+    let altVal = defaultAlt;
+    let p2Val = (currentCommand === 'WAYPOINT' || currentCommand === 'TAKEOFF') ? defaultRadius : 0;
+    let p3Val = currentCommand === 'LOITER' ? (defaultRadius > 2 ? defaultRadius : 15) : 0;
+
+    if (currentCommand === 'HOME') {
+        altVal = 0;
+        p2Val = 0;
+        p3Val = 0;
+    } else if (currentCommand === 'TAKEOFF') {
+        altVal = defaultAlt > 0 ? defaultAlt : 20;
+    }
+
     const wp = {
-        id: waypoints.length, command: currentCommand, lat: lat, lon: lon,
-        alt: currentCommand === 'HOME' ? 0 : (currentCommand === 'TAKEOFF' ? 20 : 30),
-        p1: 0, p2: 0, p3: currentCommand === 'LOITER' ? 15 : 0, p4: 0
+        id: waypoints.length,
+        command: currentCommand,
+        lat: lat,
+        lon: lon,
+        alt: altVal,
+        p1: 0,
+        p2: p2Val, // Param 2: Acceptance Radius (meter)
+        p3: p3Val, // Param 3: Loiter Radius (meter)
+        p4: 0
     };
 
     if (currentCommand === 'HOME') {
@@ -146,7 +225,10 @@ function addWaypoint(lat, lon) {
         waypoints.push(wp);
     }
     
-    reindexWaypoints(); renderWaypoints(); updateMapPath(); saveWaypointsLocal();
+    reindexWaypoints();
+    renderWaypoints();
+    updateMapPath();
+    saveWaypointsLocal();
 }
 
 function updateParam(index, field, value) {
@@ -218,10 +300,14 @@ function renderWaypoints() {
     waypoints.forEach((wp, i) => {
         let paramInputHtml = '';
         if (wp.command === 'WAYPOINT') {
-            paramInputHtml = `<div class="wp-param-row"><label>Hold (s):</label><input type="number" class="wp-grid-input" value="${wp.p1 || 0}" onchange="updateParam(${i}, 'p1', this.value)"></div>`;
+            paramInputHtml = `
+                <div class="wp-param-row"><label>Hold (s):</label><input type="number" class="wp-grid-input" value="${wp.p1 || 0}" onchange="updateParam(${i}, 'p1', this.value)"></div>
+                <div class="wp-param-row"><label>Rad (m):</label><input type="number" class="wp-grid-input" value="${wp.p2 !== undefined ? wp.p2 : 2}" onchange="updateParam(${i}, 'p2', this.value)"></div>
+            `;
         } else if (wp.command === 'LOITER') {
-            paramInputHtml = `<div class="wp-param-row"><label>Radius (m):</label><input type="number" class="wp-grid-input" value="${wp.p3 || 0}" onchange="updateParam(${i}, 'p3', this.value)"></div>`;
+            paramInputHtml = `<div class="wp-param-row"><label>Radius (m):</label><input type="number" class="wp-grid-input" value="${wp.p3 || 15}" onchange="updateParam(${i}, 'p3', this.value)"></div>`;
         }
+
         html += `
         <div class="waypoint-item">
             <div class="waypoint-index">${wp.command === 'HOME' ? 'H' : i}</div>
@@ -240,6 +326,41 @@ function renderWaypoints() {
     list.innerHTML = html;
     updateStats();
 }
+// function renderWaypoints() {
+//     const list = document.getElementById('waypointList');
+//     if (!list) return;
+
+//     if (waypoints.length === 0) { 
+//         list.innerHTML = `<div class="empty-state">Klik pada peta untuk menambahkan waypoint</div>`;
+//         updateStats(); return; 
+//     }
+    
+//     let html = '';
+//     waypoints.forEach((wp, i) => {
+//         let paramInputHtml = '';
+//         if (wp.command === 'WAYPOINT') {
+//             paramInputHtml = `<div class="wp-param-row"><label>Hold (s):</label><input type="number" class="wp-grid-input" value="${wp.p1 || 0}" onchange="updateParam(${i}, 'p1', this.value)"></div>`;
+//         } else if (wp.command === 'LOITER') {
+//             paramInputHtml = `<div class="wp-param-row"><label>Radius (m):</label><input type="number" class="wp-grid-input" value="${wp.p3 || 0}" onchange="updateParam(${i}, 'p3', this.value)"></div>`;
+//         }
+//         html += `
+//         <div class="waypoint-item">
+//             <div class="waypoint-index">${wp.command === 'HOME' ? 'H' : i}</div>
+//             <div class="waypoint-info">
+//                 <div class="waypoint-command">${wp.command}</div>
+//                 <div class="wp-param-row"><label>Alt (m):</label><input type="number" class="wp-grid-input" value="${wp.alt}" onchange="updateParam(${i}, 'alt', this.value)"></div>
+//                 ${paramInputHtml}
+//             </div>
+//             <div class="waypoint-actions">
+//                 <button onclick="moveUp(${i})">▲</button>
+//                 <button onclick="moveDown(${i})">▼</button>
+//                 <button onclick="removeWaypoint(${i})" style="background:#f44336; color:white; border-color:#d32f2f;">✕</button>
+//             </div>
+//         </div>`;
+//     });
+//     list.innerHTML = html;
+//     updateStats();
+// }
 
 function moveUp(index) {
     if (index <= 0 || waypoints[index].command === 'HOME' || (index === 1 && waypoints[0].command === 'HOME')) return;
@@ -285,16 +406,78 @@ function clearMission() {
     renderWaypoints(); updateStats(); saveWaypointsLocal();
 }
 
+// function saveMission() {
+//     const data = JSON.stringify(waypoints, null, 2);
+//     const blob = new Blob([data], { type: 'application/json' });
+//     const url = URL.createObjectURL(blob);
+//     const a = document.createElement('a');
+//     a.href = url; a.download = 'mission.json'; a.click();
+// }
+
 function saveMission() {
-    const data = JSON.stringify(waypoints, null, 2);
-    const blob = new Blob([data], { type: 'application/json' });
+    if (waypoints.length === 0) {
+        alert("Tidak ada waypoint untuk disimpan.");
+        return;
+    }
+
+    // Header standar MAVLink Waypoint format 110
+    let fileContent = "QGC WPL 110\n";
+
+    // Konversi setiap waypoint ke format 12 kolom QGC / Mission Planner
+    waypoints.forEach((wp, index) => {
+        const isHome = (index === 0 || wp.command === 'HOME');
+        const currentWp = isHome ? 1 : 0;
+        const frame = 3; // MAV_FRAME_GLOBAL_RELATIVE_ALT (3)
+
+        // Mapping MAVLink Command ID
+        let commandId = 16; // MAV_CMD_NAV_WAYPOINT
+        if (wp.command === 'TAKEOFF') commandId = 22;      // MAV_CMD_NAV_TAKEOFF
+        else if (wp.command === 'LOITER') commandId = 19;  // MAV_CMD_NAV_LOITER_TIME
+        else if (wp.command === 'RTL') commandId = 20;     // MAV_CMD_NAV_RETURN_TO_LAUNCH
+        else if (wp.command === 'LAND') commandId = 21;    // MAV_CMD_NAV_LAND
+        else if (wp.command === 'HOME') commandId = 16;
+
+        // Di dalam loop saveMission():
+        const p1 = (wp.p1 !== undefined) ? Number(wp.p1).toFixed(6) : "0.000000";
+        const p2 = (wp.p2 !== undefined) ? Number(wp.p2).toFixed(6) : "2.000000"; // Acceptance Radius
+        const p3 = (wp.p3 !== undefined) ? Number(wp.p3).toFixed(6) : "0.000000"; // Loiter Radius
+        const p4 = (wp.p4 !== undefined) ? Number(wp.p4).toFixed(6) : "0.000000";
+        const lat = Number(wp.lat).toFixed(7);
+        const lon = Number(wp.lon).toFixed(7);
+        const alt = Number(wp.alt || 0).toFixed(6);
+        const autocontinue = 1;
+
+        // Susun 12 kolom dengan pemisah tab (\t)
+        fileContent += `${index}\t${currentWp}\t${frame}\t${commandId}\t${p1}\t${p2}\t${p3}\t${p4}\t${lat}\t${lon}\t${alt}\t${autocontinue}\n`;
+    });
+
+    // Trigger download file .waypoints
+    const blob = new Blob([fileContent], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = 'mission.json'; a.click();
+    a.href = url;
+    a.download = 'mission.waypoints';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 
-function saveWaypointsLocal() { localStorage.setItem('hawkeye_mission', JSON.stringify(waypoints)); }
-
+// function saveWaypointsLocal() { localStorage.setItem('hawkeye_mission', JSON.stringify(waypoints)); }
+function saveWaypointsLocal() { 
+    localStorage.setItem('hawkeye_mission', JSON.stringify(waypoints)); 
+    // Broadcast pesan ke seluruh frame / Flight View
+    try {
+        if (window.parent) {
+            window.parent.postMessage('MISSION_UPDATED', '*');
+            // Jika Flight View ada di dalam iframe parent
+            const fvIframe = window.parent.document.querySelector('iframe[src*="flightview"], iframe#flightViewFrame');
+            if (fvIframe && fvIframe.contentWindow?.loadAndRenderMissionOnFlightView) {
+                fvIframe.contentWindow.loadAndRenderMissionOnFlightView();
+            }
+        }
+    } catch (err) {}
+}
 function loadWaypointsLocal() {
     const saved = localStorage.getItem('hawkeye_mission');
     if(saved) {
@@ -440,31 +623,104 @@ function polygonCentroidLl(vertices) {
     return { lat: sumLat / vertices.length, lon: sumLon / vertices.length };
 }
 
+// function intersectionsAtY(poly, y) {
+//     const xs = [];
+//     const n = poly.length;
+//     for (let i = 0; i < n; i++) {
+//         const a = poly[i], b = poly[(i + 1) % n];
+//         if ((a.y <= y && b.y > y) || (b.y <= y && a.y > y)) {
+//             const t = (y - a.y) / (b.y - a.y);
+//             xs.push(a.x + t * (b.x - a.x));
+//         }
+//     }
+//     xs.sort((v1, v2) => v1 - v2);
+//     return xs;
+// }
+function isPointInPolygon(point, polygon) {
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const xi = polygon[i].x, yi = polygon[i].y;
+        const xj = polygon[j].x, yj = polygon[j].y;
+        const intersect = ((yi > point.y) !== (yj > point.y))
+            && (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+    }
+    return inside;
+}
+
 function intersectionsAtY(poly, y) {
     const xs = [];
     const n = poly.length;
     for (let i = 0; i < n; i++) {
         const a = poly[i], b = poly[(i + 1) % n];
         if ((a.y <= y && b.y > y) || (b.y <= y && a.y > y)) {
-            const t = (y - a.y) / (b.y - a.y);
-            xs.push(a.x + t * (b.x - a.x));
+            // Hindari pembagian dengan nol
+            if (Math.abs(b.y - a.y) > 1e-6) {
+                const t = (y - a.y) / (b.y - a.y);
+                xs.push(a.x + t * (b.x - a.x));
+            }
         }
     }
     xs.sort((v1, v2) => v1 - v2);
     return xs;
 }
+// function generateScanWaypoints(spacingM, angleDeg) {
+//     if (fenceVertices.length < 3) return [];
 
-function generateScanWaypoints(spacingM, angleDeg) {
+//     const ref = polygonCentroidLl(fenceVertices);
+//     const xy = fenceVertices.map(p => llToLocalXY(p.lat, p.lon, ref.lat, ref.lon));
+
+//     let angleRad;
+//     if (angleDeg !== null && angleDeg !== undefined && !isNaN(angleDeg)) {
+//         angleRad = angleDeg * Math.PI / 180;
+//     } else {
+//         // Otomatis: ikuti orientasi sisi terpanjang polygon supaya jumlah baris sapuan minimal.
+//         let maxLen = -1, bestAngle = 0;
+//         for (let i = 0; i < xy.length; i++) {
+//             const a = xy[i], b = xy[(i + 1) % xy.length];
+//             const dx = b.x - a.x, dy = b.y - a.y;
+//             const len = Math.hypot(dx, dy);
+//             if (len > maxLen) { maxLen = len; bestAngle = Math.atan2(dy, dx); }
+//         }
+//         angleRad = bestAngle;
+//     }
+
+//     const rotPoly = xy.map(p => rotatePoint(p, -angleRad));
+//     const ys = rotPoly.map(p => p.y);
+//     const yMin = Math.min(...ys), yMax = Math.max(...ys);
+
+//     const rows = [];
+//     let dir = 1;
+//     for (let y = yMin + spacingM / 2; y <= yMax - 1e-6; y += spacingM) {
+//         const xs = intersectionsAtY(rotPoly, y);
+//         for (let i = 0; i + 1 < xs.length; i += 2) {
+//             let seg = [{ x: xs[i], y }, { x: xs[i + 1], y }];
+//             if (dir === -1) seg.reverse();
+//             rows.push(seg);
+//         }
+//         dir *= -1;
+//     }
+
+//     const localPoints = [];
+//     rows.forEach(seg => seg.forEach(p => localPoints.push(p)));
+
+//     // Rotasi balik + konversi ke lat/lon
+//     return localPoints.map(p => {
+//         const back = rotatePoint(p, angleRad);
+//         return localXYToLl(back.x, back.y, ref.lat, ref.lon);
+//     });
+// }
+function generateScanWaypoints(spacingM, angleDeg, startLatLng = null) {
     if (fenceVertices.length < 3) return [];
 
     const ref = polygonCentroidLl(fenceVertices);
     const xy = fenceVertices.map(p => llToLocalXY(p.lat, p.lon, ref.lat, ref.lon));
 
-    let angleRad;
+    // Sudut sapuan otomatis atau manual
+    let angleRad = 0;
     if (angleDeg !== null && angleDeg !== undefined && !isNaN(angleDeg)) {
         angleRad = angleDeg * Math.PI / 180;
     } else {
-        // Otomatis: ikuti orientasi sisi terpanjang polygon supaya jumlah baris sapuan minimal.
         let maxLen = -1, bestAngle = 0;
         for (let i = 0; i < xy.length; i++) {
             const a = xy[i], b = xy[(i + 1) % xy.length];
@@ -476,26 +732,95 @@ function generateScanWaypoints(spacingM, angleDeg) {
     }
 
     const rotPoly = xy.map(p => rotatePoint(p, -angleRad));
-    const ys = rotPoly.map(p => p.y);
-    const yMin = Math.min(...ys), yMax = Math.max(...ys);
+    const ysAll = rotPoly.map(p => p.y);
+    const yMin = Math.min(...ysAll), yMax = Math.max(...ysAll);
 
-    const rows = [];
-    let dir = 1;
-    for (let y = yMin + spacingM / 2; y <= yMax - 1e-6; y += spacingM) {
+    const marginM = Math.min(spacingM * 0.4, 5); // Inset batas aman
+    
+    // 1. Kumpulkan segmen garis horizontal valid di dalam poligon
+    let segments = [];
+    for (let y = yMin + marginM + (spacingM / 2); y <= yMax - marginM; y += spacingM) {
         const xs = intersectionsAtY(rotPoly, y);
         for (let i = 0; i + 1 < xs.length; i += 2) {
-            let seg = [{ x: xs[i], y }, { x: xs[i + 1], y }];
-            if (dir === -1) seg.reverse();
-            rows.push(seg);
+            let xLeft = xs[i];
+            let xRight = xs[i + 1];
+
+            if ((xRight - xLeft) > marginM * 2) {
+                xLeft += marginM;
+                xRight -= marginM;
+            }
+
+            const midPoint = { x: (xLeft + xRight) / 2, y: y };
+            if (isPointInPolygon(midPoint, rotPoly)) {
+                segments.push({
+                    y: y,
+                    p1: { x: xLeft, y: y },
+                    p2: { x: xRight, y: y },
+                    visited: false
+                });
+            }
         }
-        dir *= -1;
     }
 
-    const localPoints = [];
-    rows.forEach(seg => seg.forEach(p => localPoints.push(p)));
+    if (segments.length === 0) return [];
 
-    // Rotasi balik + konversi ke lat/lon
-    return localPoints.map(p => {
+    // 2. Tentukan Titik Awal berdasarkan Posisi Klik Peta
+    let initialPos = segments[0].p1;
+
+    if (startLatLng && isValidCoordinate(startLatLng.lat, startLatLng.lng)) {
+        const clickLocal = llToLocalXY(startLatLng.lat, startLatLng.lng, ref.lat, ref.lon);
+        const clickRot = rotatePoint(clickLocal, -angleRad);
+
+        let bestStartDist = Infinity;
+        segments.forEach(seg => {
+            const d1 = Math.hypot(seg.p1.x - clickRot.x, seg.p1.y - clickRot.y);
+            const d2 = Math.hypot(seg.p2.x - clickRot.x, seg.p2.y - clickRot.y);
+            if (d1 < bestStartDist) { bestStartDist = d1; initialPos = seg.p1; }
+            if (d2 < bestStartDist) { bestStartDist = d2; initialPos = seg.p2; }
+        });
+    }
+
+    // 3. Bangun Rute Waypoint (Nearest-Neighbor)
+    const orderedPoints = [];
+    let currentPos = initialPos;
+    
+    while (true) {
+        let bestDist = Infinity;
+        let bestSegIndex = -1;
+        let bestEntry = null;
+        let bestExit = null;
+
+        for (let i = 0; i < segments.length; i++) {
+            const seg = segments[i];
+            if (seg.visited) continue;
+
+            const d1 = Math.hypot(seg.p1.x - currentPos.x, seg.p1.y - currentPos.y);
+            const d2 = Math.hypot(seg.p2.x - currentPos.x, seg.p2.y - currentPos.y);
+
+            if (d1 < bestDist) {
+                bestDist = d1;
+                bestSegIndex = i;
+                bestEntry = seg.p1;
+                bestExit = seg.p2;
+            }
+            if (d2 < bestDist) {
+                bestDist = d2;
+                bestSegIndex = i;
+                bestEntry = seg.p2;
+                bestExit = seg.p1;
+            }
+        }
+
+        if (bestSegIndex === -1) break;
+
+        segments[bestSegIndex].visited = true;
+        orderedPoints.push(bestEntry);
+        orderedPoints.push(bestExit);
+        currentPos = bestExit;
+    }
+
+    // 4. Konversi balik ke Lat/Lon
+    return orderedPoints.map(p => {
         const back = rotatePoint(p, angleRad);
         return localXYToLl(back.x, back.y, ref.lat, ref.lon);
     });
@@ -535,6 +860,22 @@ window.closeScanAreaModal = function() {
     document.getElementById('scanAreaModal').style.display = 'none';
 }
 
+// window.confirmGenerateScanArea = function() {
+//     const spacing = parseFloat(document.getElementById('scanSpacingInput').value);
+//     const altitude = parseFloat(document.getElementById('scanAltitudeInput').value);
+//     const angleRaw = document.getElementById('scanAngleInput').value;
+//     const angleDeg = angleRaw === '' ? null : parseFloat(angleRaw);
+//     const replaceExisting = document.getElementById('scanReplaceInput').checked;
+
+//     if (isNaN(spacing) || spacing <= 0) return alert('Jarak antar baris scan tidak valid.');
+//     if (isNaN(altitude) || altitude <= 0) return alert('Ketinggian scan tidak valid.');
+
+//     closeScanAreaModal();
+//     addScanAreaToMission(spacing, altitude, angleDeg, replaceExisting);
+// }
+let isPickingScanStart = false;
+let pendingScanConfig = null;
+
 window.confirmGenerateScanArea = function() {
     const spacing = parseFloat(document.getElementById('scanSpacingInput').value);
     const altitude = parseFloat(document.getElementById('scanAltitudeInput').value);
@@ -546,22 +887,71 @@ window.confirmGenerateScanArea = function() {
     if (isNaN(altitude) || altitude <= 0) return alert('Ketinggian scan tidak valid.');
 
     closeScanAreaModal();
-    addScanAreaToMission(spacing, altitude, angleDeg, replaceExisting);
+
+    // Simpan konfigurasi dan aktifkan mode klik peta
+    pendingScanConfig = { spacing, altitude, angleDeg, replaceExisting };
+    isPickingScanStart = true;
+    alert("Silakan KLIK PADA PETA di sudut/posisi mana Anda ingin drone MEMULAI scan.");
+};
+
+function addScanAreaToMission(spacingM, altitude, angleDeg, startLatLng, replaceExisting) {
+    const pts = generateScanWaypoints(spacingM, angleDeg, startLatLng);
+    if (pts.length === 0) {
+        alert('Gagal membuat pola scan. Pastikan poligon geofence sudah dibuat.');
+        return;
+    }
+
+    if (replaceExisting) {
+        waypoints = waypoints.filter(wp => wp.command === 'HOME');
+    }
+
+    pts.forEach(p => {
+        waypoints.push({
+            id: waypoints.length, command: 'WAYPOINT', lat: p.lat, lon: p.lon,
+            alt: altitude, p1: 0, p2: 0, p3: 0, p4: 0
+        });
+    });
+
+    reindexWaypoints(); renderWaypoints(); updateMapPath(); saveWaypointsLocal();
 }
+
+// Intersepsi klik peta
+map.on('click', function(e) { 
+    if (isPickingScanStart && pendingScanConfig) {
+        // Eksekusi pembuatan scan dimulai dari koordinat yang baru saja diklik
+        addScanAreaToMission(
+            pendingScanConfig.spacing,
+            pendingScanConfig.altitude,
+            pendingScanConfig.angleDeg,
+            e.latlng, // Koordinat klik pengguna
+            pendingScanConfig.replaceExisting
+        );
+        isPickingScanStart = false;
+        pendingScanConfig = null;
+        return;
+    }
+
+    if (fenceEditMode) {
+        fenceVertices.push({ lat: e.latlng.lat, lon: e.latlng.lng });
+        refreshFenceUI();
+    } else {
+        addWaypoint(e.latlng.lat, e.latlng.lng); 
+    }
+});
 
 // ===== EVENT HANDLING PETA (KLIK & KLIK KANAN) =====
 
 // Ganti map.on('click') bawaan Anda dengan ini:
-map.on('click', function(e) { 
-    if (fenceEditMode) {
-        // Jika sedang mode edit, tambahkan titik Polygon
-        fenceVertices.push({ lat: e.latlng.lat, lon: e.latlng.lng });
-        refreshFenceUI();
-    } else {
-        // Jika tidak, tambahkan Waypoint misi normal
-        addWaypoint(e.latlng.lat, e.latlng.lng); 
-    }
-});
+// map.on('click', function(e) { 
+//     if (fenceEditMode) {
+//         // Jika sedang mode edit, tambahkan titik Polygon
+//         fenceVertices.push({ lat: e.latlng.lat, lon: e.latlng.lng });
+//         refreshFenceUI();
+//     } else {
+//         // Jika tidak, tambahkan Waypoint misi normal
+//         addWaypoint(e.latlng.lat, e.latlng.lng); 
+//     }
+// });
 
 // Ganti map.on('contextmenu') bawaan Anda dengan ini:
 map.on('contextmenu', function(e) {

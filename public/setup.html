@@ -167,7 +167,7 @@
                 <div class="control-block">
                     <div class="control-label">FLIGHT MODE</div>
                     <div class="control-row">
-                        <select id="flightModeSelect" class="action-select">
+                        <select id="modeSelect" class="action-select">
                             <option value="0">STABILIZE</option>
                             <option value="2">ALT_HOLD</option>
                             <option value="3">AUTO</option>
@@ -175,6 +175,7 @@
                             <option value="5">LOITER</option>
                         </select>
                         <button class="btn-action" onclick="doAction('setmode')">SET</button>
+                        <!-- <button class="btn-action" onclick="setSetupflightMode()">SET</button> -->
                     </div>
                 </div>
 
@@ -278,7 +279,7 @@ function updatePreflightHeader() {
 
     const safetyOff = !!window.parent?.gcsState?.safety?.off;
     if (setupSafety) {
-        setupSafety.textContent = safetyOff ? 'LIVE' : 'SAFE';
+        setupSafety.textContent = safetyOff ? 'UNSAFE' : 'SAFE';
         setupSafety.style.color = safetyOff ? '#ffb74d' : '#79e082';
     }
 
@@ -312,8 +313,8 @@ async function doAction(action) {
         alert("Sistem command belum termuat.");
         return;
     }
-    
-    const isLive = window.parent.commands._radioActive() || window.parent.commands._piActive();
+
+    const isLive = window.parent.mavFeatures._radioActive() || window.parent.mavFeatures._udpActive();
     if (!isLive) {
         alert("Gagal: Tidak ada koneksi aktif ke Drone.");
         return;
@@ -377,7 +378,7 @@ async function doAction(action) {
                 logToConsole("System: Perintah LAND terkirim");
                 break;
             case 'setmode': 
-                const modeValue = document.getElementById('flightModeSelect').value;
+                const modeValue = document.getElementById('modeSelect').value;
                 await window.parent.commands.setFlightMode(parseInt(modeValue, 10)); 
                 logToConsole(`System: Perintah ganti mode terkirim`);
                 break;
