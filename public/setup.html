@@ -167,7 +167,7 @@
                 <div class="control-block">
                     <div class="control-label">FLIGHT MODE</div>
                     <div class="control-row">
-                        <select id="modeSelect" class="action-select">
+                        <select id="flightModeSelect" class="action-select">
                             <option value="0">STABILIZE</option>
                             <option value="2">ALT_HOLD</option>
                             <option value="3">AUTO</option>
@@ -224,8 +224,6 @@ let lastCalibMsgTime = 0;
 let currentCalibPosition = '';
 let safetyIsOff = false; 
 
-// Pengaturan Jaringan RasPi (dipindah dari setup.html) -- restore IP tersimpan ke input.
-// Script ini sudah ada di akhir <body>, elemen sudah pasti ada di DOM, tidak perlu DOMContentLoaded.
 (function restoreRaspiIP() {
     const savedUrl = localStorage.getItem('raspyUrl');
     if (savedUrl) {
@@ -246,15 +244,9 @@ function saveRaspiIP() {
     alert('IP Backend/RasPi berhasil diatur ke: ' + url);
 }
 
-// Ikut fix yang sama seperti di mission.html: gcsConnection sudah tidak punya baseUrl
-// (backend Flask/RasPi untuk telemetry sudah retired), tapi IP RasPi untuk video stream
-// masih relevan -- baca langsung dari localStorage yang diisi saveRaspiIP() di bawah.
 const getBaseUrl = () => localStorage.getItem('raspyUrl') || 'http://localhost:5000';
 const isConnected = () => {
     if (window.parent && window.parent.mavFeatures) {
-        // _piActive() sudah tidak ada di window.mavFeatures (=window.commands) sejak
-        // migrasi ke arsitektur client-side radio/UDP -- ganti ke _udpActive(),
-        // sama seperti fix yang sudah diterapkan di mission.html
         return window.parent.mavFeatures._radioActive() || window.parent.mavFeatures._udpActive();
     }
     return false;

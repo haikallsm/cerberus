@@ -112,13 +112,16 @@
 </div>
 
 <script>
-// ===== HELPER KONEKSI PARENT =====
-const getBaseUrl = () => window.parent.gcsConnection?.baseUrl || 'http://localhost:5000';
+// const getBaseUrl = () => window.parent.gcsConnection?.baseUrl || 'http://localhost:5000';
 const isConnected = () => {
-    if (window.parent && window.parent.mavFeatures) {
-        return window.parent.mavFeatures._radioActive() || window.parent.mavFeatures._piActive();
+    if (window.parent?.mavFeatures) {
+        return (typeof window.parent.mavFeatures._radioActive === 'function' && window.parent.mavFeatures._radioActive()) ||
+               (typeof window.parent.mavFeatures._udpActive === 'function' && window.parent.mavFeatures._udpActive());
     }
-    return window.parent.gcsConnection?.isConnected || false;
+    return (
+        window.parent?.radioMavlink?.telemetry?.connected === true ||
+        window.parent?.udpMavlink?.telemetry?.connected === true
+    );
 };
 
 const COPTER_MODE_MAP = {
@@ -274,12 +277,12 @@ async function saveModes() {
         const mav = window.parent.mavFeatures;
         let failed = [];
         for (const p of params) {
-            const ok = await mav.setParam(p.name, p.value);
-            if (!ok) {
+            const response = await mav.setParam(p.name, p.value);
+            if (!response || !response.ok) {
                 failed.push(p.name);
             } else {
-                if (window.parent.paramCache && window.parent.paramCache.params) {
-                    window.parent.paramCache.params[p.name] = p.value;
+                if (window.parent.paramCache?.params) {
+                    window.parent.paramCache.params[p.name] = response.value;
                 }
             }
         }
@@ -321,12 +324,12 @@ async function saveParams() {
         const mav = window.parent.mavFeatures;
         let failed = [];
         for (const p of params) {
-            const ok = await mav.setParam(p.name, p.value);
-            if (!ok) {
+            const response = await mav.setParam(p.name, p.value);
+            if (!response || !response.ok) {
                 failed.push(p.name);
             } else {
-                if (window.parent.paramCache && window.parent.paramCache.params) {
-                    window.parent.paramCache.params[p.name] = p.value;
+                if (window.parent.paramCache?.params) {
+                    window.parent.paramCache.params[p.name] = response.value;
                 }
             }
         }
