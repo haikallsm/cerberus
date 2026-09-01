@@ -154,16 +154,16 @@
                             <option value="safety_off">SAFETY OFF</option>
                             <option value="safety_on">SAFETY ON</option>
                             <option value="reboot">REBOOT</option>
-                            <option value="takeoff">TAKEOFF</option>
+                            <!-- <option value="takeoff">TAKEOFF</option>
                             <option value="land">LAND</option>
-                            <option value="rtl">RTL</option>
+                            <option value="rtl">RTL</option> -->
                             <option value="rover">ROVER</option>
                             <option value="copter">COPTER</option>
                         </select>
                         <button class="btn-action" onclick="doAction(document.getElementById('cmdSelect').value)">EXECUTE</button>
                     </div>
                 </div>
-
+                
                 <div class="control-block">
                     <div class="control-label">FLIGHT MODE</div>
                     <div class="control-row">
@@ -173,9 +173,11 @@
                             <option value="3">AUTO</option>
                             <option value="4">GUIDED</option>
                             <option value="5">LOITER</option>
+                            <option value="takeoff">TAKEOFF</option>
+                            <option value="land">LAND</option>
+                            <option value="rtl">RTL</option>
                         </select>
                         <button class="btn-action" onclick="doAction('setmode')">SET</button>
-                        <!-- <button class="btn-action" onclick="setSetupflightMode()">SET</button> -->
                     </div>
                 </div>
 

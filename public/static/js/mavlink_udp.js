@@ -275,10 +275,6 @@ class UdpMavlink {
     }
 
     async sendCommandAck(command, result = 0) {
-        // Struktur penuh COMMAND_ACK (MAVLink2): command(u16) + result(u8) + progress(u8)
-        // + result_param2(i32) + target_system(u8) + target_component(u8) = 10 byte.
-        // target_system/target_component WAJIB diisi benar -- kalau di-trim jadi 0,
-        // FC bisa mengabaikan ACK ini karena dianggap tidak ditujukan untuknya.
         const buf = new ArrayBuffer(10);
         const dv = new DataView(buf);
         dv.setUint16(0, command, true);            // command

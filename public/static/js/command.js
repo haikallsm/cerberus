@@ -22,6 +22,10 @@ const commands = {
         } return ack;
     },
 
+    async takeoff(alt = 1) {
+        return this._getActiveLink().takeoff(alt);
+    },
+
     async reboot() {
         return this._getActiveLink().reboot();
     },
@@ -70,13 +74,13 @@ const commands = {
 
         let pwm;
         if(['low', 'rover'].includes(stateStr)) {
-            pwm = 1100;
+            pwm = 999;
             console.log("[COMMAND] HYBRID MODE: ROVER (LOW)");
         } else if(['mid', 'middle', 'copter_safe'].includes(stateStr)) {
-            pwm = 1000;
+            pwm = 1500;
             console.log("[COMMAND] HYBRID MODE: COPTER & SAFETY (MID)");
-        } else if (['high', 'copter_unsafe', 'ready'].includes(stateStr)) {
-            pwm = 2000;
+        } else if (['high', 'copter_safe', 'ready'].includes(stateStr)) {
+            pwm = 1998;
             console.log("[COMMAND] HYBRID MODE: COPTER & UNSAFETY (HIGH)");
         } else if (['release', 'off'].includes(stateStr)) {
             pwm = 65535;

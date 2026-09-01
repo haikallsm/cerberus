@@ -222,6 +222,7 @@ const MAV_TYPE_ROVER = 10;
 const MAV_TYPE_COPTER_SET = new Set([2, 13, 14, 19, 20, 21]);
 const COPTER_MODE_MAP = { 0:'STABILIZE',2:'ALT_HOLD',3:'AUTO',4:'GUIDED',5:'LOITER',6:'RTL',9:'LAND',16:'POSHOLD',20:'GUIDED_NOGPS' };
 const ROVER_MODE_MAP = { 0:'MANUAL',3:'STEERING',4:'HOLD',5:'LOITER',10:'AUTO',11:'RTL',15:'GUIDED' };
+const MAV_CMD_NAV_TAKEOFF = 22;
 
 const DECODERS = {
     0: (bytes) => {
@@ -403,7 +404,7 @@ const DECODERS = {
     },
     160: (bytes) => {
         const dv = new DataView(new Uint8Array(bytes).buffer);
-        return  {
+        return {
             _kind: 'fence_point',
             lat: dv.getInt32(0, true),
             lon: dv.getInt32(4, true),

@@ -839,24 +839,13 @@ class RadioMavlink {
         });
     }
 
-    // Catatan: count boleh 0 (mis. user cuma mau hapus mission di FC lewat UI upload).
-    // Protocol-layer tidak boleh berhenti cuma karena list kosong -- kalau count=0,
-    // FC (ArduPilot) langsung balas MISSION_ACK tanpa minta item apa pun, jadi alur
-    // resend-MISSION_COUNT + tunggu MISSION_ACK di bawah ini otomatis menangani kasus itu.
     async uploadMission(items, timeout = 10000) {
         const count = items.length;
         if (this._missionUpload) throw new Error('Upload mission sedang berlangsung, tunggu selesai');
 
-        // Selama transfer mission: (1) longgarkan watchdog heartbeat (FC bisa stall
-        // sejenak saat nulis EEPROM utk CLEAR_ALL+COUNT+item, itu normal, bukan link putus),
-        // (2) pause RC_CHANNELS_OVERRIDE loop (kirim tiap 150ms) supaya tidak berebut
-        // bandwidth radio 115200 baud dengan paket mission protocol & heartbeat.
         this._missionBusy = true;
         this.pauseRcOverride();
 
-        // MISSION_CLEAR_ALL dulu supaya state mission lama di FC ke-reset bersih
-        // sebelum COUNT baru dikirim (best-effort, tidak menunggu ACK-nya sendiri --
-        // MISSION_COUNT yang menyusul tetap jadi penentu hasil akhir via MISSION_ACK).
         await this._sendFrame(45, [this.targetSystem, this.targetComponent], CRC_EXTRA[45]);
 
         const p = new Promise((resolve, reject) => {
@@ -1337,8 +1326,8 @@ class RadioMavlink {
                 }
             } else {
                 console.warn(
-                    `[RadioMavlink] Heartbeat dari sysid=${sysid}/compid=${compid} diabaikan ` +
-                    `(target saat ini: ${this.targetSystem}/${this.targetComponent})`
+                    // `[RadioMavlink] Heartbeat dari sysid=${sysid}/compid=${compid} diabaikan ` +
+                    // `(target saat ini: ${this.targetSystem}/${this.targetComponent})`
                 );
             }
         }

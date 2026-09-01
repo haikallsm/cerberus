@@ -6,11 +6,70 @@
 <title>Config - HAWKEYE</title>
 <link rel="stylesheet" href="./static/css/gcs.css"/>
 <link rel="stylesheet" href="./static/css/config.css"/>
+<style>
+/* Layout & Container Styling */
+.main { margin-left: 0; padding: 15px 25px; box-sizing: border-box; }
+.page-title { font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 12px; letter-spacing: 0.5px; }
+
+/* Tabs */
+.tabs { display: flex; gap: 8px; margin-bottom: 15px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 8px; }
+.tab-btn { background: #141b24; border: 1px solid #2a3847; color: #8fa0b5; padding: 8px 18px; font-size: 12px; font-weight: 600; border-radius: 4px; cursor: pointer; transition: all 0.2s ease; }
+.tab-btn:hover { background: #1c2633; color: #fff; }
+.tab-btn.active { background: #00bcd4; color: #0d131a; border-color: #00bcd4; font-weight: bold; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* Parameters Table UI */
+.param-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.param-search-box { display: flex; gap: 10px; align-items: center; }
+.param-search-input { width: 380px; padding: 8px 12px; background: #0c1015; border: 1px solid #24303f; border-radius: 4px; color: #fff; font-size: 12px; outline: none; transition: border 0.2s; }
+.param-search-input:focus { border-color: #00bcd4; }
+.param-counter-badge { font-size: 11px; color: #8fa0b5; background: #141b24; padding: 6px 12px; border-radius: 4px; border: 1px solid #24303f; }
+.param-counter-badge b { color: #00bcd4; }
+
+.param-table-container { height: calc(100vh - 220px); overflow-y: auto; border: 1px solid #202b38; background: #090d12; border-radius: 4px; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #d1d9e2; }
+.data-table thead th { position: sticky; top: 0; background: #131a22; color: #00bcd4; text-align: left; padding: 8px 10px; border-bottom: 2px solid #24303f; border-right: 1px solid #1a232e; font-weight: 600; z-index: 2; }
+.data-table tbody tr { border-bottom: 1px solid #141b24; }
+.data-table tbody tr:nth-child(even) { background: #0d1218; }
+.data-table tbody tr:hover { background: #17212c; }
+.data-table td { padding: 5px 10px; border-right: 1px solid #161f2a; vertical-align: middle; position: relative; }
+
+/* Value Input & Modified Highlight */
+.mp-val-input { width: 95px; background: #06090d; border: 1px solid #2a394a; color: #4caf50; font-weight: 600; padding: 4px 6px; border-radius: 3px; font-family: monospace; font-size: 11px; outline: none; transition: border 0.2s ease; }
+.mp-val-input:focus { border-color: #00bcd4; }
+.data-table tr.is-modified { background: rgba(255, 152, 0, 0.12) !important; }
+.data-table tr.is-modified .mp-val-input { border-color: #ff9800; background: #231808; color: #ffb74d; }
+
+/* Dropdown Options */
+.mp-select-opt { background: #06090d; border: 1px solid #24303f; color: #ffb74d; font-size: 11px; padding: 4px 6px; border-radius: 3px; max-width: 220px; width: 100%; outline: none; }
+.mp-select-opt:focus { border-color: #00bcd4; }
+
+/* Bitmask Popup Dropdown / Checklist Button Style (Ala Mission Planner) */
+.bitmask-btn { background: #141b24; border: 1px solid #2a3847; color: #ffb74d; font-size: 11px; padding: 5px 10px; border-radius: 4px; cursor: pointer; text-align: left; width: 100%; max-width: 220px; display: flex; justify-content: space-between; align-items: center; }
+.bitmask-btn:hover { background: #1c2633; border-color: #00bcd4; }
+.bitmask-popup { display: none; position: absolute; left: 0; top: 35px; background: #131a22; border: 1px solid #00bcd4; border-radius: 6px; padding: 12px; z-index: 999; box-shadow: 0 8px 24px rgba(0,0,0,0.8); width: 450px; }
+.bitmask-popup.show { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 12px; }
+.bitmask-item { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #d1d9e2; cursor: pointer; user-select: none; white-space: nowrap; }
+.bitmask-item input[type="checkbox"] { accent-color: #00bcd4; cursor: pointer; width: 13px; height: 13px; }
+
+/* Action Buttons */
+.param-actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+.btn { padding: 7px 15px; font-size: 11px; font-weight: 600; border-radius: 4px; cursor: pointer; border: none; transition: background 0.2s ease; }
+.btn-primary { background: #2e7d32; color: #fff; }
+.btn-primary:hover { background: #388e3c; }
+.btn-secondary { background: #1c2633; color: #c0cddb; border: 1px solid #2a3847; }
+.btn-secondary:hover { background: #273547; color: #fff; }
+.btn-warning { background: #ff9800; color: #fff; }
+.btn-warning:hover { background: #f57c00; }
+.btn-danger { background: #d32f2f; color: #fff; margin-left: auto; }
+.btn-danger:hover { background: #b71c1c; }
+</style>
 </head>
 
 <body style="background: transparent;">
 
-<div class="main" style="margin-left: 0;"> <!-- Hilangkan margin kiri navbar -->
+<div class="main">
     <div class="page-title">Configuration &amp; Tuning</div>
 
     <div class="tabs">
@@ -19,63 +78,61 @@
         <button class="tab-btn" onclick="switchTab('params')">Parameters</button>
     </div>
 
-    <!-- TAB PID (Konten sama persis dengan yang Anda miliki) -->
+    <!-- TAB 1: PID TUNING -->
     <div id="tab-pid" class="tab-panel active">
         <div class="pid-grid">
-            <!-- Isi Kartu-Kartu PID Anda -->
             <div class="pid-card">
                 <div class="pid-title">Rate Roll</div>
-                <div class="pid-row"><span class="pid-label">P</span><input type="number" id="rollP" class="pid-input" step="0.001" placeholder="0.000"></div>
-                <div class="pid-row"><span class="pid-label">I</span><input type="number" id="rollI" class="pid-input" step="0.001" placeholder="0.000"></div>
-                <div class="pid-row"><span class="pid-label">D</span><input type="number" id="rollD" class="pid-input" step="0.0001" placeholder="0.0000"></div>
-                <div class="pid-row"><span class="pid-label">IMAX</span><input type="number" id="rollIMax" class="pid-input" step="0.1" placeholder="0.0"></div>
+                <div class="pid-row"><span class="pid-label">P</span><input type="number" id="rollP" class="pid-input" step="0.001"></div>
+                <div class="pid-row"><span class="pid-label">I</span><input type="number" id="rollI" class="pid-input" step="0.001"></div>
+                <div class="pid-row"><span class="pid-label">D</span><input type="number" id="rollD" class="pid-input" step="0.0001"></div>
+                <div class="pid-row"><span class="pid-label">IMAX</span><input type="number" id="rollIMax" class="pid-input" step="0.1"></div>
             </div>
             
             <div class="pid-card">
                 <div class="pid-title">Rate Pitch</div>
-                <div class="pid-row"><span class="pid-label">P</span><input type="number" id="pitchP" class="pid-input" step="0.001" placeholder="0.000"></div>
-                <div class="pid-row"><span class="pid-label">I</span><input type="number" id="pitchI" class="pid-input" step="0.001" placeholder="0.000"></div>
-                <div class="pid-row"><span class="pid-label">D</span><input type="number" id="pitchD" class="pid-input" step="0.0001" placeholder="0.0000"></div>
-                <div class="pid-row"><span class="pid-label">IMAX</span><input type="number" id="pitchIMax" class="pid-input" step="0.1" placeholder="0.0"></div>
+                <div class="pid-row"><span class="pid-label">P</span><input type="number" id="pitchP" class="pid-input" step="0.001"></div>
+                <div class="pid-row"><span class="pid-label">I</span><input type="number" id="pitchI" class="pid-input" step="0.001"></div>
+                <div class="pid-row"><span class="pid-label">D</span><input type="number" id="pitchD" class="pid-input" step="0.0001"></div>
+                <div class="pid-row"><span class="pid-label">IMAX</span><input type="number" id="pitchIMax" class="pid-input" step="0.1"></div>
             </div>
 
             <div class="pid-card">
                 <div class="pid-title">Rate Yaw</div>
-                <div class="pid-row"><span class="pid-label">P</span><input type="number" id="yawP" class="pid-input" step="0.001" placeholder="0.000"></div>
-                <div class="pid-row"><span class="pid-label">I</span><input type="number" id="yawI" class="pid-input" step="0.001" placeholder="0.000"></div>
-                <div class="pid-row"><span class="pid-label">D</span><input type="number" id="yawD" class="pid-input" step="0.0001" placeholder="0.0000"></div>
-                <div class="pid-row"><span class="pid-label">IMAX</span><input type="number" id="yawIMax" class="pid-input" step="0.1" placeholder="0.0"></div>
+                <div class="pid-row"><span class="pid-label">P</span><input type="number" id="yawP" class="pid-input" step="0.001"></div>
+                <div class="pid-row"><span class="pid-label">I</span><input type="number" id="yawI" class="pid-input" step="0.001"></div>
+                <div class="pid-row"><span class="pid-label">D</span><input type="number" id="yawD" class="pid-input" step="0.0001"></div>
+                <div class="pid-row"><span class="pid-label">IMAX</span><input type="number" id="yawIMax" class="pid-input" step="0.1"></div>
             </div>
 
             <div class="pid-card">
                 <div class="pid-title">Waypoint Nav</div>
-                <div class="pid-row"><span class="pid-label">Speed</span><input type="number" id="wpnavSpeed" class="pid-input" step="1" placeholder="0"></div>
-                <div class="pid-row"><span class="pid-label">Radius</span><input type="number" id="wpnavRadius" class="pid-input" step="1" placeholder="0"></div>
-                <div class="pid-row"><span class="pid-label">Accel</span><input type="number" id="wpnavAccel" class="pid-input" step="1" placeholder="0"></div>
-                <div class="pid-row"><span class="pid-label">Speed Up</span><input type="number" id="wpnavSpeedUp" class="pid-input" step="1" placeholder="0"></div>
-                <div class="pid-row"><span class="pid-label">Speed Dn</span><input type="number" id="wpnavSpeedDn" class="pid-input" step="1" placeholder="0"></div>
+                <div class="pid-row"><span class="pid-label">Speed</span><input type="number" id="wpnavSpeed" class="pid-input" step="1"></div>
+                <div class="pid-row"><span class="pid-label">Radius</span><input type="number" id="wpnavRadius" class="pid-input" step="1"></div>
+                <div class="pid-row"><span class="pid-label">Accel</span><input type="number" id="wpnavAccel" class="pid-input" step="1"></div>
+                <div class="pid-row"><span class="pid-label">Speed Up</span><input type="number" id="wpnavSpeedUp" class="pid-input" step="1"></div>
+                <div class="pid-row"><span class="pid-label">Speed Dn</span><input type="number" id="wpnavSpeedDn" class="pid-input" step="1"></div>
             </div>
 
             <div class="pid-card">
                 <div class="pid-title">Throttle Accel</div>
-                <div class="pid-row"><span class="pid-label">P</span><input type="number" id="thrAccelP" class="pid-input" step="0.001" placeholder="0.000"></div>
-                <div class="pid-row"><span class="pid-label">I</span><input type="number" id="thrAccelI" class="pid-input" step="0.001" placeholder="0.000"></div>
-                <div class="pid-row"><span class="pid-label">D</span><input type="number" id="thrAccelD" class="pid-input" step="0.0001" placeholder="0.0000"></div>
-                <div class="pid-row"><span class="pid-label">IMAX</span><input type="number" id="thrAccelIMax" class="pid-input" step="0.1" placeholder="0.0"></div>
+                <div class="pid-row"><span class="pid-label">P</span><input type="number" id="thrAccelP" class="pid-input" step="0.001"></div>
+                <div class="pid-row"><span class="pid-label">I</span><input type="number" id="thrAccelI" class="pid-input" step="0.001"></div>
+                <div class="pid-row"><span class="pid-label">D</span><input type="number" id="thrAccelD" class="pid-input" step="0.0001"></div>
+                <div class="pid-row"><span class="pid-label">IMAX</span><input type="number" id="thrAccelIMax" class="pid-input" step="0.1"></div>
             </div>
         </div>
 
         <div class="param-actions">
             <button class="btn btn-primary" onclick="savePID()">Write PID to Drone</button>
             <button class="btn btn-secondary" onclick="refreshPIDUI()">Load from Parameters</button>
-            <button class="btn" style="background-color: #e53935; color: #fff; border: none; margin-left: auto;" onclick="resetPID()">Reset to Default</button>
+            <button class="btn btn-danger" onclick="resetPID()">Reset to Default</button>
         </div>
     </div>
 
-    <!-- FLIGHT MODES (Persis) -->
+    <!-- TAB 2: FLIGHT MODES -->
     <div id="tab-modes" class="tab-panel">
         <div class="flight-modes">
-            <!-- (Bagian Mode 1-6 Disederhanakan untuk contoh, paste utuh dari file asli Anda) -->
             <div class="mode-item"><span class="mode-label">Mode 1</span><select class="mode-select" id="mode1"><option>STABILIZE</option><option selected>ALT_HOLD</option><option>LOITER</option><option>RTL</option><option>AUTO</option><option>LAND</option><option>GUIDED</option></select></div>
             <div class="mode-item"><span class="mode-label">Mode 2</span><select class="mode-select" id="mode2"><option selected>STABILIZE</option><option>ALT_HOLD</option><option>LOITER</option><option>RTL</option><option>AUTO</option><option>LAND</option><option>GUIDED</option></select></div>
             <div class="mode-item"><span class="mode-label">Mode 3</span><select class="mode-select" id="mode3"><option>STABILIZE</option><option>ALT_HOLD</option><option selected>LOITER</option><option>RTL</option><option>AUTO</option><option>LAND</option><option>GUIDED</option></select></div>
@@ -88,49 +145,56 @@
         </div>
     </div>
 
-    <!-- PARAMETERS (Persis) -->
+    <!-- TAB 3: PARAMETERS -->
     <div id="tab-params" class="tab-panel">
-        <div class="search-bar">
-            <input type="text" id="paramSearch" placeholder="Search parameters..." onkeyup="filterParams()">
-            <button class="btn btn-secondary" onclick="loadParams()">Refresh</button>
+        <div class="param-topbar">
+            <div class="param-search-box">
+                <input type="text" id="paramSearch" class="param-search-input" placeholder="Cari nama command, deskripsi, atau opsi..." onkeyup="filterParams()">
+                <button class="btn btn-secondary" onclick="loadParams()">Refresh FC</button>
+            </div>
+            <div class="param-counter-badge">
+                Total: <b id="paramCountDisplay">0</b> Parameter
+            </div>
         </div>
+
         <div class="param-table-container">
             <table class="data-table">
                 <thead>
-                    <tr><th>Parameter</th><th>Value</th><th>Unit</th><th>Description</th></tr>
+                    <tr>
+                        <th style="width: 175px;">Command</th>
+                        <th style="width: 115px;">Value</th>
+                        <th style="width: 75px;">Units</th>
+                        <th style="width: 225px;">Options</th>
+                        <th>Desc</th>
+                    </tr>
                 </thead>
                 <tbody id="paramTable"></tbody>
             </table>
         </div>
+
         <div class="param-actions">
             <button class="btn btn-primary" onclick="saveParams()">Write to Drone</button>
             <button class="btn btn-secondary" onclick="exportParams()">Save to File</button>
             <input type="file" id="paramFileInput" accept=".csv,.param,.txt" style="display: none;" onchange="loadFromFile(event)">
-            <button class="btn btn-secondary" style="background-color: #ff9800; color: #fff; border: none;" onclick="document.getElementById('paramFileInput').click()">Load from File</button>
+            <button class="btn btn-warning" onclick="document.getElementById('paramFileInput').click()">Load from File</button>
         </div>
     </div>
 </div>
 
 <script>
-// const getBaseUrl = () => window.parent.gcsConnection?.baseUrl || 'http://localhost:5000';
+// ===== HELPER KONEKSI =====
+const getBaseUrl = () => window.parent.gcsConnection?.baseUrl || 'http://localhost:5000';
 const isConnected = () => {
-    if (window.parent?.mavFeatures) {
-        return (typeof window.parent.mavFeatures._radioActive === 'function' && window.parent.mavFeatures._radioActive()) ||
-               (typeof window.parent.mavFeatures._udpActive === 'function' && window.parent.mavFeatures._udpActive());
+    if (window.parent && window.parent.mavFeatures) {
+        if (typeof window.parent.mavFeatures._radioActive === 'function') {
+            return window.parent.mavFeatures._radioActive() || (window.parent.mavFeatures._udpActive ? window.parent.mavFeatures._udpActive() : false);
+        }
     }
-    return (
-        window.parent?.radioMavlink?.telemetry?.connected === true ||
-        window.parent?.udpMavlink?.telemetry?.connected === true
-    );
+    return window.parent?.gcsConnection?.isConnected || false;
 };
 
 const COPTER_MODE_MAP = {
-    'STABILIZE': 0, 'ACRO': 1, 'ALT_HOLD': 2, 'AUTO': 3, 'GUIDED': 4,
-    'LOITER': 5, 'RTL': 6, 'CIRCLE': 7, 'LAND': 9, 'OF_LOITER': 10,
-    'DRIFT': 11, 'SPORT': 13, 'FLIP': 14, 'AUTOTUNE': 15, 'POSHOLD': 16,
-    'BRAKE': 17, 'THROW': 18, 'AVOID_ADSB': 19, 'GUIDED_NOGPS': 20,
-    'SMART_RTL': 21, 'FLOWHOLD': 22, 'FOLLOW': 23, 'ZIGZAG': 24,
-    'SYSTEMID': 25, 'AUTOROTATE': 26, 'AUTO_RTL': 27
+    'STABILIZE': 0, 'ACRO': 1, 'ALT_HOLD': 2, 'AUTO': 3, 'GUIDED': 4, 'LOITER': 5, 'RTL': 6, 'CIRCLE': 7, 'LAND': 9, 'OF_LOITER': 10, 'DRIFT': 11, 'SPORT': 13, 'FLIP': 14, 'AUTOTUNE': 15, 'POSHOLD': 16, 'BRAKE': 17, 'THROW': 18, 'AVOID_ADSB': 19, 'GUIDED_NOGPS': 20, 'SMART_RTL': 21, 'FLOWHOLD': 22, 'FOLLOW': 23, 'ZIGZAG': 24, 'SYSTEMID': 25, 'AUTOROTATE': 26, 'AUTO_RTL': 27
 };
 
 function switchTab(tab) {
@@ -140,51 +204,7 @@ function switchTab(tab) {
     document.getElementById('tab-' + tab).classList.add('active');
 }
 
-async function RebootFC() {
-    if (confirm("Reboot Flight Controller now?")) {
-        try {
-            const res = await fetch(getBaseUrl() + '/command/reboot', {method: 'POST'});
-            const data = await res.json();
-            alert(data.status === 'success' ? "Flight Controller is rebooting..." : `Error: ${data.message}`);
-        } catch (e) {
-            alert(`Network error: ${e.message}`);
-        }
-    }
-}
-
-async function sendParamsToBackend(api_url, params, title, requireReboot = false) {
-    const btn = event.target;
-    const originalText = btn.innerText;
-    btn.innerText = "Writing & Verifying..."; btn.disabled = true;
-
-    try {
-        const res = await fetch(getBaseUrl() + api_url, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({params: params})
-        });
-        
-        const textResp = await res.text();
-        let data;
-        try { data = JSON.parse(textResp); } catch (err) { throw new Error("Server gagal memproses data."); }
-        
-        if (data.status === 'success' || data.status === 'partial') {
-            if (data.status === 'partial') {
-                const fails = data.results.fail.map(f => `${f.name}: ${f.reason}`).join('\n');
-                alert(`Beberapa nilai gagal diverifikasi:\n${fails}`);
-            }
-            if (requireReboot) await RebootFC();
-            else loadParams();
-        } else {
-            alert(`Error: ${data.message}`);
-        }
-    } catch (e) {
-        alert(`Error: ${e.message}`);
-    } finally {
-        btn.innerText = originalText; btn.disabled = false;
-    }
-}
-
+// ===== PID & MODES =====
 const PID_MAP = {
     'rollP': 'ATC_RAT_RLL_P', 'rollI': 'ATC_RAT_RLL_I', 'rollD': 'ATC_RAT_RLL_D', 'rollIMax': 'ATC_RAT_RLL_IMAX',
     'pitchP': 'ATC_RAT_PIT_P', 'pitchI': 'ATC_RAT_PIT_I', 'pitchD': 'ATC_RAT_PIT_D', 'pitchIMax': 'ATC_RAT_PIT_IMAX',
@@ -195,31 +215,42 @@ const PID_MAP = {
 };
 
 function refreshPIDUI() {
-    let dataFound = false;
+    // Ambil objek parameter langsung dari cache induk atau dari DOM
+    const params = window.parent.paramCache?.params || {};
+
     for (const [inputId, paramName] of Object.entries(PID_MAP)) {
-        const cell = document.getElementById('val_' + paramName);
         const inputEl = document.getElementById(inputId);
-        
-        if (cell && inputEl) {
-            let rawValue = parseFloat(cell.innerText);
-            let stepStr = inputEl.getAttribute('step') || '1';
-            let decimals = 0;
-            if (stepStr.includes('.')) {
-                decimals = stepStr.split('.')[1].length;
+        if (!inputEl) continue;
+
+        let rawValue = undefined;
+
+        // 1. Prioritaskan baca langsung dari memori/cache parameter FC
+        if (params[paramName] !== undefined) {
+            rawValue = parseFloat(params[paramName]);
+        } 
+        // 2. Fallback: ambil dari metadata default jika FC belum connect
+        else if (PARAM_METADATA && PARAM_METADATA[paramName]?.default !== undefined) {
+            rawValue = parseFloat(PARAM_METADATA[paramName].default);
+        }
+        // 3. Fallback: baca dari elemen input tabel jika sudah ada di DOM
+        else {
+            const valInput = document.getElementById('val_' + paramName);
+            if (valInput && valInput.value !== "") {
+                rawValue = parseFloat(valInput.value);
             }
-            
-            let formattedValue = parseFloat(rawValue.toFixed(decimals));
-            inputEl.value = formattedValue;
-            inputEl.dataset.original = formattedValue;
-            dataFound = true;
+        }
+
+        if (rawValue !== undefined && !isNaN(rawValue)) {
+            let stepStr = inputEl.getAttribute('step') || '1';
+            let decimals = stepStr.includes('.') ? stepStr.split('.')[1].length : 0;
+            inputEl.value = parseFloat(rawValue.toFixed(decimals));
+            inputEl.dataset.original = inputEl.value;
         }
     }
-    const warning = document.getElementById('pidWarning');
-    if (warning) warning.style.display = dataFound ? 'none' : 'block';
 }
 
 async function savePID() {
-    if (!isConnected()) return alert("Hubungkan ke FC terlebih dahulu!");
+    if (!isConnected()) return alert("Hubungkan ke Flight Controller terlebih dahulu!");
     const paramsToSend = [];
     for (const [inputId, paramName] of Object.entries(PID_MAP)) {
         const inputEl = document.getElementById(inputId);
@@ -231,242 +262,344 @@ async function savePID() {
             paramsToSend.push({ name: paramName, value: newValue });
         }
     }
-    if (paramsToSend.length === 0) return alert("Tidak ada perubahan PID.");
+    if (paramsToSend.length === 0) return alert("Tidak ada perubahan nilai PID.");
     if (!confirm(`Kirim ${paramsToSend.length} parameter PID ke drone?`)) return;
     
-    const btn = event.target;
-    const originalText = btn.innerText;
-    btn.innerText = "Writing..."; btn.disabled = true;
+    const btn = event.target; const originalText = btn.innerText; btn.innerText = "Writing..."; btn.disabled = true;
     try {
-        const mav = window.parent.mavFeatures;
-        let failed = [];
+        const mav = window.parent.mavFeatures; let failed = [];
         for (const p of paramsToSend) {
-            const response = await mav.setParam(p.name, p.value);
-            if (!response || !response.ok || Math.abs(response.value - p.value) > 0.0001) {
-                failed.push(p.name);
-            } else {
-
-            }
+            const ok = await mav.setParam(p.name, p.value);
+            if (!ok) failed.push(p.name);
         }
-        if (failed.length === 0) {
-            alert("Semua PID berhasil ditulis!");
-        } else {
-            alert("Gagal menulis: " + failed.join(', '));
-        }
-        btn.innerText = "Refreshing...";
+        if (failed.length === 0) alert("Semua nilai PID berhasil disimpan!");
+        else alert("Gagal menulis: " + failed.join(', '));
         await loadParams();
-    } catch (err) {
-        alert("Error: " + err.message);
-    } finally {
-        btn.innerText = originalText; btn.disabled = false;
-    }
+    } catch (err) { alert("Error: " + err.message); } finally { btn.innerText = originalText; btn.disabled = false; }
 }
 
 async function saveModes() {
-    if (!isConnected()) return alert("Not connected to FC");
+    if (!isConnected()) return alert("Hubungkan ke FC terlebih dahulu!");
     const params = [];
     for (let i = 1; i <= 6; i++) {
         const modeStr = document.getElementById('mode' + i).value;
         const modeVal = COPTER_MODE_MAP[modeStr] !== undefined ? COPTER_MODE_MAP[modeStr] : 0;
         params.push({ name: 'FLTMODE' + i, value: modeVal });
     }
-    const btn = event.target;
-    const originalText = btn.innerText;
-    btn.innerText = "Writing..."; btn.disabled = true;
+    const btn = event.target; const originalText = btn.innerText; btn.innerText = "Writing..."; btn.disabled = true;
     try {
-        const mav = window.parent.mavFeatures;
-        let failed = [];
+        const mav = window.parent.mavFeatures; let failed = [];
         for (const p of params) {
-            const response = await mav.setParam(p.name, p.value);
-            if (!response || !response.ok) {
-                failed.push(p.name);
-            } else {
-                if (window.parent.paramCache?.params) {
-                    window.parent.paramCache.params[p.name] = response.value;
-                }
-            }
+            const ok = await mav.setParam(p.name, p.value);
+            if (!ok) failed.push(p.name);
+            else if (window.parent.paramCache?.params) window.parent.paramCache.params[p.name] = p.value;
         }
-        if (failed.length === 0) {
-            alert("Flight modes saved!");
-            updateParamTableValues(window.parent.paramCache.params);
-        } else {
-            alert("Gagal menyimpan mode: " + failed.join(', '));
-        }
-    } catch (err) {
-        alert("Error: " + err.message);
-    } finally {
-        btn.innerText = originalText; btn.disabled = false;
+        if (failed.length === 0) { alert("Flight modes berhasil disimpan!"); updateParamTableValues(window.parent.paramCache.params); }
+        else alert("Gagal menyimpan mode: " + failed.join(', '));
+    } catch (err) { alert("Error: " + err.message); } finally { btn.innerText = originalText; btn.disabled = false; }
+}
+
+// ===============================================
+// PARAMETERS ENGINE (FLATTEN & POPUP CHECKBOX GRID)
+// ===============================================
+let PARAM_METADATA = {}; 
+
+const KNOWN_BITMASKS = {
+    "ARMING_CHECK": {
+        "0": "All",
+        "1": "Barometer",
+        "2": "Compass",
+        "3": "GPS lock",
+        "4": "INS",
+        "5": "Parameters",
+        "6": "RC Channels",
+        "7": "Board voltage",
+        "8": "Battery Level",
+        "9": "Logging Available",
+        "10": "Hardware safety switch",
+        "11": "GPS Configuration",
+        "12": "System",
+        "13": "Mission",
+        "14": "Rangefinder",
+        "15": "Camera",
+        "16": "AuxAuth",
+        "17": "VisualOdometry",
+        "18": "FFT"
     }
-}
+};
 
-async function saveParams() {
-    if (!isConnected()) return alert("Not connected to FC");
-    const params = [];
-    document.querySelectorAll('#paramTable tr').forEach(row => {
-        const cells = row.querySelectorAll('td');
-        if (cells.length === 4) {
-            const key = cells[0].innerText.trim();
-            const valCell = cells[1];
-            let currentVal = parseFloat(valCell.innerText);
-            let originalVal = parseFloat(valCell.dataset.original);
-            if (!isNaN(currentVal) && (isNaN(originalVal) || Math.abs(currentVal - originalVal) > 0.000001)) {
-                params.push({ name: key, value: currentVal });
-            }
+function flattenMetadata(obj, target = {}) {
+    if (!obj || typeof obj !== 'object') return target;
+
+    for (const [key, val] of Object.entries(obj)) {
+        if (!val) continue;
+
+        if (typeof val === 'object' && (val.Description || val.DisplayName || val.Units || val.Values || val.Bitmask)) {
+            target[key] = {
+                unit: val.Units || '-',
+                desc: val.DisplayName || val.Description || 'ArduPilot Parameter',
+                default: val.default !== undefined ? val.default : 0,
+                values: val.Values || val.Bitmask || {},
+                rawBitmask: val.Bitmask || null
+            };
+        } else if (typeof val === 'object') {
+            flattenMetadata(val, target);
         }
-    });
-    if (params.length === 0) return alert("Tidak ada perubahan parameter.");
-    if (!confirm(`Kirim ${params.length} parameter ke drone?`)) return;
-    
-    const btn = event.target;
-    const originalText = btn.innerText;
-    btn.innerText = "Writing..."; btn.disabled = true;
-    try {
-        const mav = window.parent.mavFeatures;
-        let failed = [];
-        for (const p of params) {
-            const response = await mav.setParam(p.name, p.value);
-            if (!response || !response.ok) {
-                failed.push(p.name);
-            } else {
-                if (window.parent.paramCache?.params) {
-                    window.parent.paramCache.params[p.name] = response.value;
-                }
-            }
-        }
-        if (failed.length === 0) {
-            alert("Semua parameter berhasil ditulis!");
-            updateParamTableValues(window.parent.paramCache.params);
-            refreshPIDUI();
-        } else {
-            alert("Gagal menulis: " + failed.join(', '));
-        }
-    } catch (err) {
-        alert("Error: " + err.message);
-    } finally {
-        btn.innerText = originalText; btn.disabled = false;
     }
+    return target;
 }
 
-function renderParamRows(paramsObj) {
-    const tbody = document.getElementById('paramTable');
-    if (!tbody) return;
-    tbody.innerHTML = ''; 
-    const fragment = document.createDocumentFragment();
-    const keys = Object.keys(paramsObj).sort(); 
-
-    keys.forEach(key => {
-        const val = paramsObj[key];
-        const tr = document.createElement('tr');
-        tr.id = 'row_' + key;
-        tr.innerHTML = `
-            <td style="font-weight: bold;">${key}</td>
-            <td id="val_${key}" data-original="${val}" contenteditable="true" style="background-color: rgba(0, 188, 212, 0.1); border: 1px dotted #00bcd4; cursor: text; padding: 4px;">${val}</td>
-            <td>-</td>
-            <td id="desc_${key}"><span style="font-size: 10px; color: #666;">(Default List)</span></td>
-        `;
-        fragment.appendChild(tr);
-    });
-    tbody.appendChild(fragment);
-}
-
-let DEFAULT_FULL_PARAMS = {}; 
 async function initParamTable() {
-    // 1. Load parameter default dari file JSON
     try {
-        const response = await fetch('./static/params.json?v=' + Date.now()); // Anti-cache browser
+        const response = await fetch('./static/params_metadata.json?v=' + Date.now());
         if (response.ok) {
-            DEFAULT_FULL_PARAMS = await response.json();
+            const rawData = await response.json();
+            PARAM_METADATA = flattenMetadata(rawData);
+            console.log(`[Config] Total parameter berhasil dimuat: ${Object.keys(PARAM_METADATA).length}`);
         }
-    } catch (error) {
-        console.error("Error memuat parameter bawaan:", error);
+    } catch (error) { 
+        console.warn("[Config] Gagal memuat metadata JSON:", error); 
     }
     
-    // Render tabel awal menggunakan default JSON
-    renderParamRows(DEFAULT_FULL_PARAMS);
-
-    // 2. Jika Cache Global sudah selesai ditarik (koneksi terjadi sebelum tab Config dibuka)
-    if (window.parent.paramCache?.loaded) {
+    if (window.parent.paramCache && window.parent.paramCache.loaded) {
         updateParamTableValues(window.parent.paramCache.params);
-        refreshPIDUI(); // Auto-populate ke Tab PID Tuning
+        refreshPIDUI();
+    } else {
+        if (Object.keys(PARAM_METADATA).length > 0) renderAllMetadata();
     }
 }
 
-// 3. Listener: Jika cache ditarik saat tab Config sedang terbuka, langsung update UI!
-window.addEventListener('paramCacheUpdated', () => {
-    if (window.parent.paramCache?.loaded) {
-        updateParamTableValues(window.parent.paramCache.params);
-        refreshPIDUI(); // Update juga Tab PID secara instan
+function resolveMetadata(key) {
+    let meta = { unit: "-", desc: "ArduPilot Parameter", values: {}, rawBitmask: null };
+
+    if (PARAM_METADATA && PARAM_METADATA[key]) {
+        meta.unit = PARAM_METADATA[key].unit || '-';
+        meta.desc = PARAM_METADATA[key].desc || 'ArduPilot Parameter';
+        meta.values = PARAM_METADATA[key].values || {};
+        meta.rawBitmask = PARAM_METADATA[key].rawBitmask || null;
     }
+
+    if (!meta.rawBitmask && KNOWN_BITMASKS[key]) {
+        meta.rawBitmask = KNOWN_BITMASKS[key];
+        if (meta.desc === "ArduPilot Parameter") meta.desc = "Pre-ARM Safety Checks Enabled";
+    }
+
+    return meta;
+}
+
+function toggleBitmaskPopup(event, key) {
+    event.stopPropagation();
+    document.querySelectorAll('.bitmask-popup').forEach(p => {
+        if (p.id !== 'popup_' + key) p.classList.remove('show');
+    });
+    const popup = document.getElementById('popup_' + key);
+    if (popup) popup.classList.toggle('show');
+}
+
+document.addEventListener('click', () => {
+    document.querySelectorAll('.bitmask-popup').forEach(p => p.classList.remove('show'));
 });
+
+function getParamRowHTML(key, val) {
+    const meta = resolveMetadata(key);
+    let optionsHtml = '<span style="color:#555;">-</span>';
+    const optKeys = Object.keys(meta.values);
+    
+    const isRealBitmask = meta.rawBitmask && typeof meta.rawBitmask === 'object';
+
+    if (isRealBitmask) {
+        const currentVal = parseInt(val) || 0;
+        
+        optionsHtml = `
+            <div style="position:relative;">
+                <button type="button" class="bitmask-btn" onclick="toggleBitmaskPopup(event, '${key}')">
+                    <span>Bitmask [Value: ${currentVal}]</span>
+                    <span>▼</span>
+                </button>
+                <div class="bitmask-popup" id="popup_${key}" onclick="event.stopPropagation()">`;
+        
+        for (const [bitStr, label] of Object.entries(meta.rawBitmask)) {
+            const bitPos = parseInt(bitStr);
+            const bitMaskValue = (bitPos === 0 && (key === "ARMING_CHECK" || key === "ARMING_SKIPCHK")) ? 1 : (1 << bitPos);
+            const isChecked = (currentVal & bitMaskValue) !== 0 || (bitPos === 0 && currentVal === 0);
+            
+            optionsHtml += `
+                <label class="bitmask-item">
+                    <input type="checkbox" value="${bitPos}" data-bitmask-val="${bitMaskValue}" ${isChecked ? 'checked' : ''} 
+                           onchange="onBitmaskChange('${key}')">
+                    <span>${label}</span>
+                </label>`;
+        }
+        optionsHtml += `</div></div>`;
+    } 
+    else if (optKeys.length > 0) {
+        optionsHtml = `<select class="mp-select-opt" id="opt_${key}" onchange="onOptionSelectChange('${key}', this.value)">`;
+        optionsHtml += `<option value="">-- Options --</option>`;
+        optKeys.forEach(optVal => {
+            const selected = String(optVal) === String(Math.round(val)) ? 'selected' : '';
+            optionsHtml += `<option value="${optVal}" ${selected}>${optVal}: ${meta.values[optVal]}</option>`;
+        });
+        optionsHtml += `</select>`;
+    }
+
+    return `
+        <tr id="row_${key}">
+            <td style="font-weight: bold; font-family: monospace; color: #fff;">${key}</td>
+            <td><input type="number" step="any" class="mp-val-input" id="val_${key}" data-original="${val}" value="${val}" oninput="onValueInputChange('${key}', this.value)"></td>
+            <td id="unit_${key}" style="color: #00bcd4;">${meta.unit}</td>
+            <td id="opt_container_${key}">${optionsHtml}</td>
+            <td id="desc_${key}" style="font-size: 11px; color: #ccc; line-height: 1.4;">${meta.desc}</td>
+        </tr>`;
+}
+
+function onBitmaskChange(key) {
+    const popup = document.getElementById('popup_' + key);
+    const inputVal = document.getElementById('val_' + key);
+    if (!popup || !inputVal) return;
+
+    let accumulatedValue = 0;
+    const checkboxes = popup.querySelectorAll('input[type="checkbox"]');
+    
+    checkboxes.forEach(cb => {
+        if (cb.checked) {
+            const bitPos = parseInt(cb.value);
+            const maskVal = (bitPos === 0 && (key === "ARMING_CHECK" || key === "ARMING_SKIPCHK")) ? 1 : (1 << bitPos);
+            accumulatedValue |= maskVal;
+        }
+    });
+
+    inputVal.value = accumulatedValue;
+    onValueInputChange(key, accumulatedValue);
+}
+
+function renderAllMetadata() {
+    const tbody = document.getElementById('paramTable');
+    const countDisplay = document.getElementById('paramCountDisplay');
+    if (!tbody) return;
+    
+    if (countDisplay) countDisplay.innerHTML = "<span style='color: #ff9800;'>Memproses data...</span>";
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 30px; color: #ff9800; font-weight: bold;">Merender parameter dari metadata JSON...</td></tr>`;
+
+    setTimeout(() => {
+        let htmlBuffer = "";
+        const keys = Object.keys(PARAM_METADATA).sort();
+        
+        for (let i = 0; i < keys.length; i++) {
+            const key = keys[i];
+            const val = PARAM_METADATA[key].default !== undefined ? PARAM_METADATA[key].default : 0;
+            htmlBuffer += getParamRowHTML(key, val);
+        }
+        
+        tbody.innerHTML = htmlBuffer;
+        if (countDisplay) countDisplay.innerText = keys.length;
+    }, 50);
+}
 
 function updateParamTableValues(paramsObj) {
     if (!paramsObj || Object.keys(paramsObj).length === 0) return;
-    for (const [key, value] of Object.entries(paramsObj)) {
-        const cell = document.getElementById('val_' + key);
-        if (cell) {
-            cell.innerText = value; cell.dataset.original = value; 
-            cell.style.backgroundColor = 'rgba(76, 175, 80, 0.15)'; cell.style.border = '1px solid #4caf50';
-            const desc = document.getElementById('desc_' + key);
-            if (desc) desc.innerHTML = '<span style="font-size: 10px; color: #4caf50; font-weight: bold;">(Loaded from FC)</span>';
-        } else {
-            appendNewParamRow(key, value);
-        }
-    }
-}
-
-function appendNewParamRow(key, val) {
+    
     const tbody = document.getElementById('paramTable');
-    if (!tbody) return;
-    const tr = document.createElement('tr');
-    tr.id = 'row_' + key;
-    tr.innerHTML = `
-        <td style="font-weight: bold;">${key}</td>
-        <td id="val_${key}" data-original="${val}" contenteditable="true" style="background-color: rgba(76, 175, 80, 0.15); border: 1px solid #4caf50; cursor: text; padding: 4px;">${val}</td>
-        <td>-</td>
-        <td id="desc_${key}"><span style="font-size: 10px; color: #4caf50; font-weight: bold;">(Loaded from FC)</span></td>
-    `;
-    tbody.appendChild(tr);
-}
+    const countDisplay = document.getElementById('paramCountDisplay');
+    
+    if (countDisplay) countDisplay.innerHTML = "<span style='color: #00bcd4;'>Sinkronisasi FC...</span>";
 
-async function fetchParameters() {
-    try {
-        const mav = window.parent.mavFeatures;
-        const params = await mav.getAllParams();
-        updateParamTableValues(params);
-        return Object.keys(params).length;
-    } catch (e) {
-        console.error("Gagal ambil parameter:", e);
-        return 0;
-    }
+    setTimeout(() => {
+        let htmlBuffer = "";
+        const keys = Object.keys(paramsObj).sort();
+        
+        for (let i = 0; i < keys.length; i++) {
+            const key = keys[i];
+            const val = paramsObj[key];
+            htmlBuffer += getParamRowHTML(key, val);
+        }
+
+        if (tbody) tbody.innerHTML = htmlBuffer;
+        if (countDisplay) countDisplay.innerText = keys.length;
+    }, 50);
 }
 
 async function loadParams() {
-    if (!isConnected()) return alert("Hubungkan ke FC terlebih dahulu!");
+    if (!isConnected()) return alert("Hubungkan ke Flight Controller terlebih dahulu!");
+    const countDisplay = document.getElementById('paramCountDisplay');
+    if (countDisplay) countDisplay.innerHTML = "<span style='color: #00bcd4;'>Membaca dari FC...</span>";
+
+    try {
+        await window.parent.loadAllParams(); 
+        if (window.parent.paramCache?.loaded) {
+            updateParamTableValues(window.parent.paramCache.params);
+            refreshPIDUI();
+        }
+    } catch (e) { console.error("Gagal load params dari FC:", e); }
+}
+
+function onValueInputChange(key, newVal) {
+    const row = document.getElementById('row_' + key);
+    const input = document.getElementById('val_' + key);
+    const optSelect = document.getElementById('opt_' + key);
+    if (!input || !row) return;
+
+    const original = parseFloat(input.dataset.original);
+    const current = parseFloat(newVal);
+
+    if (!isNaN(current) && Math.abs(current - original) > 0.000001) row.classList.add('is-modified');
+    else row.classList.remove('is-modified');
+
+    if (optSelect && !isNaN(current)) optSelect.value = String(Math.round(current));
+}
+
+function onOptionSelectChange(key, selectedVal) {
+    if (selectedVal === "") return;
+    const input = document.getElementById('val_' + key);
+    if (input) { input.value = selectedVal; onValueInputChange(key, selectedVal); }
+}
+
+async function saveParams() {
+    if (!isConnected()) return alert("Hubungkan ke Flight Controller terlebih dahulu!");
+    const params = [];
+    document.querySelectorAll('.mp-val-input').forEach(input => {
+        const key = input.id.replace('val_', '');
+        const currentVal = parseFloat(input.value);
+        const originalVal = parseFloat(input.dataset.original);
+        if (!isNaN(currentVal) && (isNaN(originalVal) || Math.abs(currentVal - originalVal) > 0.000001)) {
+            params.push({ name: key, value: currentVal });
+        }
+    });
+
+    if (params.length === 0) return alert("Tidak ada parameter yang diubah.");
+    if (!confirm(`Kirim ${params.length} parameter baru ke drone?`)) return;
     
-    await window.parent.loadAllParams(); 
-    
-    if (window.parent.paramCache?.loaded) {
-        updateParamTableValues(window.parent.paramCache.params);
-        refreshPIDUI();
-    }
+    const btn = event.target; const originalText = btn.innerText; btn.innerText = "Writing..."; btn.disabled = true;
+    try {
+        const mav = window.parent.mavFeatures; let failed = [];
+        for (const p of params) {
+            const ok = await mav.setParam(p.name, p.value);
+            if (!ok) failed.push(p.name);
+            else {
+                const input = document.getElementById('val_' + p.name);
+                const row = document.getElementById('row_' + p.name);
+                if (input) input.dataset.original = p.value;
+                if (row) row.classList.remove('is-modified');
+                if (window.parent.paramCache?.params) window.parent.paramCache.params[p.name] = p.value;
+            }
+        }
+        if (failed.length === 0) { alert("Semua parameter berhasil ditulis!"); refreshPIDUI(); }
+        else alert("Gagal menulis: " + failed.join(', '));
+    } catch (err) { alert("Error: " + err.message); } finally { btn.innerText = originalText; btn.disabled = false; }
 }
 
 function loadFromFile(event) {
     const file = event.target.files[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = function(e) {
-        const text = e.target.result;
-        const lines = text.split('\n');
+        const lines = e.target.result.split('\n');
         const NON_PARAM_KEYS = new Set(['FORMAT_VERSION']);
         let changeCount = 0;
-
+        const tbody = document.getElementById('paramTable');
 
         lines.forEach(line => {
             line = line.trim();
             if (line.startsWith('#') || line.length === 0) return;
-
             let key, value;
             if (line.includes(',')) {
                 const parts = line.split(','); key = parts[0].trim(); value = parseFloat(parts[1].trim());
@@ -477,34 +610,61 @@ function loadFromFile(event) {
             }
 
             if (key && NON_PARAM_KEYS.has(key.toUpperCase())) return;
-
             if (key && !isNaN(value)) {
-                const cell = document.getElementById('val_' + key);
-                if (cell) {
-                    const originalVal = parseFloat(cell.dataset.original);
-                    if (originalVal !== value) {
-                        cell.innerText = value; cell.style.backgroundColor = 'rgba(255, 152, 0, 0.2)'; cell.style.border = '1px solid #ff9800';
-                        const desc = document.getElementById('desc_' + key);
-                        if(desc) desc.innerHTML = '<span style="color:#ff9800; font-weight:bold;">(Modified from File)</span>';
-                        changeCount++;
-                    }
-                } else { appendNewParamRow(key, value); changeCount++; }
+                const input = document.getElementById('val_' + key);
+                if (input) {
+                    input.value = value; onValueInputChange(key, value); changeCount++;
+                } else { 
+                    if(tbody) { tbody.insertAdjacentHTML('beforeend', getParamRowHTML(key, value)); onValueInputChange(key, value); changeCount++; }
+                }
             }
         });
-
         document.getElementById('paramFileInput').value = ''; 
-        if (changeCount > 0) alert(`File berhasil dimuat! Ditemukan ${changeCount} angka yang berbeda (ditandai warna oranye). Klik "Write to Drone" untuk menyimpan.`);
+        if (changeCount > 0) alert(`File berhasil dimuat! Ditemukan ${changeCount} nilai yang diubah. Klik "Write to Drone" untuk menyimpan.`);
+        document.getElementById('paramCountDisplay').innerText = document.querySelectorAll('#paramTable tr').length;
     };
     reader.readAsText(file);
 }
 
+let searchTimeout = null;
+
 function filterParams() {
-    const query = document.getElementById('paramSearch').value.toLowerCase();
-    const rows = document.getElementById('paramTable').getElementsByTagName('tr');
-    for(let i = 0; i < rows.length; i++) {
-        const paramName = rows[i].cells[0].innerText.toLowerCase();
-        rows[i].style.display = paramName.includes(query) ? '' : 'none';
-    }
+    clearTimeout(searchTimeout);
+    
+    searchTimeout = setTimeout(() => {
+        const query = document.getElementById('paramSearch').value.toLowerCase().trim();
+        const rows = document.getElementById('paramTable').getElementsByTagName('tr');
+        let visible = 0;
+        
+        requestAnimationFrame(() => {
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                
+                // Pastikan baris memiliki kolom (mengabaikan pesan loading colspan)
+                if (row.cells.length > 0) {
+                    
+                    // CACHING: Ambil teks HANYA dari kolom pertama (index 0) yaitu Command
+                    if (!row.searchData) {
+                        row.searchData = row.cells[0].textContent.toLowerCase();
+                    }
+                    
+                    const matches = row.searchData.includes(query);
+                    const isCurrentlyHidden = row.style.display === 'none';
+                    
+                    if (matches && isCurrentlyHidden) {
+                        row.style.display = '';
+                    } else if (!matches && !isCurrentlyHidden) {
+                        row.style.display = 'none';
+                    }
+                    
+                    if (matches) visible++;
+                }
+            }
+            
+            const countDisplay = document.getElementById('paramCountDisplay');
+            if (countDisplay) countDisplay.innerText = visible;
+        });
+    }, 150);
 }
 
 function resetPID() {
@@ -513,10 +673,7 @@ function resetPID() {
         for (const [inputId, paramName] of Object.entries(PID_MAP)) {
             const inputEl = document.getElementById(inputId);
             if (inputEl && inputEl.dataset.original !== undefined) {
-                inputEl.value = inputEl.dataset.original;
-                inputEl.style.backgroundColor = '';
-                inputEl.style.borderColor = '#00e676';
-                restored++;
+                inputEl.value = inputEl.dataset.original; restored++;
             }
         }
         alert(restored > 0 ? "Sliders restored to default values" : "No sliders were restored");
@@ -524,33 +681,30 @@ function resetPID() {
 }
 
 function exportParams() {
-    let csv = 'Parameter,Value,Unit,Description\n';
+    let csv = 'Command,Value,Units,Options,Description\n';
     document.querySelectorAll('#paramTable tr').forEach(row => {
-        const c = row.querySelectorAll('td');
-        if (c.length === 4) csv += `${c[0].innerText},${c[1].innerText},${c[2].innerText},${c[3].innerText}\n`;
+        if(row.style.display === 'none') return;
+        const key = row.cells[0]?.innerText.trim();
+        const val = row.querySelector('.mp-val-input')?.value.trim();
+        const unit = row.cells[2]?.innerText.trim();
+        const opt = row.querySelector('.mp-select-opt')?.value || '';
+        const desc = row.cells[4]?.innerText.trim();
+        if (key && val !== undefined) csv += `"${key}","${val}","${unit}","${opt}","${desc}"\n`;
     });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    a.download = 'hawkeye_parameters.csv';
-    a.click();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = 'hawkeye_parameters.csv'; a.click();
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
     await initParamTable();
-
-    if (window.parent.paramCache && window.parent.paramCache.loaded) {
-        updateParamTableValues(window.parent.paramCache.params);
-        refreshPIDUI(); // Otomatis isi nilai PID
-    }
-
-    window.addEventListener('paramCacheUpdated', () => {
-        if (window.parent.paramCache && window.parent.paramCache.loaded) {
-            updateParamTableValues(window.parent.paramCache.params);
-            refreshPIDUI(); // Otomatis isi nilai PID
-        }
-    });
 });
 
+window.addEventListener('paramCacheUpdated', () => {
+    if (window.parent.paramCache && window.parent.paramCache.loaded) {
+        updateParamTableValues(window.parent.paramCache.params);
+        refreshPIDUI();
+    }
+});
 </script>
 </body>
 </html>

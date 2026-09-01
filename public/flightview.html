@@ -9,13 +9,19 @@
 <link rel="stylesheet" href="./static/css/flightview.css"/>
 </head>
 
-<body style="background: transparent;">
+<body class="transparent-bg">
 
-<div class="main" style="margin-left: 0;">
+<div class="main no-margin">
     <div id="map"></div>
 
+    <!-- Kontainer Pesan Error HUD (Di bawah Navbar) -->
+    <div id="hudErrorContainer" aria-live="polite"></div>
+
     <div class="telemetry-panel">
-        <div class="ah-container">
+        <div class="ah-container ah-container-relative">
+            <!-- Teks [SAFE] Overlay di tengah gyro -->
+            <div id="horizonSafeOverlay">[SAFE]</div>
+
             <canvas id="gyroCanvas" width="200" height="100"></canvas>
             <div class="ah-overlay">
                 <div class="ah-bank-scale" id="bankScale"></div>
@@ -23,9 +29,8 @@
             </div>
         </div>
 
-        <div id="page-telems" class="telem-page" style="display: block">
-
-            <div class="telem-tabs" style="margin-bottom: 8px;">
+        <div id="page-telems" class="telem-page" >
+            <div class="telem-tabs" >
                 <button class="telem-tab-btn active" onclick="switchTelemPage('telems', this)">Quick</button>
                 <button class="telem-tab-btn" onclick="switchTelemPage('actions', this)">Actions</button>
             </div>
@@ -45,7 +50,7 @@
                 </div>
                 <div class="telemetry-item">
                     <div class="telemetry-label">Lat / Lon</div>
-                    <div id="coords" class="telemetry-value" style="font-size: 10px;">0.00000, 0.00000</div>
+                    <div id="coords" class="telemetry-value coords-small">0.00000, 0.00000</div>
                 </div>
                 <div class="telemetry-item">
                     <div class="telemetry-label">Speed</div>
@@ -71,12 +76,10 @@
                     <div class="telemetry-label">Armed</div>
                     <div id="armGridStatus" class="telemetry-value">DISARMED</div>
                 </div>
-                
                 <div class="telemetry-item">
                     <div class="telemetry-label">Vehicle Type</div>
                     <div id="vehicleType" class="telemetry-value">UNKNOWN</div>
                 </div>
-    
                 <div class="telemetry-item" id="rangefinderItem">
                     <div class="telemetry-label">RangeFinder</div>
                     <div id="rangefinderDistance" class="telemetry-value">-- m</div>
@@ -85,27 +88,26 @@
             </div>
     
             <!-- GPS Status -->
-            <div style="margin-top: 6px; padding: 6px; background: #0a0a1a; border-radius: 2px; border-left: 3px solid #2196f3;">
-                <div style="font-size: 10px; color: #888; margin-bottom: 4px;">GPS</div>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <div id="gpsIndicator" style="width: 8px; height: 8px; border-radius: 50%; background: #f44336;"></div>
-                    <div style="flex: 1;">
-                        <div id="gpsFix" style="font-size: 10px; color: #ccc;">No Fix</div>
-                        <div id="gpsSats" style="font-size: 9px; color: #888;">0 satellites</div>
+            <div class="gps-status-container">
+                <div class="gps-status-title">GPS</div>
+                <div class="gps-status-row">
+                    <div id="gpsIndicator" class="gps-indicator"></div>
+                    <div class="flex-1">
+                        <div id="gpsFix" class="gps-fix-text">No Fix</div>
+                        <div id="gpsSats" class="gps-sats-text">0 satellites</div>
                     </div>
                 </div>
             </div>
     
-            <div style="border-top: 1px solid #444; margin-top: 8px; padding-top: 8px; font-size: 9px; color: #888;">
-                <div> <span id="msgCount">0</span> msgs</div>
-                <div> <span id="errorCount">0</span> errors</div>
+            <div class="stats-container">
+                <div><span id="msgCount">0</span> msgs</div>
+                <div><span id="errorCount">0</span> errors</div>
             </div>
         </div>
 
-        <!-- PAGE 2: ACTIONS (Tombol Perintah) -->
-        <div id="page-actions" class="telem-page" style="display: none; padding-top: 10px;">
-            
-            <div class="telem-tabs" style="margin-bottom: 8px;">
+        <!-- PAGE 2: ACTIONS -->
+        <div id="page-actions" class="telem-page" style="display: none;" class="action-page-wrapper">
+            <div class="telem-tabs" >
                 <button class="telem-tab-btn active" onclick="switchTelemPage('telems', this)">Quick</button>
                 <button class="telem-tab-btn" onclick="switchTelemPage('actions', this)">Actions</button>
             </div>
@@ -116,14 +118,13 @@
                 <button class="action-btn btn-danger" onclick="doAction('reboot')">REBOOT</button>
                 <button class="action-btn btn-rover" onclick="doAction('rover')">ROVER</button>
                 <button class="action-btn btn-copter" onclick="doAction('copter')">COPTER</button>
-                
                 <button class="action-btn" onclick="doAction('takeoff')">TAKEOFF</button>
                 <button class="action-btn" onclick="doAction('land')">LAND</button>
                 <button class="action-btn btn-rtl" onclick="doAction('rtl')">RTL</button>
             </div>
 
-            <div class="action-section-title" style="margin-top: 12px;">Flight Modes</div>
-            <div style="display: flex; gap: 8px;">
+            <div class="action-section-title">Flight Modes</div>
+            <div class="action-select-row">
                 <select id="flightModeSelect" class="action-select">
                     <option value="0">STABILIZE</option>
                     <option value="2">ALT_HOLD</option>
@@ -131,23 +132,21 @@
                     <option value="4">GUIDED</option>
                     <option value="5">LOITER</option>
                 </select>
-                <button class="action-btn" onclick="doAction('setmode')" style="width: 80px;">SET</button>
+                <button class="action-btn" onclick="doAction('setmode')" class="action-set-btn">SET</button>
             </div>
         </div>
     </div>
 
     <!-- MAP FLOATING TOOLS -->
     <div id="mapTools" class="map-tools" aria-label="Flight View tools">
-        <button id="cameraToolBtn" class="map-tool-btn" type="button"
-                onclick="toggleVideoPanel()" title="Camera" aria-label="Camera">
+        <button id="cameraToolBtn" class="map-tool-btn" type="button" onclick="toggleVideoPanel()" title="Camera" aria-label="Camera">
             <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M8 7.5 9.5 5h5L16 7.5H19A2 2 0 0 1 21 9.5v8A2 2 0 0 1 19 19.5H5A2 2 0 0 1 3 17.5v-8A2 2 0 0 1 5 7.5h3Z"/>
                 <circle cx="12" cy="13.5" r="3.5"/>
             </svg>
         </button>
 
-        <button id="logToolBtn" class="map-tool-btn" type="button"
-                onclick="toggleMavlinkLog()" title="Message Log" aria-label="Message Log" aria-expanded="false">
+        <button id="logToolBtn" class="map-tool-btn" type="button" onclick="toggleMavlinkLog()" title="Message Log" aria-label="Message Log" aria-expanded="false">
             <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M5 5.5h14A2 2 0 0 1 21 7.5v9A2 2 0 0 1 19 18.5H9l-4.5 3v-3.2A2 2 0 0 1 3 16.5v-9A2 2 0 0 1 5 5.5Z"/>
                 <path d="M7 9.5h10M7 13h7"/>
@@ -162,21 +161,24 @@
         </div>
         <div id="mavlinkLogContent"></div>
     </div>
-
 </div>
 
 <!-- VIDEO POPUP -->
 <div id="videoModal" class="video-modal" aria-hidden="true">
     <div class="video-content">
-        <button class="video-close-btn" type="button" onclick="closeVideo()" title="Close camera" aria-label="Close camera">&times;</button>
-        <video id="webrtc-video" playsinline muted autoplay></video>
-        <div id="webrtc-status" class="webrtc-status">Connecting...</div>
+        <button class="video-close-btn" type="button" onclick="closeVideo()" title="Close camera" aria-label="Close camera" 
+                >&times;</button>
+        
+        <video id="webrtc-video" playsinline muted autoplay ></video>
+        <img id="mjpeg-video"  alt="Camera Stream" />
+        
+        <div id="webrtc-status" class="webrtc-status webrtc-status-text">Connecting...</div>
     </div>
 </div>
 
 <script src="./static/js/leaflet.js"></script>
 <script>
-// ===== MAP =====
+// ===== MAP INITIALIZATION =====
 let map = L.map('map', { zoomControl: false, attributionControl: false }).setView([-7.25, 112.75], 13);
 L.control.zoom({position: 'bottomright'}).addTo(map);
 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
@@ -187,13 +189,11 @@ L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
 setTimeout(() => map.invalidateSize(), 200);
 window.addEventListener('resize', () => map.invalidateSize());
 
-let lastLogTime = null;
 let droneMarker = null;
-
-// ===== FLIGHT VIEW WAYPOINT RENDERING =====
 let missionMarkers = [];
 let missionPolyline = null;
 
+// ===== WAYPOINT RENDERING =====
 function calculateFlightSmoothTrajectory(wp1, wp2, stepMeters = 15) {
     const R = 6371000;
     const lat1 = wp1.lat * Math.PI / 180, lon1 = wp1.lon * Math.PI / 180;
@@ -214,8 +214,6 @@ function calculateFlightSmoothTrajectory(wp1, wp2, stepMeters = 15) {
 
 window.loadAndRenderMissionOnFlightView = function() {
     if (!map) return;
-
-    // 1. Bersihkan marker lama
     missionMarkers.forEach(m => { if (map.hasLayer(m)) map.removeLayer(m); });
     missionMarkers = [];
     if (missionPolyline && map.hasLayer(missionPolyline)) {
@@ -223,7 +221,6 @@ window.loadAndRenderMissionOnFlightView = function() {
         missionPolyline = null;
     }
 
-    // 2. Ambil data dari localStorage
     const saved = localStorage.getItem('hawkeye_mission');
     if (!saved) return;
 
@@ -246,41 +243,32 @@ window.loadAndRenderMissionOnFlightView = function() {
             const color = isHome ? '#ffeb3b' : (i === 1 ? '#4caf50' : '#00bcd4');
 
             const marker = L.circleMarker([wp.lat, wp.lon], {
-                radius: 6,
-                fillColor: color,
-                color: '#ffffff',
-                weight: 2,
-                fillOpacity: 0.9,
-                zIndexOffset: 300
+                radius: 6, fillColor: color, color: '#ffffff', weight: 2, fillOpacity: 0.9, zIndexOffset: 300
             }).addTo(map);
 
-            marker.bindTooltip(`<b>${isHome ? 'H' : i}</b>`, {
-                permanent: true,
-                direction: 'center',
-                className: 'wp-text-label'
-            });
-
+            marker.bindTooltip(`<b>${isHome ? 'H' : i}</b>`, { permanent: true, direction: 'center', className: 'wp-text-label' });
             marker.bindPopup(`<b>${wp.command} #${isHome ? 'HOME' : i}</b><br>Alt: ${wp.alt || 0}m<br>Lat: ${wp.lat.toFixed(6)}<br>Lon: ${wp.lon.toFixed(6)}`);
             missionMarkers.push(marker);
         }
 
         if (fullTrajectory.length > 1) {
-            missionPolyline = L.polyline(fullTrajectory, {
-                color: '#ff9800',
-                weight: 2.5,
-                opacity: 0.85,
-                dashArray: '5, 5'
-            }).addTo(map);
+            missionPolyline = L.polyline(fullTrajectory, { color: '#ff9800', weight: 2.5, opacity: 0.85, dashArray: '5, 5' }).addTo(map);
         }
     } catch (e) {
         console.warn("[FlightView] Gagal merender rute mission:", e);
     }
 };
 
-// Panggil sekarang setelah map dipastikan sudah terbuat
 loadAndRenderMissionOnFlightView();
 
-// ===== ARTIFICIAL HORIZON =====
+window.addEventListener('storage', (e) => {
+    if (e.key === 'hawkeye_mission') loadAndRenderMissionOnFlightView();
+});
+window.addEventListener('message', (e) => {
+    if (e.data === 'MISSION_UPDATED') loadAndRenderMissionOnFlightView();
+});
+
+// ===== ARTIFICIAL HORIZON (GYRO) =====
 const gyroCanvas = document.getElementById('gyroCanvas');
 const gyroCtx = gyroCanvas.getContext('2d');
 
@@ -321,24 +309,30 @@ function drawArtificialHorizon(rollDeg, pitchDeg, yawDeg) {
     const deg2rad = Math.PI / 180;
     const canvas = gyroCanvas, ctx = gyroCtx;
     
-    // TAMBAHKAN BARIS INI: Hentikan rendering bila ukuran kanvas 0 (saat tab disembunyikan)
     if (canvas.width === 0 || canvas.height === 0) return; 
     
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
     
-    ctx.translate(canvas.width / 2, canvas.height / 2);
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    const width = canvas.width;
+    const height = canvas.height;
+
+    // 1. Gambar Dasar Horizon (Pitch & Roll)
+    ctx.save();
+    ctx.translate(cx, cy);
     ctx.rotate(rollDeg * deg2rad);
 
     const font = "Arial";
-    const fontsize = Math.max(9, canvas.height / 18);
-    const halfwidth = canvas.width / 2, halfheight = canvas.height / 2;
-    const every5deg = -canvas.height / 60;
+    const fontsize = Math.max(9, height / 18);
+    const halfwidth = cx, halfheight = cy;
+    const every5deg = -height / 60;
     const pitchoffset = -pitchDeg * every5deg;
 
     const gradObj = ctx.createLinearGradient(0, -halfheight * 2, 0, halfheight * 2);
     gradObj.addColorStop(0.0, "#1976d2"); 
-    let offset = Math.max(0, Math.min(1, 0.5 + pitchoffset / canvas.height / 2));
+    let offset = Math.max(0, Math.min(1, 0.5 + pitchoffset / height / 2));
     gradObj.addColorStop(offset, "#64b5f6");
     gradObj.addColorStop(offset, "#8bc34a"); 
     gradObj.addColorStop(1.0, "#33691e");
@@ -346,15 +340,15 @@ function drawArtificialHorizon(rollDeg, pitchDeg, yawDeg) {
     ctx.fillStyle = gradObj;
     ctx.fillRect(-halfwidth * 2, -halfheight * 2, halfwidth * 4, halfheight * 4);
 
-    const lengthshort = canvas.width / 15, lengthlong = canvas.width / 10;
+    const lengthshort = width / 18, lengthlong = width / 12;
     for (let a = -90; a <= 90; a += 5) {
         if (a >= pitchDeg - 34 && a <= pitchDeg + 25) { 
             let yPos = pitchoffset + a * every5deg;
             if (a % 10 == 0) {
                 DrawLine(ctx, "White", 2, -lengthlong, yPos, lengthlong, yPos);
                 if (a !== 0) {
-                    drawstring(ctx, a, font, fontsize + 1, "White", -lengthlong - 15, yPos);
-                    drawstring(ctx, a, font, fontsize + 1, "White", lengthlong + 15, yPos);
+                    drawstring(ctx, a, font, fontsize, "White", -lengthlong - 12, yPos);
+                    drawstring(ctx, a, font, fontsize, "White", lengthlong + 12, yPos);
                 }
             } else {
                 DrawLine(ctx, "White", 1, -lengthshort, yPos, lengthshort, yPos);
@@ -362,52 +356,193 @@ function drawArtificialHorizon(rollDeg, pitchDeg, yawDeg) {
         }
     }
 
-    const extra = canvas.height / 15 * 4.9, llex = canvas.height / 66 + 2;
+    const extra = height / 15 * 4.9, llex = height / 66 + 2;
     DrawPolygon(ctx, "RED", 1, [0, -llex*2 - extra, -llex, -llex - extra, llex, -llex - extra]);
     for (let a = -60; a <= 60; a += 15) {
         ctx.restore(); ctx.save();
-        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.translate(cx, cy);
         ctx.rotate(a * deg2rad);
-        drawstring(ctx, Math.abs(a), font, fontsize, "White", 0, -llex * 8 - extra + 12);
+        drawstring(ctx, Math.abs(a), font, fontsize - 1, "White", 0, -llex * 8 - extra + 12);
         DrawLine(ctx, "White", 2, 0, -llex * 3 - extra, 0, -llex * 3 - extra - llex);
     }
 
     ctx.restore(); ctx.save();
 
-    DrawEllipse(ctx, "red", 2, halfwidth - 10, halfheight - 10, 20, 20);
-    DrawLine(ctx, "red", 2, halfwidth - 25, halfheight, halfwidth - 10, halfheight);
-    DrawLine(ctx, "red", 2, halfwidth + 10, halfheight, halfwidth + 25, halfheight);
-    DrawLine(ctx, "red", 2, halfwidth, halfheight - 10, halfwidth, halfheight - 25);
+    // Crosshair Tengah
+    DrawEllipse(ctx, "red", 2, cx - 8, cy - 8, 16, 16);
+    DrawLine(ctx, "red", 2, cx - 20, cy, cx - 8, cy);
+    DrawLine(ctx, "red", 2, cx + 8, cy, cx + 20, cy);
+    DrawLine(ctx, "red", 2, cx, cy - 8, cx, cy - 20);
 
-    const tapeHeight = 22, topY = canvas.height - tapeHeight, centerY = canvas.height - (tapeHeight / 2);
-    ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
-    ctx.fillRect(0, topY, canvas.width, tapeHeight);
-    DrawLine(ctx, "white", 2, 0, topY, canvas.width, topY);
+    // Tape Kompas Bawah
+    const tapeHeight = 18, topY = height - tapeHeight, centerY = height - (tapeHeight / 2);
+    ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+    ctx.fillRect(0, topY, width, tapeHeight);
+    DrawLine(ctx, "white", 1.5, 0, topY, width, topY);
 
-    const space = (canvas.width - 10) / 120.0, start = Math.round(yawDeg - 60);
+    const space = (width - 10) / 120.0, start = Math.round(yawDeg - 60);
     for (let a = start; a <= yawDeg + 60; a += 1) {
         let xPos = 5 + space * (a - start);
         if (a % 15 == 0) {
-            DrawLine(ctx, "white", 2, xPos, canvas.height, xPos, topY + 2);
+            DrawLine(ctx, "white", 1.5, xPos, height, xPos, topY + 2);
             let disp = ((a % 360) + 360) % 360;
             let label = disp;
             if(disp===0) label="N"; else if(disp===45) label="NE"; else if(disp===90) label="E"; else if(disp===135) label="SE";
             else if(disp===180) label="S"; else if(disp===225) label="SW"; else if(disp===270) label="W"; else if(disp===315) label="NW";
-            drawstring(ctx, label, font, fontsize + 1, "white", xPos, centerY + 1);
-        } else if (a % 5 == 0) {
-            DrawLine(ctx, "white", 1, xPos, canvas.height, xPos, canvas.height - 6);
+            drawstring(ctx, label, font, fontsize - 1, "white", xPos, centerY + 1);
         }
         if (a === Math.round(yawDeg)) {
-            DrawLine(ctx, "red", 2, xPos, canvas.height, xPos, topY);
+            DrawLine(ctx, "red", 2, xPos, height, xPos, topY);
         }
     }
+
+    // =========================================================================
+    // 2. PITA KIRI (KECEPATAN / SPEED TAPE)
+    // =========================================================================
+    var speedBoxX = 4;
+    var speedBoxY = 18;
+    var speedBoxW = 42;
+    var speedBoxH = height - 44;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(speedBoxX, speedBoxY, speedBoxW, speedBoxH);
+    ctx.clip();
+
+    ctx.fillStyle = "rgba(0,0,0,0.75)";
+    ctx.fillRect(speedBoxX, speedBoxY, speedBoxW, speedBoxH);
+
+    var pixelsPerSpeedUnit = 16;
+    var currentSpeed = window.lastTelemetry?.speed || 0; 
+
+    for (var s = Math.floor(currentSpeed - 4); s <= Math.ceil(currentSpeed + 4); s += 1) {
+        var yPosSpeed = cy - (s - currentSpeed) * pixelsPerSpeedUnit;
+        if (yPosSpeed < speedBoxY || yPosSpeed > speedBoxY + speedBoxH) continue;
+
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(speedBoxX + speedBoxW, yPosSpeed);
+        ctx.lineTo(speedBoxX + speedBoxW - 6, yPosSpeed);
+        ctx.stroke();
+
+        ctx.font = "9px sans-serif";
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "left";
+        ctx.fillText(s.toFixed(0), speedBoxX + 4, yPosSpeed + 3);
+    }
+    ctx.restore();
+
+    ctx.strokeStyle = "rgba(255,255,255,0.5)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(speedBoxX, speedBoxY, speedBoxW, speedBoxH);
+
+    // Pointer Tengah Kecepatan
+    ctx.fillStyle = "#ff9800";
+    ctx.beginPath();
+    ctx.moveTo(speedBoxX + speedBoxW, cy);
+    ctx.lineTo(speedBoxX + speedBoxW + 5, cy - 4);
+    ctx.lineTo(speedBoxX + speedBoxW + 5, cy + 4);
+    ctx.fill();
+
+    // Box Nilai Tengah Kecepatan
+    ctx.fillStyle = "rgba(0,0,0,0.85)";
+    ctx.fillRect(speedBoxX, cy - 8, speedBoxW, 16);
+    ctx.strokeStyle = "#ff9800";
+    ctx.strokeRect(speedBoxX, cy - 8, speedBoxW, 16);
+
+    ctx.font = "bold 9px sans-serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.fillText(currentSpeed.toFixed(1), speedBoxX + (speedBoxW / 2), cy + 3);
+
+    // Teks AS & GS di bawah pita kecepatan
+    ctx.font = "8px sans-serif";
+    ctx.fillStyle = "#00bcd4";
+    ctx.textAlign = "left";
+    ctx.fillText("AS:" + currentSpeed.toFixed(1), speedBoxX, speedBoxY + speedBoxH + 10);
+    ctx.fillText("GS:" + currentSpeed.toFixed(1), speedBoxX, speedBoxY + speedBoxH + 19);
+
+    // =========================================================================
+    // 3. PITA KANAN (ALTITUDE TAPE)
+    // =========================================================================
+    var altBoxW = 42;
+    var altBoxX = width - altBoxW - 4;
+    var altBoxY = 18;
+    var altBoxH = height - 44;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(altBoxX, altBoxY, altBoxW, altBoxH);
+    ctx.clip();
+    
+    ctx.fillStyle = "rgba(0,0,0,0.75)";
+    ctx.fillRect(altBoxX, altBoxY, altBoxW, altBoxH);
+
+    var pixelsPerMeter = 16;
+    var currentAlt = Number(window.lastTelemetry?.alt) || 0;
+    
+    for (var m = Math.floor(currentAlt - 4); m <= Math.ceil(currentAlt + 4); m += 1) {
+        var yPosAlt = cy + (currentAlt - m) * pixelsPerMeter;
+        if (yPosAlt < altBoxY || yPosAlt > altBoxY + altBoxH) continue;
+
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(altBoxX, yPosAlt);
+        ctx.lineTo(altBoxX + 6, yPosAlt);
+        ctx.stroke();
+
+        ctx.font = "9px sans-serif";
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "right";
+        ctx.fillText(m.toFixed(0), altBoxX + altBoxW - 4, yPosAlt + 3);
+    }
+    ctx.restore();
+
+    ctx.strokeStyle = "rgba(255,255,255,0.5)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(altBoxX, altBoxY, altBoxW, altBoxH);
+
+    // Pointer Tengah Altitude
+    ctx.fillStyle = "#ff9800";
+    ctx.beginPath();
+    ctx.moveTo(altBoxX, cy);
+    ctx.lineTo(altBoxX - 5, cy - 4);
+    ctx.lineTo(altBoxX - 5, cy + 4);
+    ctx.fill();
+
+    // Box Nilai Tengah Altitude
+    ctx.fillStyle = "rgba(0,0,0,0.85)";
+    ctx.fillRect(altBoxX, cy - 8, altBoxW, 16);
+    ctx.strokeStyle = "#ff9800";
+    ctx.strokeRect(altBoxX, cy - 8, altBoxW, 16);
+    
+    ctx.font = "bold 9px sans-serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.fillText(currentAlt.toFixed(1) + "m", altBoxX + (altBoxW / 2), cy + 3);
+
+    // =========================================================================
+    // 4. STATUS ARMED / DISARMED DI ATAS TENGAH GYRO
+    // =========================================================================
+    const isArmed = !!(window.lastTelemetry?.is_armed || window.parent?.gcsState?.armed);
+    ctx.font = "bold 11px sans-serif";
+    ctx.fillStyle = isArmed ? "#4caf50" : "#f44336";
+    ctx.textAlign = "center";
+    ctx.shadowColor = "black";
+    ctx.shadowBlur = 3;
+    ctx.fillText(isArmed ? "ARMED" : "DISARMED", cx, 14);
+
+    ctx.restore();
 }
+
+// Inisialisasi awal agar kanvas gyro langsung tampil meskipun belum ada data masuk
 drawArtificialHorizon(0, 0, 0);
 
 // ===== MAIN TELEMETRY HANDLER =====
 window.updateTelemetryUI = function(data) {
     if (!data) return;
-
     window.lastTelemetry = Object.assign(window.lastTelemetry || {}, data);
 
     if (data.lat !== undefined && data.lon !== undefined) {
@@ -423,11 +558,11 @@ window.updateTelemetryUI = function(data) {
 
     if (data.speed !== undefined) {
         const speedEl = document.getElementById('speed');
-        if(speedEl) speedEl.innerText = data.speed.toFixed(1) + ' m/s';
+        if (speedEl) speedEl.innerText = data.speed.toFixed(1) + ' m/s';
     }
     if (data.climb !== undefined) {
         const climbEl = document.getElementById('climb');
-        if(climbEl) climbEl.innerText = data.climb.toFixed(1) + ' m/s';
+        if (climbEl) climbEl.innerText = data.climb.toFixed(1) + ' m/s';
     }
 
     if (data.roll !== undefined && data.pitch !== undefined) {
@@ -439,23 +574,6 @@ window.updateTelemetryUI = function(data) {
         if (yawEl) yawEl.innerText = (data.yaw || 0).toFixed(2) + '°';
         
         drawArtificialHorizon(data.roll, data.pitch, data.yaw || 0);
-    }
-
-    if (data.battery_voltage !== undefined || data.battery_remaining !== undefined) {
-        const battVoltage = data.battery_voltage || 0;
-        const battCurrent = data.battery_current || 0;
-        const battPercent = data.battery_remaining >= 0 ? data.battery_remaining : 0;
-
-        const battVoltEl = document.getElementById('batteryVoltage');
-        const battDetailEl = document.getElementById('batteryStatusDetail');
-
-        if (battVoltEl) {
-            battVoltEl.innerText = battVoltage.toFixed(1) + ' V';
-            if (battPercent < 20) battVoltEl.style.color = '#f44336'; 
-            else if (battPercent < 40) battVoltEl.style.color = '#ff9800'; 
-            else battVoltEl.style.color = '#05b1ef'; 
-        }
-        if (battDetailEl) battDetailEl.innerText = battCurrent.toFixed(1) + ' A / ' + battPercent + '%';
     }
 
     if(data.rangefinder_distance !== undefined) {
@@ -491,39 +609,41 @@ window.updateTelemetryUI = function(data) {
         if (gpsSatsEl) gpsSatsEl.innerText = (data.satellites_visible || 0) + ' satellites';
     }
 
-    if (data.flight_mode !== undefined) {
-        const flightModeEl = document.getElementById('flightModeLabel');
-        if (flightModeEl) flightModeEl.innerText = data.flight_mode;
-    }
+    // if (data.flight_mode !== undefined) {
+    //     const flightModeEl = document.getElementById('flightModeLabel');
+    //     if (flightModeEl) flightModeEl.innerText = data.flight_mode;
+    // }
 
+    if (data.flight_mode !== undefined && data.flight_mode !== "UNKNOWN") {
+        const flightModeEl = document.getElementById('flightModeLabel');
+        if (flightModeEl) {
+            if(flightModeEl.innerText !== data.flight_mode) {
+                flightModeEl.innerText = data.flight_mode;
+            }
+        }
+    }
+    
     if (data.vehicle_type !== undefined && data.vehicle_type !== 'UNKNOWN') {
         window._stableVehicleType = data.vehicle_type; 
     }
     
     let rc5 = data.rc5_in !== undefined ? data.rc5_in : (window.lastTelemetry ? window.lastTelemetry.rc5_in : 0);
+    if (rc5 >= 1400) {
+        window._stableVehicleType = 'COPTER';
+    } else if (rc5 > 800 && rc5 < 1300) {
+        window._stableVehicleType = 'ROVER';
+    }
     
-    let displayType = window._stableVehicleType;
-    
+    let displayType = window._stableVehicleType || 'ROVER';
     if (rc5 > 800) { 
-        if (rc5 > 1700 || rc5 < 1200) {
-            displayType = 'ROVER';
-        } else {
-            displayType = 'COPTER';
-        }
+        displayType = (rc5 > 1700 || rc5 < 1200) ? 'ROVER' : 'COPTER';
     }
     window.currentVehicleType = displayType;
 
     const vehicleTypeEl = document.getElementById('vehicleType');
     if (vehicleTypeEl) {
-        vehicleTypeEl.innerText = displayType;
-
-        if (displayType === 'COPTER') {
-            vehicleTypeEl.style.color = '#2196f3';
-        } else if (displayType === 'ROVER') {
-            vehicleTypeEl.style.color = '#ff9800';
-        } else {
-            vehicleTypeEl.style.color = '#ffff';
-        }
+        vehicleTypeEl.innerText = window.currentVehicleType;
+        vehicleTypeEl.style.color = (window.currentVehicleType === 'COPTER') ? '#2196f3' : '#ff9800';
     }
 
     if (data.throttle !== undefined) {
@@ -531,13 +651,36 @@ window.updateTelemetryUI = function(data) {
         if (throttleGridEl) throttleGridEl.innerText = Math.round(data.throttle) + '%';
     }
 
-    if (data.arm_mode !== undefined || data.is_armed !== undefined) {
-        const isArmed = data.is_armed || (data.arm_mode === 'armed') || false;
+    // Pengecekan ketat tipe data boolean untuk memastikan status ARMED hanya berubah saat benar-benar arm
+    if (data.is_armed !== undefined && typeof data.is_armed === 'boolean') {
+        const isArmed = data.is_armed;
+        
         const armGridEl = document.getElementById('armGridStatus');
         if (armGridEl) {
             armGridEl.innerText = isArmed ? 'ARMED' : 'DISARMED';
             armGridEl.style.color = isArmed ? '#4caf50' : '#f44336';
         }
+
+        const armToggleBtn = document.getElementById('armToggleBtn');
+        if (armToggleBtn) {
+            armToggleBtn.innerText = isArmed ? 'ARMED' : 'DISARMED';
+            armToggleBtn.classList.toggle('btn-arm', isArmed);
+            armToggleBtn.classList.toggle('btn-disarm', !isArmed);
+        }
+
+        if (window.parent && window.parent.gcsState) {
+            window.parent.gcsState.armed = isArmed;
+        }
+    }
+    updateSafetyHUDIndicator();
+}
+
+function updateSafetyHUDIndicator() {
+    const safeOverlay = document.getElementById('horizonSafeOverlay');
+    const safetyOff = !!window.parent.gcsState?.safety?.off;
+
+    if (safeOverlay) {
+        safeOverlay.style.display = safetyOff ? 'none' : 'block';
     }
 }
 
@@ -545,13 +688,12 @@ window.updateTelemetryUI = function(data) {
 function switchTelemPage(pageId, btnElement) {
     document.querySelectorAll('.telem-page').forEach(p => p.style.display = 'none');
     document.querySelectorAll('.telem-tab-btn').forEach(b => b.classList.remove('active'));
-    
     document.getElementById('page-' + pageId).style.display = 'block';
     btnElement.classList.add('active');
 }
 
 function logLocalFeedback(text, severity = 6) {
-    if(window.parent?.gcsConnection?.addLog){
+    if (window.parent?.gcsConnection?.addLog) {
         window.parent.gcsConnection.addLog(text, severity, 'GCS');
     }
     const logContent = document.getElementById('mavlinkLogContent');
@@ -570,11 +712,6 @@ function logLocalFeedback(text, severity = 6) {
     logContent.scrollTop = logContent.scrollHeight;
 }
 
-const MAV_RESULT_MAP = {
-    0: 'ACCEPTED', 1: 'TEMPORARILY_REJECTED', 2: 'DENIED',
-    3: 'UNSUPPORTED', 4: 'FAILED', 5: 'IN_PROGRESS', 6: 'CANCELLED',
-};
-
 function logAckResult(actionLabel, ack) {
     if (!ack) {
         logLocalFeedback(`${actionLabel}: perintah terkirim (tanpa ACK)`, 6);
@@ -585,171 +722,84 @@ function logAckResult(actionLabel, ack) {
     } else if (ack.result === 'timeout') {
         logLocalFeedback(`${actionLabel}`, 4);
     } else {
-        const resultName = MAV_RESULT_MAP[ack.result] ?? ack.result;
         logLocalFeedback(`${actionLabel}`, 3);
     }
 }
 
-
 async function toggleArm() {
-    if (!window.parent.commands) {
-        alert("Sistem command belum termuat.");
-        return;
-    }
-
-    const isLive =
-        window.parent.commands._radioActive() ||
-        window.parent.commands._udpActive();
-
-    if (!isLive) {
-        alert("Gagal: Tidak ada koneksi aktif ke Drone.");
-        return;
-    }
+    if (!window.parent.commands) return alert("Sistem command belum termuat.");
+    const isLive = window.parent.commands._radioActive() || window.parent.commands._udpActive();
+    if (!isLive) return alert("Gagal: Tidak ada koneksi aktif ke Drone.");
 
     const btn = document.getElementById('armToggleBtn');
-
-    if (btn) {
-        btn.disabled = true;
-    }
+    if (btn) btn.disabled = true;
 
     try {
-        const currentArmed =
-            !!window.parent.gcsState?.armed;
-
+        const currentArmed = !!window.parent.gcsState?.armed;
         const targetArmed = !currentArmed;
-        const ack =
-            await window.parent.commands.armDisarm(
-                targetArmed
-            );
-
-        if (!ack || !ack.ok) {
-            logAckResult(
-                targetArmed ? 'ARM' : 'DISARM',
-                ack
-            );
-            return;
-        }
-        updateArmButton();
-        logAckResult(
-            targetArmed ? 'ARM' : 'DISARM',
-            ack
-        );
-        console.log('[ARM TOGGLE]', targetArmed ? 'ARMED' : 'DISARMED');
+        const ack = await window.parent.commands.armDisarm(targetArmed);
+        if (ack && ack.ok) updateArmButton();
+        logAckResult(targetArmed ? 'ARM' : 'DISARM', ack);
     } catch (e) {
-        console.error('[ARM TOGGLE] Error:', e);
         alert(`Gagal mengubah ARM State: ${e.message}`);
     } finally {
-        if (btn) {
-            btn.disabled = false;
-        }
+        if (btn) btn.disabled = false;
     }
 }
 
 function updateArmButton() {
     const btn = document.getElementById('armToggleBtn');
-    if(!btn) return;
+    if (!btn) return;
     const isArmed = !!window.parent.gcsState?.armed;
-    if(btn) {
-        btn.innerText = isArmed ? 'ARMED' : 'DISARMED';
-        btn.classList.toggle('btn-disarm', !isArmed);
-        btn.classList.toggle('btn-arm', isArmed);
-    }
+    btn.innerText = isArmed ? 'ARMED' : 'DISARMED';
+    btn.classList.toggle('btn-disarm', !isArmed);
+    btn.classList.toggle('btn-arm', isArmed);
 }
 
 async function toggleSS() {
-    if (!window.parent.commands) {
-        alert("Sistem command belum termuat.");
-        return;
-    }
-
-    const isLive =
-        window.parent.commands._radioActive() ||
-        window.parent.commands._udpActive();
-
-    if (!isLive) {
-        alert("Gagal: Tidak ada koneksi aktif ke Drone.");
-        return;
-    }
+    if (!window.parent.commands) return alert("Sistem command belum termuat.");
+    const isLive = window.parent.commands._radioActive() || window.parent.commands._udpActive();
+    if (!isLive) return alert("Gagal: Tidak ada koneksi aktif ke Drone.");
 
     const btn = document.getElementById('safetyToggleBtn');
-
-    if (btn) {
-        btn.disabled = true;
-    }
+    if (btn) btn.disabled = true;
 
     try {
-        const currentSafetyOff =
-            !!window.parent.gcsState?.safety?.off;
-
+        const currentSafetyOff = !!window.parent.gcsState?.safety?.off;
         const targetSafetyOff = !currentSafetyOff;
         const targetTurnOn = !targetSafetyOff;
-        console.log(
-            '[Safety Toggle]',
-            'current =',
-            currentSafetyOff ? 'OFF' : 'ON',
-            'target =',
-            targetSafetyOff ? 'OFF' : 'ON'
-        );
-
-        const ack =
-            await window.parent.commands.setSafetySwitch(
-                targetTurnOn
-            );
-
-        if (!ack || !ack.ok) {
-            logAckResult(
-                targetSafetyOff
-                    ? 'SAFETY OFF'
-                    : 'SAFETY ON',
-                ack
-            );
-            return;
+        const ack = await window.parent.commands.setSafetySwitch(targetTurnOn);
+        if (ack && ack.ok) {
+            updateSafetyButton();
+            updateSafetyHUDIndicator();
         }
-        updateSafetyButton();
-        logAckResult(
-            targetSafetyOff
-                ? 'SAFETY OFF'
-                : 'SAFETY ON',
-            ack
-        );
-
+        logAckResult(targetSafetyOff ? 'SAFETY OFF' : 'SAFETY ON', ack);
     } catch (e) {
-        console.error('[Safety Toggle] Error:', e);
         alert(`Gagal mengubah Safety Switch: ${e.message}`);
     } finally {
-        if (btn) {
-            btn.disabled = false;
-        }
+        if (btn) btn.disabled = false;
     }
 }
 
 function updateSafetyButton() {
     const btn = document.getElementById('safetyToggleBtn');
-    if(!btn) return;
+    if (!btn) return;
     const safetyOff = !!window.parent.gcsState?.safety?.off;
-    if(btn) {
-        btn.innerText = safetyOff ? 'SAFETY OFF' : 'SAFETY ON';
-        btn.classList.toggle('btn-warning', safetyOff);
-        btn.classList.toggle('btn-disarm', !safetyOff);
-    }
+    btn.innerText = safetyOff ? 'SAFETY OFF' : 'SAFETY ON';
+    btn.classList.toggle('btn-warning', safetyOff);
+    btn.classList.toggle('btn-disarm', !safetyOff);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
     updateArmButton();
     updateSafetyButton();
+    updateSafetyHUDIndicator();
 });
 
 async function doAction(action) {
-    if (!window.parent.commands) {
-        alert("Sistem command belum termuat.");
-        return;
-    }
-    
+    if (!window.parent.commands) return alert("Sistem command belum termuat.");
     const isLive = window.parent.commands._radioActive() || window.parent.commands._udpActive();
-    if (!isLive) {
-        alert("Gagal: Tidak ada koneksi aktif ke Drone.");
-        return;
-    }
+    if (!isLive) return alert("Gagal: Tidak ada koneksi aktif ke Drone.");
 
     const link = window.parent.commands._getActiveLink();
 
@@ -778,26 +828,30 @@ async function doAction(action) {
                 break;
             }
             case 'rover': {
-                const telem = window.parent.gcsConnection.telemetry;
-                const bataslanding = 0.5;
-                const currentAlt = telem.alt || 0;
-                if (currentAlt > bataslanding) {
-                    alert(`Gagal: Drone masih berada di udara (altitude ${currentAlt.toFixed(2)} m). Silakan mendaratkan drone terlebih dahulu sebelum beralih ke mode ROVER.`);
+                const telem = window.parent?.gcsConnection?.telemetry?.data || window.lastTelemetry || {};
+                const currentAlt = Number(telem.alt || telem.altitude || 0);
+                if (currentAlt > 0.5) {
+                    alert(`Gagal: Drone masih berada di udara (altitude ${currentAlt.toFixed(2)} m). Harap mendarat dahulu.`);
                     return;
                 }
                 await window.parent.commands.setHybridMode('rover');
-                logLocalFeedback('[TRANSITION] Rover mode ready', 6);
-                console.log("[TRANSITION] Switching to Rover mode (ready)...");
+                window.currentVehicleType = 'ROVER';
+                const vEl = document.getElementById('vehicleType');
+                if (vEl) { vEl.innerText = 'ROVER'; vEl.style.color = '#ff9800'; }
+                if (droneMarker) updateMap(window.lastTelemetry || {});
+                logLocalFeedback('[TRANSITION] Mode ROVER aktif (Darat)', 6);
                 break;
             }
             case 'copter': {
-                console.log("[TRANSITION] Switching to Copter mode (safety)...");
+                logLocalFeedback('[TRANSITION] Switching to Copter mode...', 6);
                 await window.parent.commands.setHybridMode('copter_safe');
-                logLocalFeedback('[TRANSITION] Switching to Copter mode', 6);
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                console.log("[TRANSITION] Switching to Copter mode (ready)...");
+                await new Promise(resolve => setTimeout(resolve, 1500));
                 await window.parent.commands.setHybridMode('ready');
-                logLocalFeedback('[TRANSITION] Copter mode ready', 6);
+                window.currentVehicleType = 'COPTER';
+                const vEl = document.getElementById('vehicleType');
+                if (vEl) { vEl.innerText = 'COPTER'; vEl.style.color = '#2196f3'; }
+                if (droneMarker) updateMap(window.lastTelemetry || {});
+                logLocalFeedback('[TRANSITION] Mode COPTER ready', 6);
                 break;
             }
             case 'rtl': {
@@ -824,6 +878,7 @@ async function doAction(action) {
     }
 }
 
+// ===== SAR VICTIM DETECTION =====
 let victimMarkers = [];
 const VICTIM_BUFFER_RADIUS_METERS = 10;
 
@@ -831,7 +886,7 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
     const R = 6371e3;
     const p1 = lat1 * Math.PI / 180, p2 = lat2 * Math.PI / 180;
     const dp = (lat2 - lat1) * Math.PI / 180, dl = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dp/2) * Math.sin(dp/2) + Math.cos(p1) * Math.cos(p2) * Math.sin(dl/2) * Math.sin(dl/2);
+    const a = Math.sin(dp/2)**2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl/2)**2;
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
@@ -839,19 +894,14 @@ function buildPopupHtml(lat, lon, opts = {}) {
     const { status = 'unknown', jumlah = 1, confidence = null, source = 'AI' } = opts;
     const isDead = status === 'D';
     const accentColor = isDead ? '#616161' : '#f44336';
-
-    const detailLine = source === 'SAR'
-        ? `Status: ${isDead ? 'Korban Tewas' : 'Korban Hidup'} &middot; Jumlah: ${jumlah} Orang<br>Sumber: Laporan FCU (STATUSTEXT)`
-        : `Keyakinan (AI): ${(confidence !== null ? confidence * 100 : 0).toFixed(1)}%`;
+    const detailLine = source === 'SAR' ? `Status: ${isDead ? 'Korban Tewas' : 'Korban Hidup'} &middot; Jumlah: ${jumlah} Orang` : `Keyakinan (AI): ${(confidence !== null ? confidence * 100 : 0).toFixed(1)}%`;
 
     return `
         <div style="text-align: center;">
             <b style="color:${accentColor}; font-size:12px;">🚨 KORBAN TERDETEKSI</b><br>
             <span style="font-size:11px; color:#666;">Radius: ${VICTIM_BUFFER_RADIUS_METERS}m</span><br><br>
-            ${detailLine}<br>
-            Lat: ${lat.toFixed(7)}<br>Lon: ${lon.toFixed(7)}<br><br>
-            <button onclick="goToVictim(${lat}, ${lon})"
-                style="background:#2196f3;color:white;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:12px;">
+            ${detailLine}<br>Lat: ${lat.toFixed(7)}<br>Lon: ${lon.toFixed(7)}<br><br>
+            <button onclick="goToVictim(${lat}, ${lon})" style="background:#2196f3;color:white;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:12px;">
                 Terbang ke titik ini
             </button>
         </div>
@@ -860,7 +910,6 @@ function buildPopupHtml(lat, lon, opts = {}) {
 
 function addVictimMarker(lat, lon, opts = {}) {
     const { status = 'unknown', jumlah = 1, confidence = null, source = 'AI' } = opts;
-
     const existing = victimMarkers.find(m => {
         const mLatLng = m.marker.getLatLng();
         return getDistanceMeters(lat, lon, mLatLng.lat, mLatLng.lng) < VICTIM_BUFFER_RADIUS_METERS;
@@ -868,8 +917,7 @@ function addVictimMarker(lat, lon, opts = {}) {
 
     if (existing) {
         if (existing.status !== status || existing.jumlah !== jumlah) {
-            existing.status = status;
-            existing.jumlah = jumlah;
+            existing.status = status; existing.jumlah = jumlah;
             existing.marker.setPopupContent(buildPopupHtml(lat, lon, { status, jumlah, confidence, source }));
         }
         return existing.marker;
@@ -880,19 +928,12 @@ function addVictimMarker(lat, lon, opts = {}) {
     const iconGlyph = isDead ? '📍' : '🆘';
 
     const bufferCircle = L.circle([lat, lon], {
-        color: isDead ? '#424242' : 'red',
-        fillColor: isDead ? '#424242' : '#f44336',
-        fillOpacity: 0.15,
-        radius: VICTIM_BUFFER_RADIUS_METERS,
-        weight: 1,
-        dashArray: '5, 5'
+        color: isDead ? '#424242' : 'red', fillColor: isDead ? '#424242' : '#f44336', fillOpacity: 0.15, radius: VICTIM_BUFFER_RADIUS_METERS, weight: 1, dashArray: '5, 5'
     }).addTo(map);
 
     const victimIcon = L.divIcon({
-        html: `<div style="font-size: 18px; background: rgba(${iconBg}, 0.9); border-radius: 50%; width: 30px; height: 30px; text-align: center; line-height: 30px; color: white; border: 2px solid white; box-shadow: 0 0 10px ${isDead ? '#000' : 'red'}; font-family: Arial;">${iconGlyph}</div>`,
-        className: 'victim-icon',
-        iconSize: [30, 30],
-        iconAnchor: [15, 15]
+        html: `<div style="font-size: 18px; background: rgba(${iconBg}, 0.9); border-radius: 50%; width: 30px; height: 30px; text-align: center; line-height: 30px; color: white; border: 2px solid white; box-shadow: 0 0 10px ${isDead ? '#000' : 'red'};">${iconGlyph}</div>`,
+        className: 'victim-icon', iconSize: [30, 30], iconAnchor: [15, 15]
     });
 
     const marker = L.marker([lat, lon], { icon: victimIcon, zIndexOffset: 1000 })
@@ -901,33 +942,14 @@ function addVictimMarker(lat, lon, opts = {}) {
 
     marker.openPopup();
     victimMarkers.push({ marker, circle: bufferCircle, status, jumlah });
-
-    const logContent = document.getElementById('mavlinkLogContent');
-    if (logContent) {
-        const timeStr = new Date().toTimeString().split(' ')[0];
-        const msgDiv = document.createElement('div');
-        msgDiv.style.marginBottom = "3px";
-        msgDiv.innerHTML = `<span style="color:#f44336; font-weight:bold;">[${timeStr}] 🎯 SAR ALERT (${source}): ${isDead ? 'Korban Tewas' : 'Korban Hidup'} dikunci pada ${lat.toFixed(5)}, ${lon.toFixed(5)}</span>`;
-        logContent.appendChild(msgDiv);
-        logContent.scrollTop = logContent.scrollHeight;
-    }
-
     return marker;
 }
 
-function removeVictimMarkers() {
-    victimMarkers.forEach(v => {
-        map.removeLayer(v.marker);
-        map.removeLayer(v.circle);
-    });
-    victimMarkers = victimMarkers.filter(m => m !== markerEntry);
-} 
-
-// ===== SAR STATUSTEXT PARSING (chunk-aware) =====
+// ===== SAR STATUSTEXT PARSING =====
 const SAR_PREFIX = "[SAR]";
 const STATUSTEXT_MAX_LEN = 50;
-const SAR_CHUNK_TIMEOUT_MS = 2000; // flush paksa kalau chunk lanjutan tak kunjung datang (buang buffer basi)
-const sarChunkBuffers = new Map(); // msgId -> { text, lastSeq, timeoutHandle }
+const SAR_CHUNK_TIMEOUT_MS = 2000;
+const sarChunkBuffers = new Map();
 
 function flushSarBuffer(msgId) {
     const buf = sarChunkBuffers.get(msgId);
@@ -946,22 +968,20 @@ function reassembleSarText(logItem) {
         return text.startsWith(SAR_PREFIX) ? { status: 'complete', text } : { status: 'not_sar' };
     }
 
-    // Kasus multi-chunk
     let buf = sarChunkBuffers.get(msgId);
     if (chunkSeq === 0) {
-        if (!text.startsWith(SAR_PREFIX)) return { status: 'not_sar' }; // chunked tapi bukan pesan SAR, lewat sbg log biasa
+        if (!text.startsWith(SAR_PREFIX)) return { status: 'not_sar' };
         if (buf) clearTimeout(buf.timeoutHandle);
         buf = { text: '', lastSeq: -1 };
         sarChunkBuffers.set(msgId, buf);
     }
-    if (!buf) return { status: 'not_sar' }; // chunk_seq > 0 tanpa chunk awal yg tercatat -> out-of-order, abaikan
+    if (!buf) return { status: 'not_sar' };
 
     buf.text += text;
     buf.lastSeq = chunkSeq;
     clearTimeout(buf.timeoutHandle);
 
     if (text.length >= STATUSTEXT_MAX_LEN) {
-        // Chunk ini penuh -> kemungkinan besar masih ada lanjutan, tunggu
         buf.timeoutHandle = setTimeout(() => flushSarBuffer(msgId), SAR_CHUNK_TIMEOUT_MS);
         return { status: 'pending' };
     }
@@ -970,32 +990,51 @@ function reassembleSarText(logItem) {
 
 function parseSarStatustext(fullText) {
     const data = fullText.trim().split(";");
-    if (data.length !== 5) {
-        console.warn("[SAR] Format tidak valid, field count:", data.length, fullText);
-        return null;
-    }
+    if (data.length !== 5) return null;
     const [, status, jumlahStr, latStr, lonStr] = data;
     const jumlah = parseInt(jumlahStr, 10);
     const lat = parseFloat(latStr);
     const lon = parseFloat(lonStr);
-
-    if (!Number.isFinite(jumlah) || !Number.isFinite(lat) || !Number.isFinite(lon)) {
-        console.warn("[SAR] Gagal parse numerik:", fullText);
-        return null;
-    }
-    if (status !== 'H' && status !== 'D') {
-        console.warn("[SAR] Status tidak dikenal:", status);
-        return {status, jumlah, lat, lon};
-    }
+    if (!Number.isFinite(jumlah) || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
     return { status, jumlah, lat, lon };
 }
 
-window.updateMavlogUI = function(logItem) {
-    console.log("[LOG] Received:", logItem.text);
+// ===== HUD ERROR NOTIFICATION HANDLER =====
+function showHudError(text, severity) {
+    if (severity > 5) return; 
 
-    // --- Intersepsi [SAR] SEBELUM ditampilkan sebagai log FCU biasa ---
+    const container = document.getElementById('hudErrorContainer');
+    if (!container) return;
+
+    if (container.children.length >= 3) {
+        container.removeChild(container.firstChild);
+    }
+
+    const banner = document.createElement('div');
+    banner.className = `hud-error-banner ${severity >= 4 ? 'severity-warning' : ''}`;
+    const severityLabel = severity <= 2 ? 'CRITICAL' : (severity === 3 ? 'ERROR' : 'WARNING');
+    
+    banner.innerHTML = `
+        <span><b>[${severityLabel}]</b> ${text}</span>
+        <span style="cursor: pointer; font-size: 14px; margin-left: 10px;" onclick="this.parentElement.remove()">&times;</span>
+    `;
+
+    container.appendChild(banner);
+
+    setTimeout(() => {
+        if (banner && banner.parentElement) {
+            banner.style.opacity = '0';
+            banner.style.transition = 'opacity 0.5s ease';
+            setTimeout(() => banner.remove(), 500);
+        }
+    }, 6000);
+}
+
+window.updateMavlogUI = function(logItem) {
+    showHudError(logItem.text, logItem.severity ?? 6);
+
     const sarResult = reassembleSarText(logItem);
-    if (sarResult.status === 'pending') return; // masih menunggu chunk lanjutan, jangan render apa pun dulu
+    if (sarResult.status === 'pending') return; 
     if (sarResult.status === 'complete') {
         const parsed = parseSarStatustext(sarResult.text);
         if (parsed) {
@@ -1011,8 +1050,8 @@ window.updateMavlogUI = function(logItem) {
     
     const safeText = String(logItem.text).replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const timeStr = (typeof logItem.server_time === 'number')
-    ? new Date(logItem.server_time * 1000).toTimeString().split(' ')[0]
-    : new Date().toTimeString().split(' ')[0];
+        ? new Date(logItem.server_time * 1000).toTimeString().split(' ')[0]
+        : new Date().toTimeString().split(' ')[0];
     
     const msgDiv = document.createElement('div');
     msgDiv.className = `log-sev-${logItem.severity ?? 6}`;
@@ -1020,7 +1059,6 @@ window.updateMavlogUI = function(logItem) {
     msgDiv.innerHTML = `<span style="color:#ffff;">[${timeStr}]</span> ${safeText}`;
     
     logContent.appendChild(msgDiv);
-    
     if (logContent.childElementCount > 200) logContent.removeChild(logContent.firstChild);
     logContent.scrollTop = logContent.scrollHeight;
 };
@@ -1036,7 +1074,7 @@ window.updateMavlogUI = function(logItem) {
     }
 })();
 
-// ===== UPDATE MAP MARKER =====
+// ===== UPDATE MAP MARKER & HEADING =====
 let headingLineBlack = null;
 let headingLineYellow = null;
 
@@ -1051,28 +1089,20 @@ function updateMap(data) {
     }
 
     const heading = Number.isFinite(data.heading) ? data.heading : 0;
-
     const vType = window.currentVehicleType || 'COPTER';
-    const modeClass = (vType === 'ROVER') ? 'mode-rover' : 'mode-copter'; // gambar per-mode diambil dari CSS (.vehicle-marker.mode-xxx), bukan hardcode <img src>
+    const markerImage = (vType === 'ROVER') ? './static/images/rover.jpg' : './static/images/dronehijau.png';
+    const markerHtml = `<img src="${markerImage}" style="width: 36px; height: 36px; transform: rotate(${heading}deg); object-fit: contain; border-radius: 5px;">`;
 
     if (!droneMarker) {
-        const droneIcon = L.divIcon({
-            html: `<div class="vehicle-marker ${modeClass}" style="transform: rotate(${heading}deg);"></div>`,
-            iconSize: [36, 36],
-            iconAnchor: [18, 18],
-            className: 'drone-icon-custom'
-        });
+        const droneIcon = L.divIcon({ html: markerHtml, iconSize: [36, 36], iconAnchor: [18, 18], className: 'drone-icon-custom' });
         droneMarker = L.marker([lat, lon], { icon: droneIcon, zIndexOffset: 500, title: 'Vehicle Position' })
             .bindPopup(`<b>Vehicle</b><br>Lat: ${lat.toFixed(6)}<br>Lon: ${lon.toFixed(6)}<br>Alt: ${(Number(data.alt)||0).toFixed(1)}m<br>Heading: ${heading.toFixed(0)}°<br>Speed: ${(Number(data.speed)||0).toFixed(1)} m/s`)
             .addTo(map);
     } else {
         droneMarker.setLatLng([lat, lon]);
-        const inner = droneMarker.getElement()?.querySelector('.vehicle-marker');
-        if (inner) {
-            inner.classList.remove('mode-copter', 'mode-rover');
-            inner.classList.add(modeClass);
-            inner.style.transform = `rotate(${heading}deg)`;
-        }
+        const icon = droneMarker.getIcon();
+        icon.options.html = markerHtml; 
+        droneMarker.setIcon(icon);
     }
 
     const lineLengthMeters = 300; 
@@ -1092,29 +1122,7 @@ function updateMap(data) {
     map.setView([lat, lon], map.getZoom());
 }
 
-// ===== DRAG PANEL =====
-const panel = document.querySelector('.telemetry-panel');
-let isDragging = false, offsetX, offsetY, headerPanelGap = 0;
-
-panel.addEventListener('mousedown', e => {
-     const tag = e.target.tagName.toLowerCase();
-    if (tag === 'select' || tag === 'button' || tag === 'input' || tag === 'textarea') {
-        return;
-    }
-    isDragging = true;
-    offsetX = e.clientX - panel.offsetLeft;
-    offsetY = e.clientY - panel.offsetTop;
-});
-document.addEventListener('mousemove', e => {
-    if (!isDragging) return;
-    panel.style.left = (e.clientX - offsetX) + 'px';
-    panel.style.top = (e.clientY - offsetY) + 'px';
-    panel.style.right = 'auto';
-});
-
-document.addEventListener('mouseup', () => isDragging = false);
-
-// ===== FLOATING MAP TOOLS =====
+// ===== FLOATING MAP TOOLS & VIDEO =====
 const mavlinkLogPanel = document.getElementById('mavlinkLogPanel');
 const logToolBtn = document.getElementById('logToolBtn');
 
@@ -1142,136 +1150,85 @@ function updateCameraButtonState(isOpen) {
 window.toggleVideoPanel = function() {
     const modal = document.getElementById('videoModal');
     if (!modal) return;
-    const isOpen = modal.classList.contains('is-open');
-    if (isOpen) closeVideo();
+    if (modal.classList.contains('is-open')) closeVideo();
     else openVideo();
 };
 
-// ===== VIDEO STREAMING (WebRTC) =====
 let pc = null;
 window.openVideo = async function() {
     const modal = document.getElementById('videoModal');
     const statusText = document.getElementById('webrtc-status');
     const videoElement = document.getElementById('webrtc-video');
+    const imgElement = document.getElementById('mjpeg-video');
+
+    if (!modal || !statusText || !videoElement || !imgElement) return;
 
     modal.style.display = 'block';
     modal.classList.add('is-open');
     modal.setAttribute('aria-hidden', 'false');
     updateCameraButtonState(true);
-    statusText.innerText = 'Connecting Video...';
+
+    const streamType = (localStorage.getItem('videoStreamType') || 'flask_http').toLowerCase();
+    const streamUrl = localStorage.getItem('videoStreamUrl') || localStorage.getItem('raspyUrl') || 'http://127.0.0.1:5001/video_feed';
+
+    statusText.innerText = `Connecting (${streamType.toUpperCase()})...`;
     statusText.style.color = '#00bcd4';
 
+    if (streamType.includes('http') || streamType === 'udp' || streamUrl.includes('/video_feed')) {
+        videoElement.style.display = 'none';
+        imgElement.style.display = 'block';
+        imgElement.onload = () => { statusText.innerText = `Video Live (${streamType.toUpperCase()})`; statusText.style.color = '#4caf50'; };
+        imgElement.onerror = () => { statusText.innerText = `Gagal memuat ${streamType.toUpperCase()}`; statusText.style.color = '#f44336'; };
+
+        let targetUrl = streamUrl;
+        if (targetUrl.startsWith('udp://')) {
+            const host = targetUrl.replace('udp://', '').split(':')[0] || '127.0.0.1';
+            targetUrl = `http://${host}:5001/video_feed`;
+        }
+        imgElement.src = targetUrl + (targetUrl.includes('?') ? '&' : '?') + 't=' + Date.now();
+        return;
+    }
+
+    videoElement.style.display = 'block';
+    imgElement.style.display = 'none';
+    videoElement.muted = true; videoElement.autoplay = true; videoElement.playsInline = true;
+
     try {
-        let apiBase = localStorage.getItem('raspyUrl') || 'http://127.0.0.1:5000';
-        console.log("[WebRTC] Using API Base URL:", apiBase);
+        let endpoint = streamUrl.trim().replace(/\/+$/, '');
+        if (!endpoint.endsWith('/webrtc/offer') && !endpoint.endsWith('/offer')) {
+            endpoint += '/webrtc/offer';
+        }
 
-        const config = {
-            sdpSemantics: 'unified-plan',
-            bundlePolicy: 'max-bundle',
-            rtcpMuxPolicy: 'require',
-        };
-        pc = new RTCPeerConnection(config);
-        pc.addEventListener('iceconnectionstatechange', () => console.log("[WebRTC] ICE iceConnection State:", pc.iceConnectionState));
-        pc.addEventListener('connectionstatechange', () => {
-            console.log("[WebRTC] Connection State:", pc.connectionState);
-            
-            if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-                console.warn("[WebRTC] Koneksi video terputus. Mencoba reconnect dalam 3 detik...");
-                
-                statusText.innerText = 'Connection Lost. Reconnecting...';
-                statusText.style.color = '#ff9800';
-                
-                if (pc) { 
-                    pc.close(); 
-                    pc = null; 
-                }
-                
-                setTimeout(() => {
-                    if (modal.style.display === 'block') {
-                        window.openVideo(); 
-                    }
-                }, 3000);
-            }
-        });
-        pc.addEventListener('track', (evt) => console.log('[WebRTC] track diterima! kind:', evt.track.kind, '| jumlah streams:', evt.streams.length));
-        pc.addEventListener('icecandidate', (event) => {
-            if (event.candidate) {
-                console.log('[WebRTC] Local ICE candidate:', event.candidate.candidate);
-            }
-        });
-
-        let inboundStream = null;
-
-        pc.addEventListener('track', function(evt) {
-            if (evt.track.kind === 'video') {
-                if (evt.streams && evt.streams[0]) {
-                    videoElement.srcObject = evt.streams[0];
-                } else {
-                    if (!inboundStream) inboundStream = new MediaStream();
-                    inboundStream.addTrack(evt.track);
-                    videoElement.srcObject = inboundStream;
-                }
-                const playPromise = videoElement.play()
-                if (playPromise !== undefined){
-                    playPromise.catch(err => {
-                        if(err.name !== 'AbortError') {
-                            console.error("[WebRTC] Error playing video:", err);
-                        }
-                    });
-                    
-                }
-
-            }
-        });
-
+        pc = new RTCPeerConnection({ sdpSemantics: 'unified-plan' });
         pc.addTransceiver('video', { direction: 'recvonly' });
+
+        let inboundStream = new MediaStream();
+        videoElement.srcObject = inboundStream;
+        pc.addEventListener('track', (evt) => {
+            if (evt.track.kind === 'video') {
+                inboundStream.addTrack(evt.track);
+                videoElement.play().catch(() => {});
+                statusText.innerText = 'Video Live (WebRTC)';
+                statusText.style.color = '#4caf50';
+            }
+        });
 
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
-        await new Promise((resolve) => {
-            if (pc.iceGatheringState === 'complete') resolve();
-            else {
-                function checkState() {
-                    if (pc.iceGatheringState === 'complete') {
-                        pc.removeEventListener('icegatheringstatechange', checkState);
-                        resolve();
-                    }
-                }
-                pc.addEventListener('icegatheringstatechange', checkState);
-                // setTimeout(resolve, 5000); 
-            }
-        });
-
-        console.log("[WebRTC] ICE gathering complete, sending offer...");
-
-        const response = await fetch(apiBase + '/webrtc/offer', {
+        const response = await fetch(endpoint, {
             method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json', 
-            },
-            body: JSON.stringify({
-                sdp: pc.localDescription.sdp,
-                type: pc.localDescription.type
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sdp: pc.localDescription.sdp, type: pc.localDescription.type })
         });
 
-        const answer = await response.json();
-
-        if (!response.ok || answer.status === 'failed' || answer.status === 'error') {
-            throw new Error(answer.message || `HTTP Error ${response.status}`);
-        }
-
-        await pc.setRemoteDescription(answer);
-        statusText.innerText = 'Video Connected - Live (WebRTC)';
-        statusText.style.color = '#4caf50'; 
-
+        if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
+        await pc.setRemoteDescription(await response.json());
     } catch (err) {
         statusText.innerText = 'Connection Failed: ' + err.message;
         statusText.style.color = '#f44336';
-        alert("webRTC Connection Error: " + err.message);
     }
-}
+};
 
 window.closeVideo = function() {
     const modal = document.getElementById('videoModal');
@@ -1282,91 +1239,41 @@ window.closeVideo = function() {
     }
     updateCameraButtonState(false);
     const videoElement = document.getElementById('webrtc-video');
-    if (videoElement.srcObject) {
-        videoElement.srcObject.getTracks().forEach(track => track.stop());
+    if (videoElement && videoElement.srcObject) {
+        videoElement.srcObject.getTracks().forEach(t => t.stop());
         videoElement.srcObject = null;
     }
+    const imgElement = document.getElementById('mjpeg-video');
+    if (imgElement) imgElement.src = '';
     if (pc) { pc.close(); pc = null; }
-}
+};
 
-// ===== SAR VICTIM DETECTION (computer-vision, via polling /video/detections) =====
-async function pollVictimDetection() {
-    try {
-        // Ambil Base URL dari Parent Iframe
-        const baseUrl = window.parent.gcsConnection?.baseUrl || 'http://localhost:5000';
-        const response = await fetch(baseUrl + '/video/detections');
-        if (!response.ok) throw new Error('HTTP error ' + response.status);
-
-        const result = await response.json();
-
-        if (result && result.objects) {
-            result.objects.forEach(obj => {
-                if (obj.class === 'person' && obj.confidence > 0.6) {
-                    const vLat = result.lat;
-                    const vLon = result.lon;
-
-                    if (Math.abs(vLat) < 0.0001 && Math.abs(vLon) < 0.0001) return;
-
-                    addVictimMarker(vLat, vLon, { status: 'unknown', confidence: obj.confidence, source: 'AI' });
-                }
-            });
-        }
-    } catch (e) {}
-}
-
+// ===== GOTO VICTIM =====
 async function goToVictim(lat, lon, alt = null) {
-    if (!window.parent.commands) {
-        alert("Command bridge not loaded.");
-        return;
-    }
+    if (!window.parent.commands) return alert("Command bridge not loaded.");
     const link = window.parent.commands._getActiveLink();
-    if (!link) {
-        alert("No active link to drone.");
-        return;
-    }
+    if (!link) return alert("No active link to drone.");
+    
     const t = window.lastTelemetry || {};
     const isArmed = t.is_armed || (t.arm_mode === 'armed') || false;
     const currentMode = t.flight_mode || 'UNKNOWN';
     const targetAlt = (alt !== null && !Number.isNaN(alt)) ? alt : (Number(t.altitude) || 0);
 
     if (isArmed && currentMode === 'AUTO') {
-        const confirmMsg = `Drone sedang ARMED dan menjalankan mission (AUTO).\n\n` +
-            `Mengirim drone ke titik korban akan MEMINDAHKAN mode ke GUIDED dan ` +
-            `menginterupsi mission saat ini (mission TIDAK dihapus, hanya di-pause).\n\n` +
-            `Lat: ${lat.toFixed(7)}, Lon: ${lon.toFixed(7)}\n\n` +
-            `Lanjutkan?`;
-        if (!confirm(confirmMsg)) return;
+        if (!confirm(`Drone sedang ARMED (AUTO). Pindah ke GUIDED untuk interupsi misi ke korban (${lat.toFixed(5)}, ${lon.toFixed(5)})?`)) return;
     }
 
-    const result = await link.sendCommandLong(192, {
-        p1: -1,
-        p2: 0,
-        p3: 0,
-        p4: NaN,
-        p5: lat,
-        p6: lon,
-        p7: targetAlt,
-    });
-
-    if (result.ok) {
-        console.log(`[SAR] Reposition ke korban dikirim: ${lat}, ${lon}, alt=${targetAlt}m`);
-    } else {
-        alert(`Gagal mengirim perintah reposition: ${result.result}`);
-    }
+    const result = await link.sendCommandLong(192, { p1: -1, p2: 0, p3: 0, p4: NaN, p5: lat, p6: lon, p7: targetAlt });
+    if (!result.ok) alert(`Gagal reposition: ${result.result}`);
 }
-// setInterval(pollVictimDetection, 1000);
 
-// ===== UPDATE STATS =====
+// ===== STATS INTERVAL =====
 function updateStats() {
     if (!window.parent.commands) return;
     const isLive = window.parent.commands._radioActive() || window.parent.commands._udpActive();
     const msgCountEl = document.getElementById('msgCount');
     const errorCountEl = document.getElementById('errorCount');
-    if (msgCountEl){
-        msgCountEl.innerText = isLive ? 'Live' : '0';
-        msgCountEl.style.color = isLive ? '#4caf50' : '#888';
-
-    } 
+    if (msgCountEl) { msgCountEl.innerText = isLive ? 'Live' : '0'; msgCountEl.style.color = isLive ? '#4caf50' : '#888'; } 
     if (errorCountEl) errorCountEl.innerText = '0';
 }
 setInterval(updateStats, 1000);
