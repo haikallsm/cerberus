@@ -70,25 +70,49 @@ const commands = {
 
     async setHybridMode(state) {
         const stateStr = String(state).toLowerCase();
-        const CH5_INDEX = 4;
-
+        let targetState;
         let pwm;
-        if(['low', 'rover'].includes(stateStr)) {
+
+        if (['low', 'rover'].includes(stateStr)) {
+            targetState = 'rover';
             pwm = 999;
-            console.log("[COMMAND] HYBRID MODE: ROVER (LOW)");
-        } else if(['mid', 'middle', 'copter_safe'].includes(stateStr)) {
+            console.log(
+                '[COMMAND] HYBRID MODE: ROVER (LOW)'
+            );
+
+        } else if (['mid', 'middle', 'copter_safe'].includes(stateStr)) {
+            targetState = 'copter_safe';
             pwm = 1500;
-            console.log("[COMMAND] HYBRID MODE: COPTER & SAFETY (MID)");
-        } else if (['high', 'copter_safe', 'ready'].includes(stateStr)) {
+            console.log(
+                '[COMMAND] HYBRID MODE: COPTER & SAFETY (MID)'
+            );
+
+        } else if (['high', 'copter_unsafe', 'ready'].includes(stateStr)) {
+            targetState = 'copter_unsafe';
             pwm = 1998;
-            console.log("[COMMAND] HYBRID MODE: COPTER & UNSAFETY (HIGH)");
+            console.log(
+                '[COMMAND] HYBRID MODE: COPTER & UNSAFETY (HIGH)'
+            );
+
         } else if (['release', 'off'].includes(stateStr)) {
-            pwm = 65535;
-            console.log("[COMMAND] HYBRID MODE: RELEASED");
+            console.log('[COMMAND] HYBRID MODE: RELEASED');
+            const link = this._getActiveLink();
+            if (typeof link.cancelHybridOverride === 'function') {
+                return link.cancelHybridOverride();
+            }
+            return link.sendRcOverride(4, 65535);
         } else {
             throw new Error(`Invalid hybrid mode state: ${state}`);
         }
-        return this._getActiveLink().sendRcOverride(CH5_INDEX, pwm);
+        const link = this._getActiveLink();
+        if (typeof link.setHybridModeTemporary === 'function') {
+            return link.setHybridModeTemporary(
+                targetState,
+                pwm,
+                4
+            );
+        }
+        return link.sendRcOverride(4, pwm);
     },
 
     async setHome(lat, lon, alt = 0) {

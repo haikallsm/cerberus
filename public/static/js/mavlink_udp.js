@@ -31,6 +31,11 @@ class UdpMavlink {
         this._streamsRequested = false;
         this.rcChannels = new Array(8).fill(65535);
         this._rcOverrideTimer = null;
+        this._physicalRc = new Array(8).fill(65535);
+        this._physicalRc5 = 65535;
+        this._physicalRc5Seq = 0;
+        this._physicalRc5LastUpdate = 0;
+        this._hybridOverride = {active: false, channel: 4, targetPwm: 65535, targetState: null, startedAt: 0, minHoldMs: 1500, stableMatches: 0, requiredStableMatches: 3, rawSeqAtStart: 0, lastPhysicalState: null};
 
         this._remoteIp = null;
         this._remotePort = null;
@@ -271,7 +276,30 @@ class UdpMavlink {
             await this._sendFrame(66, payload, CRC_EXTRA[66]);
             await new Promise(r => setTimeout(r, 50));
         }
+        try {
+            await this.requestRawRcChannels(10);
+        } catch (e) {
+            console.warn('[UdpMavlink] Gagal request RC_CHANNELS_RAW:', e);
+        }
         console.log(`[UdpMavlink] Streams requested @ ${rateHz}Hz`);
+    }
+
+    async requestRawRcChannels(rateHz = 10) {
+        const rate = Math.max(1, Math.min(20, Number(rateHz) || 10));
+        // 1 Hz  = 1,000,000 us
+        // 10 Hz =   100,000 us
+        const intervalUs = Math.round(1_000_000 / rate);
+        console.log(
+            `[UdpMavlink] Request RC_CHANNELS_RAW(35) @ ${rate}Hz`
+        );
+        await this.sendCommandLong(
+            511, // MAV_CMD_SET_MESSAGE_INTERVAL
+            {
+                p1: 35,          // RC_CHANNELS_RAW
+                p2: intervalUs   // interval dalam microsecond
+            },
+            false
+        );
     }
 
     async sendCommandAck(command, result = 0) {
@@ -807,6 +835,260 @@ class UdpMavlink {
         return this.sendCommandLong(192, { p1: -1, p4: NaN, p5: lat, p6: lon, p7: targetAlt });
     }
     async setServo(channel, pwm) { return this.sendCommandLong(183, { p1: channel, p2: pwm }); }
+    _normalizeHybridState(state) {
+        const value = String(state ?? '').toLowerCase();
+
+        if (['rover', 'low'].includes(value)) {
+            return 'rover';
+        }
+
+        if (['copter_safe', 'mid', 'middle'].includes(value)) {
+            return 'copter_safe';
+        }
+
+        if (['copter_unsafe', 'high', 'ready'].includes(value)) {
+            return 'copter_unsafe';
+        }
+
+        return null;
+    }
+
+    _getHybridStateFromRc(pwm) {
+        const value = Number(pwm);
+
+        if (!Number.isFinite(value)) {
+            return null;
+        }
+
+        // Mapping CH5 transmitter
+        if (value <= 1250) {
+            return 'rover';
+        }
+
+        if (value >= 1750) {
+            return 'copter_unsafe';
+        }
+
+        return 'copter_safe';
+    }
+
+    _isHybridVehicleTypeCompatible(targetState) {
+        const vehicleType = String(
+            this.telemetry?.vehicle_type ?? ''
+        ).toUpperCase();
+
+        // Kalau vehicle_type belum tersedia,
+        // jangan blokir proses release.
+        if (!vehicleType) {
+            return true;
+        }
+
+        if (targetState === 'rover') {
+            return vehicleType === 'ROVER';
+        }
+
+        if (
+            targetState === 'copter_safe' ||
+            targetState === 'copter_unsafe'
+        ) {
+            return vehicleType === 'COPTER';
+        }
+
+        return true;
+    }
+
+    _resetHybridOverride() {
+        if (!this._hybridOverride) {
+            return;
+        }
+
+        this._hybridOverride.active = false;
+        this._hybridOverride.targetPwm = 65535;
+        this._hybridOverride.targetState = null;
+        this._hybridOverride.startedAt = 0;
+        this._hybridOverride.stableMatches = 0;
+        this._hybridOverride.lastRemoteState = null;
+    }
+
+    async setHybridModeTemporary(targetState, targetPwm, channel = 4) {
+        const normalized = this._normalizeHybridState(targetState);
+        if (!normalized) {
+            throw new Error(
+                `Hybrid target state tidak valid: ${targetState}`
+            );
+        }
+        if (!Number.isFinite(Number(targetPwm))) {
+            throw new Error(`Hybrid target PWM tidak valid: ${targetPwm}`);
+        }
+        if (channel < 0 || channel > 7) {
+            throw new Error(`Channel ${channel} tidak valid.`);
+        }
+        // Batalkan timer dari proses sebelumnya.
+        if (this._hybridOverride.probeTimer) {
+            clearTimeout(this._hybridOverride.probeTimer);
+            this._hybridOverride.probeTimer = null;
+        }
+        const now = Date.now();
+        this._hybridOverride.active = true;
+        this._hybridOverride.channel = channel;
+        this._hybridOverride.targetPwm = Number(targetPwm);
+        this._hybridOverride.targetState = normalized;
+        this._hybridOverride.startedAt = now;
+        this._hybridOverride.minHoldMs = 1500;
+        this._hybridOverride.stableMatches = 0;
+        // Ambil snapshot sequence RC RAW.
+        this._hybridOverride.rawSeqAtStart = this._physicalRc5Seq;
+        this._hybridOverride.lastPhysicalState = null;
+        console.log(`[HybridOverride] START ` + `target=${normalized} ` + `pwm=${targetPwm} ` + `rawSeq=${this._physicalRc5Seq}`
+        );
+        /*
+        * CH5 langsung diambil alih.
+        * Mulai dari sini FC tidak mengikuti switch remote.
+        */
+        await this.sendRcOverride(channel, Number(targetPwm));
+        return {ok: true, temporary: true, targetState: normalized, targetPwm: Number(targetPwm)};
+    }
+
+    _checkHybridOverrideRelease() {
+        const state = this._hybridOverride;
+
+        if (!state?.active) {
+            return false;
+        }
+
+        /*
+        * Jangan melakukan pengecekan terlalu cepat
+        * setelah GCS mengirim override.
+        */
+        const heldLongEnough =
+            Date.now() - state.startedAt >=
+            state.minHoldMs;
+
+        if (!heldLongEnough) {
+            return false;
+        }
+
+        /*
+        * Harus ada RC_CHANNELS_RAW baru
+        * setelah override dimulai.
+        */
+        if (this._physicalRc5Seq <= state.rawSeqAtStart) {
+            return false;
+        }
+
+        const remotePwm = Number(this._physicalRc5);
+        const remoteState = this._getHybridStateFromRc(remotePwm);
+
+        if (!remoteState) {
+            state.stableMatches = 0;
+            state.lastPhysicalState = null;
+            return false;
+        }
+
+        /*
+        * Pastikan posisi switch benar-benar
+        * konsisten beberapa sample berturut-turut.
+        */
+        if (remoteState === state.targetState && this._isHybridVehicleTypeCompatible(state.targetState)) {
+            if (state.lastPhysicalState === remoteState) {
+                state.stableMatches++;
+            } else {
+                state.stableMatches = 1;
+            }
+            state.lastPhysicalState = remoteState;
+
+        } else {
+            state.stableMatches = 0;
+            state.lastPhysicalState = remoteState;
+        }
+
+        console.log(
+            `[HybridOverride] ` +
+            `physicalRC5=${remotePwm} ` +
+            `state=${remoteState} ` +
+            `target=${state.targetState} ` +
+            `stable=${state.stableMatches}/` +
+            `${state.requiredStableMatches}`
+        );
+
+        if (state.stableMatches >= state.requiredStableMatches){
+            this._releaseHybridOverride();
+            return true;        
+        }
+        return false;
+    }
+
+    async _releaseHybridOverride() {
+        const state = this._hybridOverride;
+
+        if (!state?.active) {
+            return {
+                ok: true,
+                alreadyReleased: true
+            };
+        }
+
+        const channel = state.channel;
+        const targetState = state.targetState;
+
+        console.log(
+            `[HybridOverride] RELEASE -> ` +
+            `physical remote sudah berada di ` +
+            `${targetState}`
+        );
+
+        /*
+        * Matikan active dahulu.
+        * Setelah ini RC override loop
+        * tidak akan lagi mempertahankan target.
+        */
+        state.active = false;
+        state.targetState = null;
+        state.targetPwm = 65535;
+        state.startedAt = 0;
+
+        state.stableMatches = 0;
+        state.rawSeqAtStart = 0;
+        state.lastPhysicalState = null;
+
+        /*
+        * 65535 = ignore / release override.
+        *
+        * Saat ini remote fisik SUDAH pada posisi target,
+        * sehingga tidak ada transisi ke mode lama.
+        */
+        await this.sendRcOverride(
+            channel,
+            65535
+        );
+
+        console.log(
+            `[HybridOverride] COMPLETE -> ` +
+            `CH${channel + 1} kembali ke remote`
+        );
+
+        return {
+            ok: true,
+            released: true,
+            channel,
+            targetState
+        };
+    }
+
+    async cancelHybridOverride() {
+        const state = this._hybridOverride;
+        const channel = state?.channel ?? 4;
+        const wasActive = !!state?.active;
+        this._resetHybridOverride();
+
+        await this.sendRcOverride(
+            channel,
+            65535
+        );
+        console.log(`[HybridOverride] CANCEL/RELEASE CH${channel + 1} ` + `-> remote kembali menjadi sumber kontrol`);
+        return {ok: true, cancelled: wasActive, channel};
+    }
+    
     async sendRcOverride(chIndex, pwmValue) {
         if (chIndex < 0 || chIndex > 7) {
             throw new Error(`Channel index ${chIndex} tidak valid. Harus antara 0-7.`);
@@ -852,6 +1134,57 @@ class UdpMavlink {
         return true;
     }
 
+    _handleRawRcChannels(payload) {
+        /*
+        * MAVLink RC_CHANNELS_RAW (#35)
+        *
+        * offset:
+        * 0   = time_boot_ms uint32
+        * 4   = chan1_raw
+        * 6   = chan2_raw
+        * 8   = chan3_raw
+        * 10  = chan4_raw
+        * 12  = chan5_raw
+        * 14  = chan6_raw
+        * 16  = chan7_raw
+        * 18  = chan8_raw
+        * 20  = port
+        * 21  = rssi
+        */
+
+        if (!payload || payload.length < 20) {return;}
+        try {
+            const bytes = Uint8Array.from(payload);
+            const dv = new DataView(
+                bytes.buffer,
+                bytes.byteOffset,
+                bytes.byteLength
+            );
+
+            for (let i = 0; i < 8; i++) {
+                this._physicalRc[i] =
+                    dv.getUint16(4 + (i * 2), true);
+            }
+            const rc5 = this._physicalRc[4];
+            if (!Number.isFinite(rc5)) {return;}
+            if (rc5 === 65535) {return;}
+
+            this._physicalRc5 = rc5;
+            this._physicalRc5Seq++;
+            this._physicalRc5LastUpdate = Date.now();
+            // Hanya untuk telemetry/UI/debug.
+            this.telemetry.rc5_physical = rc5;
+            this.telemetry.hybrid_remote_state = this._getHybridStateFromRc(rc5);
+            this._checkHybridOverrideRelease();
+
+        } catch (error) {
+            console.error(
+                '[UdpMavlink] Gagal decode RC_CHANNELS_RAW:',
+                error
+            );
+        }
+    }
+
     _handleFrame(msgId, payload, sysid, compid) {
         const isSelf = (sysid === this._gcsSysId && compid === this._gcsCompId);
 
@@ -873,6 +1206,10 @@ class UdpMavlink {
         if (isSelf) return;
         if (this._streamsRequested && sysid !== this.targetSystem) return;
 
+        if (msgId === 35) {
+            this._handleRawRcChannels(payload);
+            return;
+        }
         const decoder = DECODERS[msgId];
         if (!decoder) return;
 

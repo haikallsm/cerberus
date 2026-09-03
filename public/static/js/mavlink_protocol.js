@@ -15,6 +15,8 @@ const CRC_EXTRA = {
     27: 144,   // RAW_IMU
     30: 39,    // ATTITUDE
     33: 104,   // GLOBAL_POSITION_INT
+    35: 244,   // RC_CHANNELS_RAW
+    36: 222,   // SERVO_OUTPUT_RAW
     43: 132,   // MISSION_REQUEST_LIST
     44: 221,   // MISSION_COUNT
     45: 251,   // MISSION_CLEAR_ALL
@@ -41,7 +43,7 @@ const CRC_EXTRA = {
 
 const MSG_LENGTHS = {
     0: 9, 1: 31, 20: 20, 21: 2, 22: 25, 23: 23, 24: 30, 27: 29, 30: 28, 
-    33: 28, 40: 4, 43: 3, 44: 5, 47: 4, 51: 5, 65: 42, 66: 6, 70: 18, 
+    33: 28, 35: 22, 40: 4, 43: 3, 44: 5, 47: 4, 51: 5, 65: 42, 66: 6, 70: 18, 
     73: 38, 74: 20, 75: 35, 76: 33, 77: 3, 109: 9, 132: 14, 191: 27, 
     192: 44, 253: 54, 160: 12, 161: 3, 45: 2, 242: 60
 };
@@ -321,7 +323,75 @@ const DECODERS = {
             rc8_in: dv.getUint16(18, true),
         }
     },
+    // 65: (bytes) => {
+    //     const dv = new DataView(new Uint8Array(bytes).buffer);
+    //     const result = {
+    //         _kind: 'telemetry',
+    //         rc1_in: dv.getUint16(4, true),
+    //         rc2_in: dv.getUint16(6, true),
+    //         rc3_in: dv.getUint16(8, true),
+    //         rc4_in: dv.getUint16(10, true),
+    //         rc5_in: dv.getUint16(12, true),
+    //         rc6_in: dv.getUint16(14, true),
+    //         rc7_in: dv.getUint16(16, true),
+    //         rc8_in: dv.getUint16(18, true),
+    //     };
 
+    //     console.log(
+    //         '[RC_CHANNELS] CH1-CH8:',
+    //         result.rc1_in,
+    //         result.rc2_in,
+    //         result.rc3_in,
+    //         result.rc4_in,
+    //         result.rc5_in,
+    //         result.rc6_in,
+    //         result.rc7_in,
+    //         result.rc8_in
+    //     );
+
+    //     return result;
+    // },
+    35: (bytes) => {
+        const dv = new DataView(
+            new Uint8Array(bytes).buffer
+        );
+
+        return {
+            _kind: 'rc_raw',
+
+            time_boot_ms: readU32(dv, 0),
+
+            rc1_raw: dv.getUint16(4, true),
+            rc2_raw: dv.getUint16(6, true),
+            rc3_raw: dv.getUint16(8, true),
+            rc4_raw: dv.getUint16(10, true),
+            rc5_raw: dv.getUint16(12, true),
+            rc6_raw: dv.getUint16(14, true),
+            rc7_raw: dv.getUint16(16, true),
+            rc8_raw: dv.getUint16(18, true),
+
+            port: dv.getUint8(20),
+            rssi: dv.getUint8(21)
+        };
+    },
+    36: (bytes) => {
+        const dv = new DataView(new Uint8Array(bytes).buffer);
+        return {
+            _kind: 'telemetry',
+            servo_output_raw: {
+                time_usec: readU32(dv, 0),
+                servo1_raw: dv.getUint16(4, true),
+                servo2_raw: dv.getUint16(6, true),
+                servo3_raw: dv.getUint16(8, true),
+                servo4_raw: dv.getUint16(10, true),
+                servo5_raw: dv.getUint16(12, true),
+                servo6_raw: dv.getUint16(14, true),
+                servo7_raw: dv.getUint16(16, true),
+                servo8_raw: dv.getUint16(18, true),
+                port: dv.getUint8(20),
+            }
+        };
+    },
     73: (bytes) => {
         const dv = new DataView(new Uint8Array(bytes).buffer);
         const missionType = bytes.length > 37 ? bytes[37] : 0;

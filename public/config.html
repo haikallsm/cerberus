@@ -6,65 +6,6 @@
 <title>Config - HAWKEYE</title>
 <link rel="stylesheet" href="./static/css/gcs.css"/>
 <link rel="stylesheet" href="./static/css/config.css"/>
-<style>
-/* Layout & Container Styling */
-.main { margin-left: 0; padding: 15px 25px; box-sizing: border-box; }
-.page-title { font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 12px; letter-spacing: 0.5px; }
-
-/* Tabs */
-.tabs { display: flex; gap: 8px; margin-bottom: 15px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 8px; }
-.tab-btn { background: #141b24; border: 1px solid #2a3847; color: #8fa0b5; padding: 8px 18px; font-size: 12px; font-weight: 600; border-radius: 4px; cursor: pointer; transition: all 0.2s ease; }
-.tab-btn:hover { background: #1c2633; color: #fff; }
-.tab-btn.active { background: #00bcd4; color: #0d131a; border-color: #00bcd4; font-weight: bold; }
-.tab-panel { display: none; }
-.tab-panel.active { display: block; }
-
-/* Parameters Table UI */
-.param-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.param-search-box { display: flex; gap: 10px; align-items: center; }
-.param-search-input { width: 380px; padding: 8px 12px; background: #0c1015; border: 1px solid #24303f; border-radius: 4px; color: #fff; font-size: 12px; outline: none; transition: border 0.2s; }
-.param-search-input:focus { border-color: #00bcd4; }
-.param-counter-badge { font-size: 11px; color: #8fa0b5; background: #141b24; padding: 6px 12px; border-radius: 4px; border: 1px solid #24303f; }
-.param-counter-badge b { color: #00bcd4; }
-
-.param-table-container { height: calc(100vh - 220px); overflow-y: auto; border: 1px solid #202b38; background: #090d12; border-radius: 4px; }
-.data-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #d1d9e2; }
-.data-table thead th { position: sticky; top: 0; background: #131a22; color: #00bcd4; text-align: left; padding: 8px 10px; border-bottom: 2px solid #24303f; border-right: 1px solid #1a232e; font-weight: 600; z-index: 2; }
-.data-table tbody tr { border-bottom: 1px solid #141b24; }
-.data-table tbody tr:nth-child(even) { background: #0d1218; }
-.data-table tbody tr:hover { background: #17212c; }
-.data-table td { padding: 5px 10px; border-right: 1px solid #161f2a; vertical-align: middle; position: relative; }
-
-/* Value Input & Modified Highlight */
-.mp-val-input { width: 95px; background: #06090d; border: 1px solid #2a394a; color: #4caf50; font-weight: 600; padding: 4px 6px; border-radius: 3px; font-family: monospace; font-size: 11px; outline: none; transition: border 0.2s ease; }
-.mp-val-input:focus { border-color: #00bcd4; }
-.data-table tr.is-modified { background: rgba(255, 152, 0, 0.12) !important; }
-.data-table tr.is-modified .mp-val-input { border-color: #ff9800; background: #231808; color: #ffb74d; }
-
-/* Dropdown Options */
-.mp-select-opt { background: #06090d; border: 1px solid #24303f; color: #ffb74d; font-size: 11px; padding: 4px 6px; border-radius: 3px; max-width: 220px; width: 100%; outline: none; }
-.mp-select-opt:focus { border-color: #00bcd4; }
-
-/* Bitmask Popup Dropdown / Checklist Button Style (Ala Mission Planner) */
-.bitmask-btn { background: #141b24; border: 1px solid #2a3847; color: #ffb74d; font-size: 11px; padding: 5px 10px; border-radius: 4px; cursor: pointer; text-align: left; width: 100%; max-width: 220px; display: flex; justify-content: space-between; align-items: center; }
-.bitmask-btn:hover { background: #1c2633; border-color: #00bcd4; }
-.bitmask-popup { display: none; position: absolute; left: 0; top: 35px; background: #131a22; border: 1px solid #00bcd4; border-radius: 6px; padding: 12px; z-index: 999; box-shadow: 0 8px 24px rgba(0,0,0,0.8); width: 450px; }
-.bitmask-popup.show { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 12px; }
-.bitmask-item { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #d1d9e2; cursor: pointer; user-select: none; white-space: nowrap; }
-.bitmask-item input[type="checkbox"] { accent-color: #00bcd4; cursor: pointer; width: 13px; height: 13px; }
-
-/* Action Buttons */
-.param-actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
-.btn { padding: 7px 15px; font-size: 11px; font-weight: 600; border-radius: 4px; cursor: pointer; border: none; transition: background 0.2s ease; }
-.btn-primary { background: #2e7d32; color: #fff; }
-.btn-primary:hover { background: #388e3c; }
-.btn-secondary { background: #1c2633; color: #c0cddb; border: 1px solid #2a3847; }
-.btn-secondary:hover { background: #273547; color: #fff; }
-.btn-warning { background: #ff9800; color: #fff; }
-.btn-warning:hover { background: #f57c00; }
-.btn-danger { background: #d32f2f; color: #fff; margin-left: auto; }
-.btn-danger:hover { background: #b71c1c; }
-</style>
 </head>
 
 <body style="background: transparent;">
@@ -75,6 +16,8 @@
     <div class="tabs">
         <button class="tab-btn active" onclick="switchTab('pid')">PID Tuning</button>
         <button class="tab-btn" onclick="switchTab('modes')">Flight Modes</button>
+        <button class="tab-btn" onclick="switchTab('servo')">Servo Output</button>
+        <button class="tab-btn" onclick="switchTab('radio')">Radio Calibration</button>
         <button class="tab-btn" onclick="switchTab('params')">Parameters</button>
     </div>
 
@@ -132,16 +75,239 @@
 
     <!-- TAB 2: FLIGHT MODES -->
     <div id="tab-modes" class="tab-panel">
-        <div class="flight-modes">
-            <div class="mode-item"><span class="mode-label">Mode 1</span><select class="mode-select" id="mode1"><option>STABILIZE</option><option selected>ALT_HOLD</option><option>LOITER</option><option>RTL</option><option>AUTO</option><option>LAND</option><option>GUIDED</option></select></div>
-            <div class="mode-item"><span class="mode-label">Mode 2</span><select class="mode-select" id="mode2"><option selected>STABILIZE</option><option>ALT_HOLD</option><option>LOITER</option><option>RTL</option><option>AUTO</option><option>LAND</option><option>GUIDED</option></select></div>
-            <div class="mode-item"><span class="mode-label">Mode 3</span><select class="mode-select" id="mode3"><option>STABILIZE</option><option>ALT_HOLD</option><option selected>LOITER</option><option>RTL</option><option>AUTO</option><option>LAND</option><option>GUIDED</option></select></div>
-            <div class="mode-item"><span class="mode-label">Mode 4</span><select class="mode-select" id="mode4"><option>STABILIZE</option><option>ALT_HOLD</option><option>LOITER</option><option selected>RTL</option><option>AUTO</option><option>LAND</option><option>GUIDED</option></select></div>
-            <div class="mode-item"><span class="mode-label">Mode 5</span><select class="mode-select" id="mode5"><option>STABILIZE</option><option>ALT_HOLD</option><option>LOITER</option><option>RTL</option><option selected>AUTO</option><option>LAND</option><option>GUIDED</option></select></div>
-            <div class="mode-item"><span class="mode-label">Mode 6</span><select class="mode-select" id="mode6"><option>STABILIZE</option><option>ALT_HOLD</option><option>LOITER</option><option>RTL</option><option>AUTO</option><option selected>LAND</option><option>GUIDED</option></select></div>
+        <div style="display: flex; gap: 30px;">
+            <div style="flex: 1;">
+                <h3 style="color: #00bcd4; font-size: 13px; margin-bottom: 10px;">Flight Mode Settings (Channel 5)</h3>
+                <div class="flight-modes">
+                    <div class="mode-item"><span class="mode-label">Mode 1</span><select class="mode-select" id="mode1"><option>STABILIZE</option><option selected>ALT_HOLD</option><option>LOITER</option><option>RTL</option><option>AUTO</option><option>LAND</option><option>GUIDED</option></select></div>
+                    <div class="mode-item"><span class="mode-label">Mode 2</span><select class="mode-select" id="mode2"><option selected>STABILIZE</option><option>ALT_HOLD</option><option>LOITER</option><option>RTL</option><option>AUTO</option><option>LAND</option><option>GUIDED</option></select></div>
+                    <div class="mode-item"><span class="mode-label">Mode 3</span><select class="mode-select" id="mode3"><option>STABILIZE</option><option>ALT_HOLD</option><option selected>LOITER</option><option>RTL</option><option>AUTO</option><option>LAND</option><option>GUIDED</option></select></div>
+                    <div class="mode-item"><span class="mode-label">Mode 4</span><select class="mode-select" id="mode4"><option>STABILIZE</option><option>ALT_HOLD</option><option>LOITER</option><option selected>RTL</option><option>AUTO</option><option>LAND</option><option>GUIDED</option></select></div>
+                    <div class="mode-item"><span class="mode-label">Mode 5</span><select class="mode-select" id="mode5"><option>STABILIZE</option><option>ALT_HOLD</option><option>LOITER</option><option>RTL</option><option selected>AUTO</option><option>LAND</option><option>GUIDED</option></select></div>
+                    <div class="mode-item"><span class="mode-label">Mode 6</span><select class="mode-select" id="mode6"><option>STABILIZE</option><option>ALT_HOLD</option><option>LOITER</option><option>RTL</option><option>AUTO</option><option selected>LAND</option><option>GUIDED</option></select></div>
+                </div>
+            </div>
+            
+            <div style="flex: 1;">
+                <h3 style="color: #00bcd4; font-size: 13px; margin-bottom: 10px;">Channel Options</h3>
+                <div class="flight-modes">
+                    <div class="mode-item">
+                        <span class="mode-label" style="width: 110px;">Channel option 7</span>
+                        <select class="mode-select" id="opt_ch7">
+                            <option value="0" selected>Do Nothing</option>
+                            <option value="2">RTL</option>
+                            <option value="3">Loiter</option>
+                            <option value="4">Smart RTL</option>
+                            <option value="16">Simple Mode</option>
+                            <option value="21">Land</option>
+                            <option value="28">Camera Trigger</option>
+                            <option value="34">Parachute Release</option>
+                            <option value="39">Landing Gear</option>
+                            <option value="41">Fence Enable</option>
+                            <option value="59">Gripper</option>
+                            <option value="87">Auto Mode</option>
+                            <option value="91">Guided Mode</option>
+                        </select>
+                    </div>
+                    <div class="mode-item">
+                        <span class="mode-label" style="width: 110px;">Channel option 8</span>
+                        <select class="mode-select" id="opt_ch8">
+                            <option value="0" selected>Do Nothing</option>
+                            <option value="2">RTL</option>
+                            <option value="3">Loiter</option>
+                            <option value="4">Smart RTL</option>
+                            <option value="16">Simple Mode</option>
+                            <option value="21">Land</option>
+                            <option value="28">Camera Trigger</option>
+                            <option value="34">Parachute Release</option>
+                            <option value="39">Landing Gear</option>
+                            <option value="41">Fence Enable</option>
+                            <option value="59">Gripper</option>
+                            <option value="87">Auto Mode</option>
+                            <option value="91">Guided Mode</option>
+                        </select>
+                    </div>
+                    <div class="mode-item">
+                        <span class="mode-label" style="width: 110px;">Channel option 9</span>
+                        <select class="mode-select" id="opt_ch9">
+                            <option value="0" selected>Do Nothing</option>
+                            <option value="2">RTL</option>
+                            <option value="3">Loiter</option>
+                            <option value="4">Smart RTL</option>
+                            <option value="16">Simple Mode</option>
+                            <option value="21">Land</option>
+                            <option value="28">Camera Trigger</option>
+                            <option value="34">Parachute Release</option>
+                            <option value="39">Landing Gear</option>
+                            <option value="41">Fence Enable</option>
+                            <option value="59">Gripper</option>
+                            <option value="87">Auto Mode</option>
+                            <option value="91">Guided Mode</option>
+                        </select>
+                    </div>
+                    <div class="mode-item">
+                        <span class="mode-label" style="width: 110px;">Channel option 10</span>
+                        <select class="mode-select" id="opt_ch10">
+                            <option value="0" selected>Do Nothing</option>
+                            <option value="2">RTL</option>
+                            <option value="3">Loiter</option>
+                            <option value="4">Smart RTL</option>
+                            <option value="16">Simple Mode</option>
+                            <option value="21">Land</option>
+                            <option value="28">Camera Trigger</option>
+                            <option value="34">Parachute Release</option>
+                            <option value="39">Landing Gear</option>
+                            <option value="41">Fence Enable</option>
+                            <option value="59">Gripper</option>
+                            <option value="87">Auto Mode</option>
+                            <option value="91">Guided Mode</option>
+                        </select>
+                    </div>
+                    <div class="mode-item">
+                        <span class="mode-label" style="width: 110px;">Channel option 11</span>
+                        <select class="mode-select" id="opt_ch11">
+                            <option value="0" selected>Do Nothing</option>
+                            <option value="2">RTL</option>
+                            <option value="3">Loiter</option>
+                            <option value="4">Smart RTL</option>
+                            <option value="16">Simple Mode</option>
+                            <option value="21">Land</option>
+                            <option value="28">Camera Trigger</option>
+                            <option value="34">Parachute Release</option>
+                            <option value="39">Landing Gear</option>
+                            <option value="41">Fence Enable</option>
+                            <option value="59">Gripper</option>
+                            <option value="87">Auto Mode</option>
+                            <option value="91">Guided Mode</option>
+                        </select>
+                    </div>
+                    <div class="mode-item">
+                        <span class="mode-label" style="width: 110px;">Channel option 12</span>
+                        <select class="mode-select" id="opt_ch12">
+                            <option value="0" selected>Do Nothing</option>
+                            <option value="2">RTL</option>
+                            <option value="3">Loiter</option>
+                            <option value="4">Smart RTL</option>
+                            <option value="16">Simple Mode</option>
+                            <option value="21">Land</option>
+                            <option value="28">Camera Trigger</option>
+                            <option value="34">Parachute Release</option>
+                            <option value="39">Landing Gear</option>
+                            <option value="41">Fence Enable</option>
+                            <option value="59">Gripper</option>
+                            <option value="87">Auto Mode</option>
+                            <option value="91">Guided Mode</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="param-actions">
+        <div class="param-actions" style="margin-top: 15px;">
             <button class="btn btn-primary" onclick="saveModes()">Save Flight Modes</button>
+        </div>
+    </div>
+
+    <!-- TAB NEW: SERVO OUTPUT (DENGAN TOMBOL UPDATE DI SEBELAH JUDUL) -->
+    <div id="tab-servo" class="tab-panel">
+        <div class="config-card" style="max-width: 950px; margin: 0 auto; overflow-x: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #202b38; padding-bottom: 6px;">
+                <div class="config-card-title" style="margin-bottom: 0; border-bottom: none; padding-bottom: 0;">Servo Output Configuration</div>
+                <button class="btn btn-secondary" onclick="initServoOutputTable()" style="padding: 4px 12px; font-size: 11px;">Update</button>
+            </div>
+            <table class="servo-table">
+                <thead>
+                    <tr>
+                        <th style="width: 35px;">#</th>
+                        <th style="width: 120px;">Position</th>
+                        <th style="width: 60px; text-align:center;">Reverse</th>
+                        <th style="width: 160px;">Function</th>
+                        <th style="width: 80px;">Min</th>
+                        <th style="width: 80px;">Trim</th>
+                        <th style="width: 80px;">Max</th>
+                    </tr>
+                </thead>
+                <tbody id="servoOutputTableBody">
+                    <!-- Terisi otomatis dari parameters -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- TAB NEW: RADIO CALIBRATION (DARI PARAMETERS) -->
+    <div id="tab-radio" class="tab-panel">
+        <div class="radio-cal-layout">
+            <div class="radio-col-left">
+                <!-- Roll (ch1) + Auto Save Reverse -->
+                <div class="radio-channel-header">
+                    <span>Roll (ch1)</span>
+                    <label class="radio-rev-label"><input type="checkbox" id="rev_ch_1" onchange="autoSaveChannelReverse(1)"> Reverse</label>
+                </div>
+                <div class="radio-bar-h"><div class="radio-bar-fill" id="cal_bar_1" style="width: 50%;"></div><span id="cal_txt_1">1500</span></div>
+
+                <div class="radio-bar-v-container">
+                    <!-- Pitch (ch2) + Auto Save Reverse -->
+                    <div class="radio-bar-v-wrapper">
+                        <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 4px;">
+                            <span style="font-size: 10px; color: #aaa;">Pitch (ch2)</span>
+                            <label class="radio-rev-label"><input type="checkbox" id="rev_ch_2" onchange="autoSaveChannelReverse(2)"> Rev</label>
+                        </div>
+                        <div class="radio-bar-v"><div class="radio-bar-v-fill" id="cal_bar_2" style="height: 50%;"></div><span id="cal_txt_2">1500</span></div>
+                    </div>
+                    <!-- Throttle (ch3) + Auto Save Reverse -->
+                    <div class="radio-bar-v-wrapper">
+                        <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 4px;">
+                            <span style="font-size: 10px; color: #aaa;">Throttle (ch3)</span>
+                            <label class="radio-rev-label"><input type="checkbox" id="rev_ch_3" onchange="autoSaveChannelReverse(3)"> Rev</label>
+                        </div>
+                        <div class="radio-bar-v"><div class="radio-bar-v-fill" id="cal_bar_3" style="height: 0%;"></div><span id="cal_txt_3">1000</span></div>
+                    </div>
+                </div>
+
+                <!-- Yaw (ch4) + Auto Save Reverse -->
+                <div class="radio-channel-header" style="margin-top: 5px;">
+                    <span>Yaw (ch4)</span>
+                    <label class="radio-rev-label"><input type="checkbox" id="rev_ch_4" onchange="autoSaveChannelReverse(4)"> Reverse</label>
+                </div>
+                <div class="radio-bar-h"><div class="radio-bar-fill" id="cal_bar_4" style="width: 50%;"></div><span id="cal_txt_4">1500</span></div>
+            </div>
+
+            <div class="radio-col-right">
+                <div>
+                    <div style="font-size: 10px; color: #8fa0b5; margin-bottom: 2px;">Radio 5</div>
+                    <div class="radio-bar-h" style="max-width: 100%;"><div class="radio-bar-fill" id="cal_bar_5" style="width: 50%;"></div><span id="cal_txt_5">1500</span></div>
+                </div>
+                <div>
+                    <div style="font-size: 10px; color: #8fa0b5; margin-bottom: 2px;">Radio 9</div>
+                    <div class="radio-bar-h" style="max-width: 100%;"><div class="radio-bar-fill" id="cal_bar_9" style="width: 50%;"></div><span id="cal_txt_9">1500</span></div>
+                </div>
+                <div>
+                    <div style="font-size: 10px; color: #8fa0b5; margin-bottom: 2px;">Radio 6</div>
+                    <div class="radio-bar-h" style="max-width: 100%;"><div class="radio-bar-fill" id="cal_bar_6" style="width: 50%;"></div><span id="cal_txt_6">1500</span></div>
+                </div>
+                <div>
+                    <div style="font-size: 10px; color: #8fa0b5; margin-bottom: 2px;">Radio 10</div>
+                    <div class="radio-bar-h" style="max-width: 100%;"><div class="radio-bar-fill" id="cal_bar_10" style="width: 50%;"></div><span id="cal_txt_10">1500</span></div>
+                </div>
+                <div>
+                    <div style="font-size: 10px; color: #8fa0b5; margin-bottom: 2px;">Radio 7</div>
+                    <div class="radio-bar-h" style="max-width: 100%;"><div class="radio-bar-fill" id="cal_bar_7" style="width: 50%;"></div><span id="cal_txt_7">1500</span></div>
+                </div>
+                <div>
+                    <div style="font-size: 10px; color: #8fa0b5; margin-bottom: 2px;">Radio 11</div>
+                    <div class="radio-bar-h" style="max-width: 100%;"><div class="radio-bar-fill" id="cal_bar_11" style="width: 50%;"></div><span id="cal_txt_11">1500</span></div>
+                </div>
+                <div>
+                    <div style="font-size: 10px; color: #8fa0b5; margin-bottom: 2px;">Radio 8</div>
+                    <div class="radio-bar-h" style="max-width: 100%;"><div class="radio-bar-fill" id="cal_bar_8" style="width: 50%;"></div><span id="cal_txt_8">1500</span></div>
+                </div>
+                <div>
+                    <div style="font-size: 10px; color: #8fa0b5; margin-bottom: 2px;">Radio 12</div>
+                    <div class="radio-bar-h" style="max-width: 100%;"><div class="radio-bar-fill" id="cal_bar_12" style="width: 50%;"></div><span id="cal_txt_12">1500</span></div>
+                </div>
+                <div style="grid-column: span 2; margin-top: 15px; display: flex; justify-content: center;">
+                    <button class="btn btn-warning" onclick="startRadioCalibration()" style="padding: 10px 25px; font-weight: bold;">Calibrate Radio</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -215,7 +381,6 @@ const PID_MAP = {
 };
 
 function refreshPIDUI() {
-    // Ambil objek parameter langsung dari cache induk atau dari DOM
     const params = window.parent.paramCache?.params || {};
 
     for (const [inputId, paramName] of Object.entries(PID_MAP)) {
@@ -224,15 +389,12 @@ function refreshPIDUI() {
 
         let rawValue = undefined;
 
-        // 1. Prioritaskan baca langsung dari memori/cache parameter FC
         if (params[paramName] !== undefined) {
             rawValue = parseFloat(params[paramName]);
         } 
-        // 2. Fallback: ambil dari metadata default jika FC belum connect
         else if (PARAM_METADATA && PARAM_METADATA[paramName]?.default !== undefined) {
             rawValue = parseFloat(PARAM_METADATA[paramName].default);
         }
-        // 3. Fallback: baca dari elemen input tabel jika sudah ada di DOM
         else {
             const valInput = document.getElementById('val_' + paramName);
             if (valInput && valInput.value !== "") {
@@ -286,6 +448,10 @@ async function saveModes() {
         const modeVal = COPTER_MODE_MAP[modeStr] !== undefined ? COPTER_MODE_MAP[modeStr] : 0;
         params.push({ name: 'FLTMODE' + i, value: modeVal });
     }
+    for (let i = 7; i <= 12; i++) {
+        const optVal = parseInt(document.getElementById('opt_ch' + i).value) || 0;
+        params.push({ name: 'RC' + i + '_OPTION', value: optVal });
+    }
     const btn = event.target; const originalText = btn.innerText; btn.innerText = "Writing..."; btn.disabled = true;
     try {
         const mav = window.parent.mavFeatures; let failed = [];
@@ -294,10 +460,214 @@ async function saveModes() {
             if (!ok) failed.push(p.name);
             else if (window.parent.paramCache?.params) window.parent.paramCache.params[p.name] = p.value;
         }
-        if (failed.length === 0) { alert("Flight modes berhasil disimpan!"); updateParamTableValues(window.parent.paramCache.params); }
+        if (failed.length === 0) { alert("Flight modes & Channel options berhasil disimpan!"); updateParamTableValues(window.parent.paramCache.params); }
         else alert("Gagal menyimpan mode: " + failed.join(', '));
     } catch (err) { alert("Error: " + err.message); } finally { btn.innerText = originalText; btn.disabled = false; }
 }
+
+// ===== SERVO OUTPUT DENGAN AUTO SAVE & AUTO UPDATE =====
+function initServoOutputTable() {
+    const tbody = document.getElementById('servoOutputTableBody');
+    if (!tbody) return;
+    let html = '';
+    
+    const servoFunctions = [
+        { val: 0, label: 'Disabled' },
+        { val: 4, label: 'Aileron' },
+        { val: 19, label: 'Elevator' },
+        { val: 21, label: 'Rudder' },
+        { val: 70, label: 'Throttle' },
+        { val: 33, label: 'Motor 1' },
+        { val: 34, label: 'Motor 2' },
+        { val: 35, label: 'Motor 3' },
+        { val: 36, label: 'Motor 4' },
+        { val: 37, label: 'Motor 5' },
+        { val: 38, label: 'Motor 6' },
+        { val: 39, label: 'Motor 7' },
+        { val: 40, label: 'Motor 8' },
+        { val: 73, label: 'Mount Tilt' },
+        { val: 74, label: 'Mount Roll' },
+        { val: 75, label: 'Mount Pan' }
+    ];
+
+    const fcParams = window.parent.paramCache?.params || {};
+
+    for (let i = 1; i <= 16; i++) {
+        let defaultFunc = fcParams[`SERVO${i}_FUNCTION`] !== undefined ? parseInt(fcParams[`SERVO${i}_FUNCTION`]) : (i <= 4 ? 32 + i : (i === 9 ? 73 : 0));
+        let defaultMin = fcParams[`SERVO${i}_MIN`] !== undefined ? parseInt(fcParams[`SERVO${i}_MIN`]) : 1100;
+        let defaultTrim = fcParams[`SERVO${i}_TRIM`] !== undefined ? parseInt(fcParams[`SERVO${i}_TRIM`]) : 1500;
+        let defaultMax = fcParams[`SERVO${i}_MAX`] !== undefined ? parseInt(fcParams[`SERVO${i}_MAX`]) : 1900;
+        let defaultRev = fcParams[`SERVO${i}_REVERSED`] !== undefined ? (parseInt(fcParams[`SERVO${i}_REVERSED`]) === 1) : false;
+
+        let funcOpts = '';
+        servoFunctions.forEach(fn => {
+            const selected = (fn.val === defaultFunc) ? 'selected' : '';
+            funcOpts += `<option value="${fn.val}" ${selected}>${fn.val}: ${fn.label}</option>`;
+        });
+
+        html += `
+            <tr>
+                <td style="font-weight: bold; color: #00bcd4; text-align: center;">${i}</td>
+                <td>
+                    <div class="servo-bar">
+                        <div class="servo-bar-fill" id="servo_bar_${i}" style="width: 50%;"></div>
+                        <span id="servo_pos_${i}">1500</span>
+                    </div>
+                </td>
+                <td style="text-align: center;"><input type="checkbox" id="servo_rev_${i}" ${defaultRev ? 'checked' : ''} onchange="autoSaveServoParam(${i}, 'REVERSED', this.checked ? 1 : 0)"></td>
+                <td><select id="servo_func_${i}" class="mp-select-opt" style="width: 150px;" onchange="autoSaveServoParam(${i}, 'FUNCTION', this.value)">${funcOpts}</select></td>
+                <td><input type="number" id="servo_min_${i}" value="${defaultMin}" onchange="autoSaveServoParam(${i}, 'MIN', this.value)"></td>
+                <td><input type="number" id="servo_trim_${i}" value="${defaultTrim}" onchange="autoSaveServoParam(${i}, 'TRIM', this.value)"></td>
+                <td><input type="number" id="servo_max_${i}" value="${defaultMax}" onchange="autoSaveServoParam(${i}, 'MAX', this.value)"></td>
+            </tr>
+        `;
+    }
+    tbody.innerHTML = html;
+}
+
+async function autoSaveServoParam(servoNum, paramType, val) {
+    const paramName = `SERVO${servoNum}_${paramType}`;
+    const numericVal = parseFloat(val);
+    if (isNaN(numericVal)) return;
+
+    const valInput = document.getElementById(`val_${paramName}`);
+    if (valInput) {
+        valInput.value = numericVal;
+        onValueInputChange(paramName, numericVal);
+    }
+
+    if (isConnected()) {
+        try {
+            const mav = window.parent.mavFeatures;
+            const success = await mav.setParam(paramName, numericVal);
+            if (success) {
+                if (window.parent.paramCache?.params) {
+                    window.parent.paramCache.params[paramName] = numericVal;
+                }
+            }
+        } catch (err) {
+            console.error(`[AutoSave Servo Error]`, err);
+        }
+    }
+}
+
+function startRadioCalibration() {
+    alert("Mode Kalibrasi Radio Aktif.\nGerakkan seluruh stick transmitter ke posisi minimum dan maksimum secara bergantian, lalu pastikan posisi netral di tengah.");
+}
+
+function initRadioReverseFromParams() {
+    const fcParams = window.parent.paramCache?.params || {};
+    for (let ch = 1; ch <= 4; ch++) {
+        const revVal = fcParams[`RC${ch}_REVERSED`];
+        const revCheckbox = document.getElementById(`rev_ch_${ch}`);
+        if (revCheckbox && revVal !== undefined) {
+            revCheckbox.checked = (parseInt(revVal) === 1);
+        }
+    }
+}
+
+async function autoSaveChannelReverse(ch) {
+    const isRev = document.getElementById(`rev_ch_${ch}`).checked;
+    const paramName = `RC${ch}_REVERSED`;
+    const valVal = isRev ? 1 : 0;
+
+    const valInput = document.getElementById(`val_${paramName}`);
+    if (valInput) {
+        valInput.value = valVal;
+        onValueInputChange(paramName, valVal);
+    }
+
+    if (isConnected()) {
+        try {
+            const mav = window.parent.mavFeatures;
+            const success = await mav.setParam(paramName, valVal);
+            if (success) {
+                if (window.parent.paramCache?.params) {
+                    window.parent.paramCache.params[paramName] = valVal;
+                }
+            }
+        } catch (err) {
+            console.error(`[AutoSave Error]`, err);
+        }
+    }
+}
+
+// ===== REAL-TIME RC CHANNELS & SERVO OUTPUT POLLER =====
+setInterval(() => {
+    try {
+        const telemetry = window.parent.gcsConnection?.telemetry;
+        // Objek 'data' ini berisi variabel MAVLink dari radio-mavlink.js
+        const data = telemetry?.data || telemetry || {}; 
+        
+        let rc = data.rc_channels || data.RC_CHANNELS || data.rc || data;
+        let servos = data.servo_output_raw || data.SERVO_OUTPUT_RAW || data.servos || data.servo || rc;
+
+        for (let ch = 1; ch <= 16; ch++) {
+            // PERBAIKAN: Tambahkan data['rc' + ch + '_in'] dan data['rc' + ch + '_raw'] 
+            // agar sesuai dengan output decoder MAVLink di mavlink_protocol.js
+            let pwmRadio = data['rc' + ch + '_in'] ?? 
+                           data['rc' + ch + '_raw'] ?? 
+                           rc['chan' + ch + '_raw'] ?? 
+                           rc['chan' + ch] ?? 
+                           rc['rc' + ch] ?? 
+                           rc['c' + ch] ?? 
+                           (ch === 3 ? 1000 : 1500); // Default throttle 1000, sisanya 1500
+
+            pwmRadio = parseInt(pwmRadio);
+            if (isNaN(pwmRadio)) pwmRadio = (ch === 3 ? 1000 : 1500);
+
+            // Cek apakah mode reverse untuk channel ini aktif (di-centang)
+            const revCheckbox = document.getElementById(`rev_ch_${ch}`);
+            let displayPwm = pwmRadio;
+            if (revCheckbox && revCheckbox.checked) {
+                displayPwm = 3000 - pwmRadio; // Logika reverse PWM (contoh: 1100 menjadi 1900)
+            }
+
+            // UPDATE UI TEKS DAN GRAFIK BAR
+            const txtEl = document.getElementById('cal_txt_' + ch);
+            const barEl = document.getElementById('cal_bar_' + ch);
+            
+            if (txtEl) txtEl.innerText = displayPwm;
+            if (barEl) {
+                // Konversi nilai PWM (1000-2000) menjadi Persentase (0% - 100%)
+                const percent = Math.max(0, Math.min(100, ((displayPwm - 1000) / 1000) * 100));
+                
+                // Cek apakah elemen menggunakan bar vertikal (Throttle/Pitch) atau horizontal (Roll/Yaw/Option)
+                if (barEl.parentElement.classList.contains('radio-bar-v')) {
+                    barEl.style.height = percent + '%';
+                } else {
+                    barEl.style.width = percent + '%';
+                }
+            }
+
+            // --- Bagian Servo Output ---
+            let pwmServo = 1500;
+            if (Array.isArray(servos)) {
+                pwmServo = servos[ch - 1] ?? servos[ch] ?? 1500;
+            } else if (typeof servos === 'object' && servos !== null) {
+                pwmServo = servos['servo' + ch + '_raw'] ?? 
+                           servos['servo' + ch] ?? 
+                           servos['s' + ch] ?? 
+                           servos['c' + ch] ??
+                           servos[ch] ?? 
+                           pwmRadio;
+            }
+
+            pwmServo = parseInt(pwmServo);
+            if (isNaN(pwmServo)) pwmServo = 1500;
+
+            const servoPosEl = document.getElementById(`servo_pos_${ch}`);
+            const servoBarEl = document.getElementById(`servo_bar_${ch}`);
+            if (servoPosEl) servoPosEl.innerText = pwmServo;
+            if (servoBarEl) {
+                const sPercent = Math.max(0, Math.min(100, ((pwmServo - 1000) / 1000) * 100));
+                servoBarEl.style.width = sPercent + '%';
+            }
+        }
+    } catch (e) {
+        console.error("Error reading telemetry poller:", e);
+    }
+}, 100); // Polling UI dilakukan setiap 100ms
 
 // ===============================================
 // PARAMETERS ENGINE (FLATTEN & POPUP CHECKBOX GRID)
@@ -355,7 +725,6 @@ async function initParamTable() {
         if (response.ok) {
             const rawData = await response.json();
             PARAM_METADATA = flattenMetadata(rawData);
-            console.log(`[Config] Total parameter berhasil dimuat: ${Object.keys(PARAM_METADATA).length}`);
         }
     } catch (error) { 
         console.warn("[Config] Gagal memuat metadata JSON:", error); 
@@ -364,6 +733,8 @@ async function initParamTable() {
     if (window.parent.paramCache && window.parent.paramCache.loaded) {
         updateParamTableValues(window.parent.paramCache.params);
         refreshPIDUI();
+        initServoOutputTable();
+        initRadioReverseFromParams();
     } else {
         if (Object.keys(PARAM_METADATA).length > 0) renderAllMetadata();
     }
@@ -511,11 +882,29 @@ function updateParamTableValues(paramsObj) {
             const key = keys[i];
             const val = paramsObj[key];
             htmlBuffer += getParamRowHTML(key, val);
+            
+            if (key === 'RC1_REVERSED' || key === 'RC2_REVERSED' || key === 'RC3_REVERSED' || key === 'RC4_REVERSED') {
+                const chNum = key.replace('RC', '').replace('_REVERSED', '');
+                const revCheckbox = document.getElementById(`rev_ch_${chNum}`);
+                if (revCheckbox) {
+                    revCheckbox.checked = (parseInt(val) === 1);
+                }
+            }
         }
 
         if (tbody) tbody.innerHTML = htmlBuffer;
         if (countDisplay) countDisplay.innerText = keys.length;
+        
+        initServoOutputTable();
     }, 50);
+
+    for (let i = 7; i <= 12; i++) {
+        const pName = 'RC' + i + '_OPTION';
+        if (paramsObj[pName] !== undefined) {
+            const selEl = document.getElementById('opt_ch' + i);
+            if (selEl) selEl.value = Math.round(paramsObj[pName]);
+        }
+    }
 }
 
 async function loadParams() {
@@ -528,6 +917,8 @@ async function loadParams() {
         if (window.parent.paramCache?.loaded) {
             updateParamTableValues(window.parent.paramCache.params);
             refreshPIDUI();
+            initServoOutputTable();
+            initRadioReverseFromParams();
         }
     } catch (e) { console.error("Gagal load params dari FC:", e); }
 }
@@ -626,45 +1017,35 @@ function loadFromFile(event) {
     reader.readAsText(file);
 }
 
-let searchTimeout = null;
-
 function filterParams() {
-    clearTimeout(searchTimeout);
+    const query = document.getElementById('paramSearch').value.toLowerCase().trim();
+    const rows = document.getElementById('paramTable').getElementsByTagName('tr');
+    let visible = 0;
     
-    searchTimeout = setTimeout(() => {
-        const query = document.getElementById('paramSearch').value.toLowerCase().trim();
-        const rows = document.getElementById('paramTable').getElementsByTagName('tr');
-        let visible = 0;
-        
-        requestAnimationFrame(() => {
-            for (let i = 0; i < rows.length; i++) {
-                const row = rows[i];
-                
-                // Pastikan baris memiliki kolom (mengabaikan pesan loading colspan)
-                if (row.cells.length > 0) {
-                    
-                    // CACHING: Ambil teks HANYA dari kolom pertama (index 0) yaitu Command
-                    if (!row.searchData) {
-                        row.searchData = row.cells[0].textContent.toLowerCase();
-                    }
-                    
-                    const matches = row.searchData.includes(query);
-                    const isCurrentlyHidden = row.style.display === 'none';
-                    
-                    if (matches && isCurrentlyHidden) {
-                        row.style.display = '';
-                    } else if (!matches && !isCurrentlyHidden) {
-                        row.style.display = 'none';
-                    }
-                    
-                    if (matches) visible++;
-                }
+    requestAnimationFrame(() => {
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            
+            if (!row.searchData) {
+                const cmdCell = row.cells[0];
+                row.searchData = cmdCell ? cmdCell.innerText.toLowerCase().trim() : '';
             }
             
-            const countDisplay = document.getElementById('paramCountDisplay');
-            if (countDisplay) countDisplay.innerText = visible;
-        });
-    }, 150);
+            const matches = query === '' || row.searchData.includes(query);
+            const isCurrentlyHidden = row.style.display === 'none';
+            
+            if (matches && isCurrentlyHidden) {
+                row.style.display = '';
+            } else if (!matches && !isCurrentlyHidden) {
+                row.style.display = 'none';
+            }
+            
+            if (matches) visible++;
+        }
+        
+        const countDisplay = document.getElementById('paramCountDisplay');
+        if (countDisplay) countDisplay.innerText = visible;
+    });
 }
 
 function resetPID() {
@@ -696,6 +1077,8 @@ function exportParams() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    initServoOutputTable();
+    initRadioReverseFromParams();
     await initParamTable();
 });
 
@@ -703,6 +1086,8 @@ window.addEventListener('paramCacheUpdated', () => {
     if (window.parent.paramCache && window.parent.paramCache.loaded) {
         updateParamTableValues(window.parent.paramCache.params);
         refreshPIDUI();
+        initServoOutputTable();
+        initRadioReverseFromParams();
     }
 });
 </script>
