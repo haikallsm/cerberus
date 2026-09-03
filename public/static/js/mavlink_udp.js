@@ -281,6 +281,11 @@ class UdpMavlink {
         } catch (e) {
             console.warn('[UdpMavlink] Gagal request RC_CHANNELS_RAW:', e);
         }
+        try {
+            await this.requestServoOutput(10);
+        } catch (e) {
+            console.warn('[UdpMavlink] Gagal request SERVO_OUTPUT_RAW:', e);
+        }
         console.log(`[UdpMavlink] Streams requested @ ${rateHz}Hz`);
     }
 
@@ -301,6 +306,24 @@ class UdpMavlink {
             false
         );
     }
+
+    async requestServoOutput(rateHz = 10) {
+        const rate = Math.max(1, Math.min(20, Number(rateHz) || 10));
+        const intervalUs = Math.round(1_000_000 / rate);
+        console.log(`[UdpMavlink] Request SERVO_OUTPUT_RAW(36) @ ${rate}Hz`);
+        await this.sendCommandLong(511, {p1: 36, p2: intervalUs}, false);
+    }
+
+    async requestHomePosition() {
+        try {
+            await this.sendCommandLong(410, {}, false);
+            console.log('[UdpMavlink] Request HOME_POSITION (CMD 410) sent');
+        } catch (e) {
+            console.warn('[UdpMavlink] Gagal request HOME_POSITION:', e);
+        }
+    }
+    pauseRCOverride() {this._stopRcOverrideLoop();}
+    resumeRCOverride() {this._startRcOverrideLoop();}
 
     async sendCommandAck(command, result = 0) {
         const buf = new ArrayBuffer(10);
@@ -442,12 +465,45 @@ class UdpMavlink {
         });
     }
 
+    // before
+    // async uploadMission(items, timeout = 10000) {
+    //     const count = items.length;
+    //     if (count === 0) throw new Error('Mission kosong, tidak ada yang di-upload');
+    //     if (this._missionUpload) throw new Error('Upload mission sedang berlangsung, tunggu selesai');
+
+    //     return new Promise((resolve, reject) => {
+    //         const state = { items, resolve, reject, timer: null, resendTimer: null };
+    //         state.resetTimer = () => {
+    //             if (state.resendTimer) { clearInterval(state.resendTimer); state.resendTimer = null; }
+    //             if (state.timer) clearTimeout(state.timer);
+    //             state.timer = setTimeout(() => {
+    //                 this._missionUpload = null;
+    //                 reject(new Error('Upload mission timeout -- FC berhenti meminta item'));
+    //             }, timeout);
+    //         };
+    //         state.resetTimer();
+    //         this._missionUpload = state;
+
+    //         const countPayload = [count & 0xFF, (count >> 8) & 0xFF, this.targetSystem, this.targetComponent];
+    //         this._sendFrame(44, countPayload, CRC_EXTRA[44]);
+
+    //         state.resendTimer = setInterval(() => {
+    //             if (!this._missionUpload) return;
+    //             console.warn('[UdpMavlink] uploadMission: belum ada respons FC, resend MISSION_COUNT...');
+    //             this._sendFrame(44, countPayload, CRC_EXTRA[44]);
+    //         }, 1500);
+    //     });
+    // }
+
     async uploadMission(items, timeout = 10000) {
         const count = items.length;
         if (count === 0) throw new Error('Mission kosong, tidak ada yang di-upload');
         if (this._missionUpload) throw new Error('Upload mission sedang berlangsung, tunggu selesai');
 
-        return new Promise((resolve, reject) => {
+        this._missionBusy = true;
+        this.pauseRcOverride();
+
+        const p = new Promise((resolve, reject) => {
             const state = { items, resolve, reject, timer: null, resendTimer: null };
             state.resetTimer = () => {
                 if (state.resendTimer) { clearInterval(state.resendTimer); state.resendTimer = null; }
@@ -468,6 +524,11 @@ class UdpMavlink {
                 console.warn('[UdpMavlink] uploadMission: belum ada respons FC, resend MISSION_COUNT...');
                 this._sendFrame(44, countPayload, CRC_EXTRA[44]);
             }, 1500);
+        });
+
+        return p.finally(() => {
+            this._missionBusy = false;
+            this.resumeRcOverride();
         });
     }
 
@@ -492,50 +553,58 @@ class UdpMavlink {
     }
 
     async downloadMission(timeout = 5000, maxRetries = 3) {
-        let count;
-        try {
-            count = await new Promise((resolve, reject) => {
-                const listPayload = [this.targetSystem, this.targetComponent];
-                const resendTimer = setInterval(() => {
-                    console.warn('[UdpMavlink] downloadMission: belum ada respons FC, resend MISSION_REQUEST_LIST...');
+        console.log(`[UdpMavlink] downloadMission: request mission list dari targetSystem=${this.targetSystem}, targetComponent=${this.targetComponent}`);
+        this._missionBusy = true;
+        this.pauseRcOverride();
+        
+        try{
+            let count;
+            try {
+                count = await new Promise((resolve, reject) => {
+                    const listPayload = [this.targetSystem, this.targetComponent];
+                    const resendTimer = setInterval(() => {
+                        console.warn('[UdpMavlink] downloadMission: belum ada respons FC, resend MISSION_REQUEST_LIST...');
+                        this._sendFrame(43, listPayload, CRC_EXTRA[43]);
+                    }, 1500);
+                    const timer = setTimeout(() => {
+                        clearInterval(resendTimer);
+                        console.warn('[UdpMavlink] Timeout MISSION_REQUEST_LIST, asumsikan tidak ada misi');
+                        resolve(0);
+                    }, timeout);
+                    this._missionCountWaiter = { resolve: (c) => { clearInterval(resendTimer); clearTimeout(timer); resolve(c); } };
                     this._sendFrame(43, listPayload, CRC_EXTRA[43]);
-                }, 1500);
-                const timer = setTimeout(() => {
-                    clearInterval(resendTimer);
-                    console.warn('[UdpMavlink] Timeout MISSION_REQUEST_LIST, asumsikan tidak ada misi');
-                    resolve(0);
-                }, timeout);
-                this._missionCountWaiter = { resolve: (c) => { clearInterval(resendTimer); clearTimeout(timer); resolve(c); } };
-                this._sendFrame(43, listPayload, CRC_EXTRA[43]);
-            });
-        } catch (e) {
-            console.warn('[UdpMavlink] Gagal mendapatkan MISSION_COUNT:', e);
-            return [];
-        }
-
-        if (count === 0) return [];
-
-        const items = [];
-        for (let seq = 0; seq < count; seq++) {
-            let item = null;
-            for (let attempt = 0; attempt < maxRetries && !item; attempt++) {
-                try {
-                    item = await new Promise((resolve, reject) => {
-                        const timer = setTimeout(() => reject(new Error('timeout')), timeout);
-                        this._missionItemWaiter = { seq, resolve: (it) => { clearTimeout(timer); resolve(it); } };
-                        const payload = [seq & 0xFF, (seq >> 8) & 0xFF, this.targetSystem, this.targetComponent];
-                        this._sendFrame(51, payload, CRC_EXTRA[51]);
-                    });
-                } catch (e) {
-                    console.warn(`[UdpMavlink] Item seq=${seq} timeout, percobaan ${attempt + 1}/${maxRetries}`);
-                }
+                });
+            } catch (e) {
+                console.warn('[UdpMavlink] Gagal mendapatkan MISSION_COUNT:', e);
+                return [];
             }
-            if (!item) throw new Error(`Gagal ambil mission item seq=${seq} setelah ${maxRetries} percobaan`);
-            items.push(item);
+    
+            if (count === 0) return [];
+    
+            const items = [];
+            for (let seq = 0; seq < count; seq++) {
+                let item = null;
+                for (let attempt = 0; attempt < maxRetries && !item; attempt++) {
+                    try {
+                        item = await new Promise((resolve, reject) => {
+                            const timer = setTimeout(() => reject(new Error('timeout')), timeout);
+                            this._missionItemWaiter = { seq, resolve: (it) => { clearTimeout(timer); resolve(it); } };
+                            const payload = [seq & 0xFF, (seq >> 8) & 0xFF, this.targetSystem, this.targetComponent];
+                            this._sendFrame(51, payload, CRC_EXTRA[51]);
+                        });
+                    } catch (e) {
+                        console.warn(`[UdpMavlink] Item seq=${seq} timeout, percobaan ${attempt + 1}/${maxRetries}`);
+                    }
+                }
+                if (!item) throw new Error(`Gagal ambil mission item seq=${seq} setelah ${maxRetries} percobaan`);
+                items.push(item);
+            }
+            await this._sendFrame(47, [this.targetSystem, this.targetComponent, 0], CRC_EXTRA[47]);
+            return items;
+        } finally {
+            this._missionBusy = false;
+            this.resumeRcOverride();
         }
-
-        await this._sendFrame(47, [this.targetSystem, this.targetComponent, 0], CRC_EXTRA[47]);
-        return items;
     }
 
     _buildFenceItemPayload(seq, item) {
@@ -1195,11 +1264,13 @@ class UdpMavlink {
                 this.targetComponent = compid;
                 this._streamsRequested = true;
                 this.requestDataStreams().catch(e => console.warn('[UdpMavlink] requestDataStreams gagal:', e));
+                this.requestHomePosition();
             }
             if (sysid === this.targetSystem && compid === this.targetComponent) {
                 this.lastHeartbeatTime = Date.now();
             } else {
-                console.warn(`[UdpMavlink] Heartbeat dari sysid=${sysid}/compid=${compid} diabaikan (target saat ini: ${this.targetSystem}/${this.targetComponent}) -- kemungkinan ada device lain di broadcast yang sama.`);
+                // console.warn(`[UdpMavlink] Heartbeat dari sysid=${sysid}/compid=${compid} diabaikan (target saat ini: ${this.targetSystem}/${this.targetComponent}) -- kemungkinan ada device lain di broadcast yang sama.`);
+                console.warn();
             }
         }
 
