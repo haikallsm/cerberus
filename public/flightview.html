@@ -169,6 +169,13 @@
                 <path d="M7 9.5h10M7 13h7"/>
             </svg>
         </button>
+
+        <button id="autoCenterBtn" class="map-tool-btn active" type="button" onclick="toggleAutoCenter()" title="Auto-Center Map" aria-label="Auto Center" aria-pressed="true">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="3" fill="currentColor"/>
+                <path d="M12 2v4M12 18v4M2 12h4M18 12h4M12 22c-5.523 0-10-4.477-10-10S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zM12 6a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"/>
+            </svg>
+        </button>
     </div>
 
     <div id="mavlinkLogPanel" class="mavlink-log-panel" aria-hidden="true">
@@ -1254,6 +1261,23 @@ window.updateMavlogUI = function(logItem) {
 // ===== UPDATE MAP MARKER & HEADING =====
 let headingLineBlack = null;
 let headingLineYellow = null;
+let isAutoCenterEnabled = true;
+
+// KODE BARU: Fungsi untuk Toggle Auto-Center
+window.toggleAutoCenter = function() {
+    isAutoCenterEnabled = !isAutoCenterEnabled;
+    const btn = document.getElementById('autoCenterBtn');
+    if (btn) {
+        btn.classList.toggle('active', isAutoCenterEnabled);
+        btn.setAttribute('aria-pressed', String(isAutoCenterEnabled));
+    }
+    
+    // Jika diaktifkan kembali, langsung paksakan kamera ke posisi drone saat ini
+    if (isAutoCenterEnabled && droneMarker) {
+        const currentPos = droneMarker.getLatLng();
+        map.setView(currentPos, map.getZoom());
+    }
+};
 
 function updateMap(data) {
     const lat = Number(data.lat), lon = Number(data.lon);
@@ -1297,7 +1321,9 @@ function updateMap(data) {
         headingLineBlack.setLatLngs(lineCoords);
         headingLineYellow.setLatLngs(lineCoords);
     }
-    map.setView([lat, lon], map.getZoom());
+    if (isAutoCenterEnabled) {
+        map.setView([lat, lon], map.getZoom());
+    }
 }
 
 // ===== FLOATING MAP TOOLS & VIDEO =====
