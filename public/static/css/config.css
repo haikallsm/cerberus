@@ -1,46 +1,62 @@
-/* Layout & Container Styling */
-.main {
-    margin-top: 60px;
-    margin-left: 0;
-    margin-right: auto;
-    padding: 15px 25px;
-    max-width: 100%;
-    position: relative;
-    z-index: 1;
-    box-sizing: border-box;
+/* =======================================================
+   Layout & Styling Kunci Layar (Fixed Global Scroll) 
+   ======================================================= */
+html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    height: auto;
+    overflow-y: auto; /* Mengizinkan scroll pada halaman utama */
+    overflow-x: hidden;
 }
-.page-title { font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 12px; letter-spacing: 0.5px; }
+
+.main { 
+    margin-left: 0; 
+    padding: 10px 15px; 
+    box-sizing: border-box; 
+    min-height: 100vh; 
+    height: auto;
+    display: flex; 
+    flex-direction: column; 
+}
+
+.page-title { 
+    font-size: 15px; 
+    font-weight: 700; 
+    color: #fff; 
+    margin-bottom: 8px; 
+    letter-spacing: 0.5px; 
+    flex-shrink: 0; 
+}
 
 /* Tabs */
-.tabs {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 15px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    padding-bottom: 8px;
+.tabs { 
+    display: flex; 
+    gap: 6px; 
+    margin-bottom: 10px; 
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1); 
+    padding-bottom: 6px; 
+    flex-shrink: 0; 
 }
-.tab-btn {
-    background: #141b24;
-    border: 1px solid #2a3847;
-    color: #8fa0b5;
-    padding: 8px 18px;
-    font-size: 12px;
-    font-weight: 600;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
+.tab-btn { background: #141b24; border: 1px solid #2a3847; color: #8fa0b5; padding: 6px 12px; font-size: 11px; font-weight: 600; border-radius: 4px; cursor: pointer; transition: all 0.2s ease; }
 .tab-btn:hover { background: #1c2633; color: #fff; }
-.tab-btn.active {
-    background: #00bcd4;
-    color: #0d131a;
-    border-color: #00bcd4;
-    font-weight: bold;
-}
-.tab-panel { display: none; }
-.tab-panel.active { display: block; }
+.tab-btn.active { background: #00bcd4; color: #0d131a; border-color: #00bcd4; font-weight: bold; }
 
-/* PID Tuning */
+.tab-panel { display: none; }
+.tab-panel.active { 
+    display: flex; 
+    flex-direction: column; 
+    flex: 1; 
+    padding-right: 4px;
+}
+
+/* Custom Scrollbar agar lebih estetik saat scroll di dalam tab */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2a3847; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #00bcd4; }
+
+/* PID Tuning (Dipertahankan dari config_2.css) */
 .pid-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 20px; }
 .pid-card { background: #1a1a1a; border: 1px solid #333; border-radius: 10px; padding: 15px; }
 .pid-card:hover { border-color: #00bcd4; }
@@ -51,53 +67,73 @@
 .pid-input { width: 80px; background: #222; border: 1px solid #444; color: #00e676; padding: 5px; font-weight: bold; border-radius: 3px; text-align: right; }
 .pid-input:focus { border-color: #00bcd4; outline: none; }
 
-/* Flight Modes */
-.flight-modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; }
-.mode-item { display: flex; align-items: center; gap: 10px; padding: 10px; background: #252525; border-radius: 6px; }
-.mode-label { font-size: 12px; color: #888; min-width: 80px; }
-.mode-select { flex: 1; background: #1a1a1a; color: #ccc; border: 1px solid #444; padding: 6px 10px; border-radius: 6px; font-size: 12px; }
-
-/* Search Bar */
-.search-bar { display: flex; gap: 10px; margin-bottom: 15px; }
-.search-bar input { flex: 1; background: #252525; color: #ccc; border: 1px solid #444; padding: 8px 12px; border-radius: 6px; font-size: 13px; }
+/* Flight Modes 2 Kolom dengan Indikator Hijau Aktif */
+.flight-modes { display: flex; flex-direction: column; gap: 6px; }
+.mode-item { display: flex; align-items: center; gap: 10px; }
+.mode-label { font-size: 11px; color: #8fa0b5; width: 100px; font-weight: 600; }
+.mode-select {
+    background: #06090d;
+    border: 1px solid #2a394a;
+    color: #ffb74d;
+    font-size: 11px;
+    padding: 5px 8px;
+    border-radius: 3px;
+    width: 160px;
+    outline: none;
+}
+.mode-select.active-mode-green {
+    background-color: #2e7d32 !important;
+    color: #ffffff !important;
+    border-color: #4caf50 !important;
+    font-weight: bold;
+}
 
 /* Parameters Table UI */
-.param-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.param-search-box { display: flex; gap: 10px; align-items: center; }
-.param-search-input { width: 380px; padding: 8px 12px; background: #0c1015; border: 1px solid #24303f; border-radius: 4px; color: #fff; font-size: 12px; outline: none; transition: border 0.2s; }
+.param-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-shrink: 0; }
+.param-search-box { display: flex; gap: 8px; align-items: center; }
+.param-search-input { width: 320px; padding: 6px 10px; background: #0c1015; border: 1px solid #24303f; border-radius: 4px; color: #fff; font-size: 11px; outline: none; transition: border 0.2s; }
 .param-search-input:focus { border-color: #00bcd4; }
-.param-counter-badge { font-size: 11px; color: #8fa0b5; background: #141b24; padding: 6px 12px; border-radius: 4px; border: 1px solid #24303f; }
+.param-counter-badge { font-size: 10px; color: #8fa0b5; background: #141b24; padding: 4px 10px; border-radius: 4px; border: 1px solid #24303f; }
 .param-counter-badge b { color: #00bcd4; }
 
-.param-table-container { height: calc(100vh - 220px); max-height: 500px; overflow-y: auto; border: 1px solid #202b38; background: #090d12; border-radius: 4px; }
+.param-table-container { 
+    display: block;
+    max-height: 480px; /* Membatasi tinggi tabel sekitar 10 baris */
+    overflow-y: auto;  /* Memunculkan scroll di dalam tabel */
+    border: 1px solid #202b38; 
+    background: #090d12; 
+    border-radius: 4px; 
+    margin-bottom: 12px;
+    position: relative;
+}
 .data-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #d1d9e2; }
-.data-table thead th { position: sticky; top: 0; background: #131a22; color: #00bcd4; text-align: left; padding: 8px 10px; border-bottom: 2px solid #24303f; border-right: 1px solid #1a232e; font-weight: 600; z-index: 2; }
+.data-table thead th { position: sticky; top: 0; background: #131a22; color: #00bcd4; text-align: left; padding: 6px 8px; border-bottom: 2px solid #24303f; border-right: 1px solid #1a232e; font-weight: 600; z-index: 2; }
 .data-table tbody tr { border-bottom: 1px solid #141b24; }
 .data-table tbody tr:nth-child(even) { background: #0d1218; }
 .data-table tbody tr:hover { background: #17212c; }
-.data-table td { padding: 5px 10px; border-right: 1px solid #161f2a; vertical-align: middle; position: relative; }
+.data-table td { padding: 4px 8px; border-right: 1px solid #161f2a; vertical-align: middle; position: relative; }
 
 /* Value Input & Modified Highlight */
-.mp-val-input { width: 95px; background: #06090d; border: 1px solid #2a394a; color: #4caf50; font-weight: 600; padding: 4px 6px; border-radius: 3px; font-family: monospace; font-size: 11px; outline: none; transition: border 0.2s ease; }
+.mp-val-input { width: 85px; background: #06090d; border: 1px solid #2a394a; color: #4caf50; font-weight: 600; padding: 3px 5px; border-radius: 3px; font-family: monospace; font-size: 11px; outline: none; transition: border 0.2s ease; }
 .mp-val-input:focus { border-color: #00bcd4; }
 .data-table tr.is-modified { background: rgba(255, 152, 0, 0.12) !important; }
 .data-table tr.is-modified .mp-val-input { border-color: #ff9800; background: #231808; color: #ffb74d; }
 
 /* Dropdown Options */
-.mp-select-opt { background: #06090d; border: 1px solid #24303f; color: #ffb74d; font-size: 11px; padding: 4px 6px; border-radius: 3px; max-width: 220px; width: 100%; outline: none; }
+.mp-select-opt { background: #06090d; border: 1px solid #24303f; color: #ffb74d; font-size: 11px; padding: 3px 5px; border-radius: 3px; max-width: 200px; width: 100%; outline: none; }
 .mp-select-opt:focus { border-color: #00bcd4; }
 
 /* Bitmask Popup Dropdown / Checklist Button Style */
-.bitmask-btn { background: #141b24; border: 1px solid #2a3847; color: #ffb74d; font-size: 11px; padding: 5px 10px; border-radius: 4px; cursor: pointer; text-align: left; width: 100%; max-width: 220px; display: flex; justify-content: space-between; align-items: center; }
+.bitmask-btn { background: #141b24; border: 1px solid #2a3847; color: #ffb74d; font-size: 11px; padding: 4px 8px; border-radius: 4px; cursor: pointer; text-align: left; width: 100%; max-width: 200px; display: flex; justify-content: space-between; align-items: center; }
 .bitmask-btn:hover { background: #1c2633; border-color: #00bcd4; }
-.bitmask-popup { display: none; position: absolute; left: 0; top: 35px; background: #131a22; border: 1px solid #00bcd4; border-radius: 6px; padding: 12px; z-index: 999; box-shadow: 0 8px 24px rgba(0,0,0,0.8); width: 450px; }
-.bitmask-popup.show { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 12px; }
-.bitmask-item { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #d1d9e2; cursor: pointer; user-select: none; white-space: nowrap; }
-.bitmask-item input[type="checkbox"] { accent-color: #00bcd4; cursor: pointer; width: 13px; height: 13px; }
+.bitmask-popup { display: none; position: absolute; left: 0; top: 30px; background: #131a22; border: 1px solid #00bcd4; border-radius: 6px; padding: 10px; z-index: 999; box-shadow: 0 8px 24px rgba(0,0,0,0.8); width: 420px; }
+.bitmask-popup.show { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 10px; }
+.bitmask-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: #d1d9e2; cursor: pointer; user-select: none; white-space: nowrap; }
+.bitmask-item input[type="checkbox"] { accent-color: #00bcd4; cursor: pointer; width: 12px; height: 12px; }
 
 /* Action Buttons */
-.param-actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
-.btn { padding: 7px 15px; font-size: 11px; font-weight: 600; border-radius: 4px; cursor: pointer; border: none; transition: background 0.2s ease; }
+.param-actions { display: flex; gap: 6px; margin-top: 8px; align-items: center; flex-shrink: 0; }
+.btn { padding: 5px 12px; font-size: 11px; font-weight: 600; border-radius: 4px; cursor: pointer; border: none; transition: background 0.2s ease; }
 .btn-primary { background: #2e7d32; color: #fff; }
 .btn-primary:hover { background: #388e3c; }
 .btn-secondary { background: #1c2633; color: #c0cddb; border: 1px solid #2a3847; }
@@ -107,28 +143,30 @@
 .btn-danger { background: #d32f2f; color: #fff; margin-left: auto; }
 .btn-danger:hover { background: #b71c1c; }
 
-/* Radio Calibration */
-.radio-cal-layout { display: flex; justify-content: space-between; gap: 20px; background: #090d12; padding: 20px; border-radius: 6px; border: 1px solid #202b38; }
-.radio-col-left { display: flex; flex-direction: column; align-items: center; gap: 15px; flex: 1; }
-.radio-col-right { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 15px; flex: 2; align-content: start; }
-.radio-bar-h { background: #222; border: 1px solid #444; border-radius: 4px; height: 26px; width: 100%; max-width: 240px; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+/* Radio Calibration Layout */
+.radio-cal-layout { display: flex; justify-content: space-between; gap: 15px; background: #090d12; padding: 12px 15px; border-radius: 6px; border: 1px solid #202b38; flex-shrink: 0; }
+.radio-col-left { display: flex; flex-direction: column; align-items: center; gap: 10px; flex: 1; }
+.radio-col-right { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 12px; flex: 2; align-content: start; }
+.radio-bar-h { background: #222; border: 1px solid #444; border-radius: 4px; height: 22px; width: 100%; max-width: 220px; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
 .radio-bar-h-fill { position: absolute; left: 0; top: 0; bottom: 0; background: #76b900; width: 50%; z-index: 1; transition: width 0.1s; }
-.radio-bar-h span { position: relative; z-index: 2; color: #fff; font-size: 11px; font-weight: bold; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
-.radio-bar-v-container { display: flex; gap: 15px; justify-content: center; height: 220px; margin: 10px 0; }
+.radio-bar-h span { position: relative; z-index: 2; color: #fff; font-size: 10px; font-weight: bold; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+
+.radio-bar-v-container { display: flex; gap: 12px; justify-content: center; height: 160px; margin: 5px 0; }
 .radio-bar-v-wrapper { display: flex; flex-direction: column; align-items: center; }
-.radio-bar-v { background: #222; border: 1px solid #444; border-radius: 4px; width: 28px; height: 180px; position: relative; overflow: hidden; display: flex; align-items: flex-end; justify-content: center; }
+.radio-bar-v { background: #222; border: 1px solid #444; border-radius: 4px; width: 24px; height: 130px; position: relative; overflow: hidden; display: flex; align-items: flex-end; justify-content: center; }
 .radio-bar-v-fill { position: absolute; bottom: 0; left: 0; right: 0; background: #76b900; height: 50%; z-index: 1; transition: height 0.1s; }
-.radio-bar-v span { position: relative; z-index: 2; color: #fff; font-size: 10px; font-weight: bold; margin-bottom: 4px; writing-mode: vertical-lr; transform: rotate(180deg); text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
-.radio-channel-header { display: flex; justify-content: space-between; align-items: center; width: 100%; max-width: 240px; font-size: 12px; font-weight: bold; color: #00bcd4; margin-bottom: 2px; }
-.radio-rev-label { font-size: 10px; color: #aaa; font-weight: normal; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+.radio-bar-v span { position: relative; z-index: 2; color: #fff; font-size: 9px; font-weight: bold; margin-bottom: 3px; writing-mode: vertical-lr; transform: rotate(180deg); text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+
+.radio-channel-header { display: flex; justify-content: space-between; align-items: center; width: 100%; max-width: 220px; font-size: 11px; font-weight: bold; color: #00bcd4; margin-bottom: 2px; }
+.radio-rev-label { font-size: 10px; color: #aaa; font-weight: normal; cursor: pointer; display: flex; align-items: center; gap: 3px; }
 .radio-rev-label input { accent-color: #00bcd4; cursor: pointer; }
 
 /* Servo Output Table Style */
 .servo-table { width: 100%; border-collapse: collapse; font-size: 11px; color: #d1d9e2; }
-.servo-table th { background: #131a22; color: #00bcd4; padding: 8px; text-align: left; border-bottom: 2px solid #24303f; }
-.servo-table td { padding: 6px 8px; border-bottom: 1px solid #141b24; vertical-align: middle; }
-.servo-bar { background: #222; border: 1px solid #444; border-radius: 3px; height: 18px; width: 100px; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.servo-table th { background: #131a22; color: #00bcd4; padding: 6px 8px; text-align: left; border-bottom: 2px solid #24303f; }
+.servo-table td { padding: 4px 8px; border-bottom: 1px solid #141b24; vertical-align: middle; }
+.servo-bar { background: #222; border: 1px solid #444; border-radius: 3px; height: 16px; width: 90px; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
 .servo-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: #76b900; width: 50%; z-index: 1; }
-.servo-bar span { position: relative; z-index: 2; color: #fff; font-size: 10px; font-weight: bold; }
-.servo-table input[type="number"] { width: 65px; background: #06090d; border: 1px solid #2a394a; color: #fff; padding: 3px 6px; border-radius: 3px; font-size: 11px; }
-.servo-table select { background: #06090d; border: 1px solid #2a394a; color: #ffb74d; padding: 3px 6px; border-radius: 3px; font-size: 11px; width: 145px; }
+.servo-bar span { position: relative; z-index: 2; color: #fff; font-size: 9px; font-weight: bold; }
+.servo-table input[type="number"] { width: 60px; background: #06090d; border: 1px solid #2a394a; color: #fff; padding: 2px 5px; border-radius: 3px; font-size: 11px; }
+.servo-table select { background: #06090d; border: 1px solid #2a394a; color: #ffb74d; padding: 2px 5px; border-radius: 3px; font-size: 11px; width: 130px; }

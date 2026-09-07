@@ -39,6 +39,7 @@ class UdpMavlink {
 
         this._remoteIp = null;
         this._remotePort = null;
+        this._localPort = null;
         this._connected = false;
         this._gcsHeartbeatTimer = null;
         this._dataUnsubscribe = null;
@@ -69,25 +70,57 @@ class UdpMavlink {
         return this.telemetry.connected && (Date.now() - this.lastHeartbeatTime) < this._linkLossTimeoutMs;
     }
 
-    async connect(ip, port) {
+    // ini kode yang kemaren
+    // async connect(ip, port) {
+    //     if (!window.udpBridge) throw new Error('udpBridge tidak tersedia -- pastikan preload.js sudah dimuat.');
+    //     if (!ip || !port) throw new Error('IP dan Port wajib diisi.');
+
+    //     this._intentionalDisconnect = false;
+    //     this._awaitingReconnect = false;
+
+    //     const result = await window.udpBridge.connect(ip, parseInt(port, 10));
+    //     if (!result || !result.ok) {
+    //         throw new Error(result?.message || 'Gagal membuka UDP socket di main process.');
+    //     }
+
+    //     this._remoteIp = ip;
+    //     this._remotePort = parseInt(port, 10);
+    //     this._connected = true;
+    //     this.telemetry.connected = true;
+    //     this.lastHeartbeatTime = Date.now(); // grace period awal, sama seperti RadioMavlink
+
+    //     // Dengarkan data masuk dari main process
+    //     this._dataUnsubscribe = window.udpBridge.onData((bytes) => {
+    //         for (const b of bytes) this.parser.feedByte(b);
+    //     });
+
+    //     this._startGcsHeartbeat();
+    //     this._startWatchdog();
+    //     this._startRcOverrideLoop();
+    //     if (this.onConnect) this.onConnect();
+    // }
+
+    // ini kode yang bisa
+    async connect(ip, port, localPort = null) {
         if (!window.udpBridge) throw new Error('udpBridge tidak tersedia -- pastikan preload.js sudah dimuat.');
         if (!ip || !port) throw new Error('IP dan Port wajib diisi.');
 
         this._intentionalDisconnect = false;
         this._awaitingReconnect = false;
 
-        const result = await window.udpBridge.connect(ip, parseInt(port, 10));
+        const result = await window.udpBridge.connect(ip, parseInt(port, 10), localPort ? parseInt(localPort, 10) : null);
         if (!result || !result.ok) {
             throw new Error(result?.message || 'Gagal membuka UDP socket di main process.');
         }
 
         this._remoteIp = ip;
         this._remotePort = parseInt(port, 10);
+        this._localPort = result.bindPort ?? localPort ?? null;
+
         this._connected = true;
         this.telemetry.connected = true;
-        this.lastHeartbeatTime = Date.now(); // grace period awal, sama seperti RadioMavlink
+        this.lastHeartbeatTime = Date.now();
 
-        // Dengarkan data masuk dari main process
         this._dataUnsubscribe = window.udpBridge.onData((bytes) => {
             for (const b of bytes) this.parser.feedByte(b);
         });
@@ -95,7 +128,31 @@ class UdpMavlink {
         this._startGcsHeartbeat();
         this._startWatchdog();
         this._startRcOverrideLoop();
+
+        console.log(`[UdpMavlink] CONNECTED local:${this._localPort} -> remote:${this._remoteIp}:${this._remotePort}`);
         if (this.onConnect) this.onConnect();
+    }
+
+    // ini juga yang tadi bisa
+    async _attemptReconnect(attempt) {
+        if (this._intentionalDisconnect || !this._awaitingReconnect || this._reconnecting) return;
+        if (!this._remoteIp || !this._remotePort) {
+            this._scheduleReconnect(attempt + 1);
+            return;
+        }
+
+        this._reconnecting = true;
+        try {
+            // NEW: ikutkan localPort saat reconnect
+            await this.connect(this._remoteIp, this._remotePort, this._localPort);
+            console.log('[UdpMavlink] Auto-reconnect berhasil setelah unexpected drop.');
+        } catch (e) {
+            console.warn(`[UdpMavlink] Auto-reconnect attempt ${attempt} gagal:`, e.message);
+            this._reconnecting = false;
+            this._scheduleReconnect(attempt + 1);
+            return;
+        }
+        this._reconnecting = false;
     }
 
     async _teardownTransport() {
@@ -144,25 +201,25 @@ class UdpMavlink {
         this._reconnectTimer = setTimeout(() => this._attemptReconnect(attempt), delayMs);
     }
 
-    async _attemptReconnect(attempt) {
-        if (this._intentionalDisconnect || !this._awaitingReconnect || this._reconnecting) return;
-        if (!this._remoteIp || !this._remotePort) {
-            this._scheduleReconnect(attempt + 1);
-            return;
-        }
+    // async _attemptReconnect(attempt) {
+    //     if (this._intentionalDisconnect || !this._awaitingReconnect || this._reconnecting) return;
+    //     if (!this._remoteIp || !this._remotePort) {
+    //         this._scheduleReconnect(attempt + 1);
+    //         return;
+    //     }
         
-        this._reconnecting = true;
-        try {
-            await this.connect(this._remoteIp, this._remotePort);
-            console.log('[UdpMavlink] Auto-reconnect berhasil setelah unexpected drop.');
-        } catch (e) {
-            console.warn(`[UdpMavlink] Auto-reconnect attempt ${attempt} gagal:`, e.message);
-            this._reconnecting = false;
-            this._scheduleReconnect(attempt + 1);
-            return;
-        }
-        this._reconnecting = false;
-    }
+    //     this._reconnecting = true;
+    //     try {
+    //         await this.connect(this._remoteIp, this._remotePort);
+    //         console.log('[UdpMavlink] Auto-reconnect berhasil setelah unexpected drop.');
+    //     } catch (e) {
+    //         console.warn(`[UdpMavlink] Auto-reconnect attempt ${attempt} gagal:`, e.message);
+    //         this._reconnecting = false;
+    //         this._scheduleReconnect(attempt + 1);
+    //         return;
+    //     }
+    //     this._reconnecting = false;
+    // }
 
     async disconnect() {
         if (this._intentionalDisconnect) return;
@@ -291,20 +348,11 @@ class UdpMavlink {
 
     async requestRawRcChannels(rateHz = 10) {
         const rate = Math.max(1, Math.min(20, Number(rateHz) || 10));
-        // 1 Hz  = 1,000,000 us
-        // 10 Hz =   100,000 us
         const intervalUs = Math.round(1_000_000 / rate);
-        console.log(
-            `[UdpMavlink] Request RC_CHANNELS_RAW(35) @ ${rate}Hz`
-        );
-        await this.sendCommandLong(
-            511, // MAV_CMD_SET_MESSAGE_INTERVAL
-            {
-                p1: 35,          // RC_CHANNELS_RAW
-                p2: intervalUs   // interval dalam microsecond
-            },
-            false
-        );
+        console.log(`[UdpMavlink] Request RC_CHANNELS (65) & RAW (35) @ ${rate}Hz`);
+        
+        await this.sendCommandLong(511, {p1: 65, p2: intervalUs}, false);
+        await this.sendCommandLong(511, {p1: 35, p2: intervalUs}, false);
     }
 
     async requestServoOutput(rateHz = 10) {
@@ -981,108 +1029,56 @@ class UdpMavlink {
 
     async setHybridModeTemporary(targetState, targetPwm, channel = 4) {
         const normalized = this._normalizeHybridState(targetState);
-        if (!normalized) {
-            throw new Error(
-                `Hybrid target state tidak valid: ${targetState}`
-            );
-        }
-        if (!Number.isFinite(Number(targetPwm))) {
-            throw new Error(`Hybrid target PWM tidak valid: ${targetPwm}`);
-        }
-        if (channel < 0 || channel > 7) {
-            throw new Error(`Channel ${channel} tidak valid.`);
-        }
-        // Batalkan timer dari proses sebelumnya.
-        if (this._hybridOverride.probeTimer) {
-            clearTimeout(this._hybridOverride.probeTimer);
-            this._hybridOverride.probeTimer = null;
-        }
-        const now = Date.now();
+
+        if (!normalized) throw new Error(`Hybrid target state tidak valid: ${targetState}`);
+        if (!Number.isFinite(Number(targetPwm))) throw new Error(`Hybrid target PWM tidak valid: ${targetPwm}`);
+        if (channel < 0 || channel > 7) throw new Error(`Channel ${channel} tidak valid.`);
+
+        const remotePwm = Number(this.telemetry?.[`rc${channel + 1}_raw`]);
+        const remoteState = this._getHybridStateFromRc(remotePwm);
+
         this._hybridOverride.active = true;
         this._hybridOverride.channel = channel;
         this._hybridOverride.targetPwm = Number(targetPwm);
         this._hybridOverride.targetState = normalized;
-        this._hybridOverride.startedAt = now;
-        this._hybridOverride.minHoldMs = 1500;
+        this._hybridOverride.startedAt = Date.now();
+        this._hybridOverride.minHoldMs = 800;
         this._hybridOverride.stableMatches = 0;
-        // Ambil snapshot sequence RC RAW.
-        this._hybridOverride.rawSeqAtStart = this._physicalRc5Seq;
-        this._hybridOverride.lastPhysicalState = null;
-        console.log(`[HybridOverride] START ` + `target=${normalized} ` + `pwm=${targetPwm} ` + `rawSeq=${this._physicalRc5Seq}`
-        );
-        /*
-        * CH5 langsung diambil alih.
-        * Mulai dari sini FC tidak mengikuti switch remote.
-        */
+        this._hybridOverride.lastRemoteState = remoteState;
+        this._hybridOverride.initialRemoteState = remoteState;
+
+        console.log(`[HybridOverride] START target=${normalized} pwm=${targetPwm} | remote_rc${channel + 1}=${Number.isFinite(remotePwm) ? remotePwm : 'N/A'} (${remoteState ?? 'unknown'})`);
+
         await this.sendRcOverride(channel, Number(targetPwm));
-        return {ok: true, temporary: true, targetState: normalized, targetPwm: Number(targetPwm)};
+        this._checkHybridOverrideRelease();
+
+        return { ok: true, temporary: true, targetState: normalized, targetPwm: Number(targetPwm), remoteState };
     }
 
     _checkHybridOverrideRelease() {
         const state = this._hybridOverride;
+        if (!state?.active) return false;
 
-        if (!state?.active) {
-            return false;
-        }
-
-        /*
-        * Jangan melakukan pengecekan terlalu cepat
-        * setelah GCS mengirim override.
-        */
-        const heldLongEnough =
-            Date.now() - state.startedAt >=
-            state.minHoldMs;
-
-        if (!heldLongEnough) {
-            return false;
-        }
-
-        /*
-        * Harus ada RC_CHANNELS_RAW baru
-        * setelah override dimulai.
-        */
-        if (this._physicalRc5Seq <= state.rawSeqAtStart) {
-            return false;
-        }
-
-        const remotePwm = Number(this._physicalRc5);
+        const remotePwm = Number(this.telemetry?.[`rc${state.channel + 1}_raw`]);
         const remoteState = this._getHybridStateFromRc(remotePwm);
 
-        if (!remoteState) {
-            state.stableMatches = 0;
-            state.lastPhysicalState = null;
-            return false;
-        }
+        const matchesTarget = remoteState === state.targetState && this._isHybridVehicleTypeCompatible(state.targetState);
+        const operatorMovedAway = remoteState !== null && remoteState !== state.initialRemoteState;
+        const shouldTrack = matchesTarget || operatorMovedAway;
 
-        /*
-        * Pastikan posisi switch benar-benar
-        * konsisten beberapa sample berturut-turut.
-        */
-        if (remoteState === state.targetState && this._isHybridVehicleTypeCompatible(state.targetState)) {
-            if (state.lastPhysicalState === remoteState) {
-                state.stableMatches++;
-            } else {
-                state.stableMatches = 1;
-            }
-            state.lastPhysicalState = remoteState;
-
+        if (shouldTrack) {
+            state.stableMatches = state.lastRemoteState === remoteState ? state.stableMatches + 1 : 1;
         } else {
             state.stableMatches = 0;
-            state.lastPhysicalState = remoteState;
         }
+        state.lastRemoteState = remoteState;
 
-        console.log(
-            `[HybridOverride] ` +
-            `physicalRC5=${remotePwm} ` +
-            `state=${remoteState} ` +
-            `target=${state.targetState} ` +
-            `stable=${state.stableMatches}/` +
-            `${state.requiredStableMatches}`
-        );
+        const heldLongEnough = Date.now() - state.startedAt >= state.minHoldMs;
+        const stableEnough = state.stableMatches >= state.requiredStableMatches;
 
-        if (state.stableMatches >= state.requiredStableMatches){
+        if (heldLongEnough && stableEnough) {
             this._releaseHybridOverride();
-            return true;        
+            return true;
         }
         return false;
     }
@@ -1203,54 +1199,61 @@ class UdpMavlink {
         return true;
     }
 
-    _handleRawRcChannels(payload) {
-        /*
-        * MAVLink RC_CHANNELS_RAW (#35)
-        *
-        * offset:
-        * 0   = time_boot_ms uint32
-        * 4   = chan1_raw
-        * 6   = chan2_raw
-        * 8   = chan3_raw
-        * 10  = chan4_raw
-        * 12  = chan5_raw
-        * 14  = chan6_raw
-        * 16  = chan7_raw
-        * 18  = chan8_raw
-        * 20  = port
-        * 21  = rssi
-        */
+    _emitTelemetrySafe() {
+        if (!this.onTelemetry) return;
+        try {
+            this.onTelemetry({ ...this.telemetry });
+        } catch (err) {
+            console.error('[UdpMavlink] onTelemetry callback error:', err);
+        }
+    }
 
-        if (!payload || payload.length < 20) {return;}
+    _scheduleMagCalTelemetry() {
+        this._magCalTelemetryPending = true;
+        if (this._magCalTelemetryTimer) return;
+
+        this._magCalTelemetryTimer = setTimeout(() => {
+            this._magCalTelemetryTimer = null;
+            if (!this._magCalTelemetryPending) return;
+
+            this._magCalTelemetryPending = false;
+            this._emitTelemetrySafe();
+        }, 150);
+    }    
+
+    _handleRawRcChannels(payload) {
+        if (!payload || payload.length < 20) return;
+
         try {
             const bytes = Uint8Array.from(payload);
-            const dv = new DataView(
-                bytes.buffer,
-                bytes.byteOffset,
-                bytes.byteLength
-            );
+            const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+            
+            for (let i = 0; i < 8; i++) {
+                this._physicalRc[i] = dv.getUint16(4 + (i * 2), true);
+            }
 
             for (let i = 0; i < 8; i++) {
-                this._physicalRc[i] =
-                    dv.getUint16(4 + (i * 2), true);
+                const raw = this._physicalRc[i];
+                if (Number.isFinite(raw) && raw !== 65535) {
+                    this.telemetry[`rc${i + 1}_raw`] = raw;
+                }
             }
-            const rc5 = this._physicalRc[4];
-            if (!Number.isFinite(rc5)) {return;}
-            if (rc5 === 65535) {return;}
 
+            const rc5 = this._physicalRc[4];
+            if (!Number.isFinite(rc5) || rc5 === 65535) {
+                this._emitTelemetrySafe();
+                return;
+            }
             this._physicalRc5 = rc5;
             this._physicalRc5Seq++;
             this._physicalRc5LastUpdate = Date.now();
-            // Hanya untuk telemetry/UI/debug.
             this.telemetry.rc5_physical = rc5;
             this.telemetry.hybrid_remote_state = this._getHybridStateFromRc(rc5);
+            
             this._checkHybridOverrideRelease();
-
+            this._emitTelemetrySafe();
         } catch (error) {
-            console.error(
-                '[UdpMavlink] Gagal decode RC_CHANNELS_RAW:',
-                error
-            );
+            console.error('[UdpMavlink] Gagal decode RC_CHANNELS_RAW:', error);
         }
     }
 
@@ -1299,10 +1302,14 @@ class UdpMavlink {
             delete result._kind;
             Object.assign(this.telemetry, result);
             this.telemetry.connected = true;
+            
+            // Khusus di UDP: Konfirmasi titik HOME jika diterima
             if (Number.isFinite(result.home_lat) && Number.isFinite(result.home_lon)) {
                 this._notifyHomePosition(result.home_lat, result.home_lon, result.home_alt);
             }
-            if (this.onTelemetry) this.onTelemetry({ ...this.telemetry });
+            
+            this._checkHybridOverrideRelease();
+            this._emitTelemetrySafe();
         } else if (result._kind === 'statustext') {
             this._handleStatustext(result);
         } else if (result._kind === 'command_ack') {
@@ -1345,15 +1352,14 @@ class UdpMavlink {
             this.telemetry.rangefinder_distance = result.current_distance / 100;
             this.telemetry.rangefinder_healthy = isHealthy;
             this.telemetry.rangefinder_type = RANGEFINDER_TYPE_MAP[result.type] || 'UNKNOWN';
-            if (this.onTelemetry) this.onTelemetry({ ...this.telemetry });
+            this._emitTelemetrySafe();
         } else if (result._kind === 'mag_cal_progress') {
             if (!this.telemetry.mag_cal_progress) this.telemetry.mag_cal_progress = {};
             this.telemetry.mag_cal_progress[result.compass_id] = {
                 id: result.compass_id,
                 pct: result.completion_pct
             };
-            if (this.onTelemetry) this.onTelemetry({ ...this.telemetry });
-
+            this._scheduleMagCalTelemetry();
         } else if (result._kind === 'mag_cal_report') {
             if (!this.telemetry.mag_cal_report) this.telemetry.mag_cal_report = {};
             this.telemetry.mag_cal_report[result.compass_id] = {
@@ -1368,7 +1374,7 @@ class UdpMavlink {
                 if (!this.telemetry.mag_cal_progress) this.telemetry.mag_cal_progress = {};
                 this.telemetry.mag_cal_progress[result.compass_id] = { id: result.compass_id, pct: 100 };
             }
-            if (this.onTelemetry) this.onTelemetry({ ...this.telemetry });
+            this._emitTelemetrySafe();
         }
     }
     

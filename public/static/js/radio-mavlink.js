@@ -347,6 +347,7 @@ class RadioMavlink {
         this._reconnecting = false;
     }
 
+    // ini untuk web
     // async _attemptReconnect(attempt) {
     //     if (this._intentionalDisconnect || !this._awaitingReconnect || this._reconnecting) return;
 
@@ -707,6 +708,9 @@ class RadioMavlink {
         const rate = Math.max(1, Math.min(20, Number(rateHz) || 10));
         const intervalUs = Math.round(1_000_000 / rate);
         console.log(`[RadioMavlink] Request RC_CHANNELS_RAW(35) @ ${rate}Hz`);
+        // ID 65
+        await this.sendCommandLong(511, {p1: 65, p2: intervalUs}, false);
+        // ID 35
         await this.sendCommandLong(511, {p1: 35, p2: intervalUs}, false);
     }    
 
@@ -1303,7 +1307,7 @@ class RadioMavlink {
         }
 
         const remotePwm = Number(
-            this.telemetry?.[`rc${channel + 1}_in`]
+            this.telemetry?.[`rc${channel + 1}_raw`]
         );
 
         const remoteState = this._getHybridStateFromRc(remotePwm);
@@ -1316,6 +1320,7 @@ class RadioMavlink {
         this._hybridOverride.minHoldMs = 800;
         this._hybridOverride.stableMatches = 0;
         this._hybridOverride.lastRemoteState = remoteState;
+        this._hybridOverride.initialRemoteState = remoteState;
 
         console.log(
             `[HybridOverride] START target=${normalized} pwm=${targetPwm} ` +
@@ -1344,41 +1349,35 @@ class RadioMavlink {
 
     _checkHybridOverrideRelease() {
         const state = this._hybridOverride;
-
-        if (!state?.active) {
-            return false;
-        }
+        if (!state?.active) return false;
 
         const remotePwm = Number(
-            this.telemetry?.[`rc${state.channel + 1}_in`]
+            this.telemetry?.[`rc${state.channel + 1}_raw`]
         );
+        const remoteState = this._getHybridStateFromRc(remotePwm);
 
-        const remoteState =
-            this._getHybridStateFromRc(remotePwm);
-
-        /*
-        * Remote sudah berada pada state target.
-        */
-        if (
+        const matchesTarget =
             remoteState === state.targetState &&
-            this._isHybridVehicleTypeCompatible(state.targetState)
-        ) {
-            if (state.lastRemoteState === remoteState) {
-                state.stableMatches++;
-            } else {
-                state.stableMatches = 1;
-            }
+            this._isHybridVehicleTypeCompatible(state.targetState);
 
-            state.lastRemoteState = remoteState;
+        const operatorMovedAway =
+            remoteState !== null &&
+            remoteState !== state.initialRemoteState;
 
+        const shouldTrack = matchesTarget || operatorMovedAway;
+
+        if (shouldTrack) {
+            state.stableMatches =
+                state.lastRemoteState === remoteState
+                    ? state.stableMatches + 1
+                    : 1;
         } else {
             state.stableMatches = 0;
-            state.lastRemoteState = remoteState;
         }
+        state.lastRemoteState = remoteState;
 
         const heldLongEnough =
             Date.now() - state.startedAt >= state.minHoldMs;
-
         const stableEnough =
             state.stableMatches >= state.requiredStableMatches;
 
@@ -1566,15 +1565,34 @@ class RadioMavlink {
                         true
                     );
             }
+
+            // FIX: sebelumnya cuma channel 5 yang diteruskan ke this.telemetry,
+            // channel 1-4/6-8 dibaca ke _physicalRc[] lalu dibuang. Sekarang
+            // semua 8 channel diekspos dengan nama field yang sama persis
+            // dengan yang dicari poller Radio Calibration di config.html
+            // (data['rc' + ch + '_raw']).
+            for (let i = 0; i < 8; i++) {
+                const raw = this._physicalRc[i];
+                if (Number.isFinite(raw) && raw !== 65535) {
+                    this.telemetry[`rc${i + 1}_raw`] = raw;
+                }
+            }
+
             const rc5 = this._physicalRc[4];
-            if (!Number.isFinite(rc5)) {return;}
-            if (rc5 === 65535) {return;}
+            if (!Number.isFinite(rc5) || rc5 === 65535) {
+                this._emitTelemetrySafe();
+                return;
+            }
             this._physicalRc5 = rc5;
             this._physicalRc5Seq++;
             this._physicalRc5LastUpdate = Date.now();
             this.telemetry.rc5_physical = rc5;
             this.telemetry.hybrid_remote_state = this._getHybridStateFromRc(rc5);
             this._checkHybridOverrideRelease();
+            // FIX: tanpa ini, update rc*_raw & rc5_physical cuma "menumpang"
+            // terkirim ke UI kalau kebetulan ada message lain yang trigger
+            // emit -- tidak reliable dan bikin bar kalibrasi terasa macet.
+            this._emitTelemetrySafe();
         } catch (error) {
             console.error(
                 '[RadioMavlink] Gagal decode RC_CHANNELS_RAW:',

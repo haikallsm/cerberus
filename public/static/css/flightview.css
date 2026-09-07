@@ -18,12 +18,10 @@ html, body{
 
 /* UI layout: map full background; telemetry panel docked top-right */
 #map, .leaflet-container {
-    width: 100% !important;F
+    width: 100% !important;
     height: 100% !important;
     flex: 1;
 }
-
-
 
 .telemetry-panel {
     position: absolute;
@@ -66,7 +64,6 @@ html, body{
 }
 
 .telemetry-grid {
-
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 3px;
@@ -241,6 +238,13 @@ html, body{
     display: block;
 }
 
+.video-content img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: none;
+}
+
 .video-close-btn {
     position: absolute;
     top: 6px;
@@ -264,7 +268,7 @@ html, body{
     background: rgba(0, 0, 0, 0.85);
 }
 
-/* ===== WAYPOINT LABEL (Menghilangkan kotak putih bawaan Leaflet) ===== */
+/* ===== WAYPOINT LABEL ===== */
 .leaflet-tooltip.wp-text-label {
     background-color: transparent;
     border: none;
@@ -274,28 +278,27 @@ html, body{
     padding: 0;
 }
 
-/* Hilangkan tanda panah (segitiga kecil) di pinggir tooltip */
 .leaflet-tooltip.wp-text-label::before {
     display: none;
 }
 
 .vehicle-marker {
-    width: 36px;
-    height: 36px;
+    width: 64px;
+    height: 64px;
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center;
     border-radius: 5px;
-    transition: transform 0.2s ease-out; /* smooth saat heading berubah */
+    transition: transform 0.2s ease-out;
     animation: drone-pulse 1s infinite;
 }
 
 .vehicle-marker.mode-copter {
-    background-image: url('../images/dronehijau.png');
+    background-image: url('./images/dronehijau.png');
 }
 
 .vehicle-marker.mode-rover {
-    background-image: url('../images/rover.png');
+    background-image: url('./images/rover.png');
 }
 
 @keyframes drone-pulse {
@@ -383,12 +386,11 @@ html, body{
 }
 
 /* Warna teks berdasarkan severity (tingkat keparahan dari MAVLink) */
-.log-sev-0, .log-sev-1, .log-sev-2 { color: #ff4757; font-weight: bold; } /* Emergency/Critical */
-.log-sev-3, .log-sev-4 { color: #ffa502; } /* Warning/Error */
-.log-sev-5, .log-sev-6 { color: #00cc00; } /* Notice/Info */
-.log-sev-7 { color: #ffff; } /* Debug */
+.log-sev-0, .log-sev-1, .log-sev-2 { color: #ff4757; font-weight: bold; }
+.log-sev-3, .log-sev-4 { color: #ffa502; }
+.log-sev-5, .log-sev-6 { color: #00cc00; }
+.log-sev-7 { color: #ffff; }
 
-/* Percantik scrollbar khusus untuk log */
 #mavlinkLogContent::-webkit-scrollbar {
     width: 4px;
 }
@@ -403,6 +405,7 @@ html, body{
     gap: 4px;
     border-bottom: 1px solid #333;
     padding-bottom: 4px;
+    margin-bottom: 8px;
 }
 
 .telem-tab-btn {
@@ -433,18 +436,17 @@ html, body{
     font-size: 10px;
     color: #888;
     margin-bottom: 8px;
+    margin-top: 12px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
-/* Diubah menjadi 3 kolom mengikuti telemetry-grid */
 .action-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 3px;
 }
 
-/* Disesuaikan bentuknya mengikuti .telemetry-item */
 .action-btn {
     background: #1f1f1f;
     border: 1px solid #333;
@@ -455,7 +457,7 @@ html, body{
     font-weight: bold;
     cursor: pointer;
     transition: all 0.2s;
-    min-height: 56px; /* Tinggi disamakan dengan item telemetri */
+    min-height: 56px; 
     display: flex;
     align-items: center;
     justify-content: center;
@@ -489,6 +491,23 @@ html, body{
     border-radius: 7px;
     font-size: 11px;
     outline: none;
+}
+
+.action-select-row {
+    display: flex;
+    gap: 8px;
+}
+
+.flex-1 {
+    flex: 1;
+}
+
+.action-page-wrapper {
+    padding-top: 10px;
+}
+
+.action-set-btn {
+    width: 80px;
 }
 
 /* ===== HUD ERROR / WARNING BANNER ===== */
@@ -549,6 +568,30 @@ html, body{
     display: none;
 }
 
+/* ===== KONTAINER TELEMETRI & KOMPAS ===== */
+.telemetry-outer-container {
+    position: absolute;
+    top: 80px;
+    right: 10px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: row-reverse;
+    align-items: flex-start;
+    gap: 2px;
+}
+
+.external-compass-panel {
+    background: rgba(18, 18, 28, 0.9);
+    border: 1px solid #444;
+    border-radius: 200px;
+    padding: 1px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
 /* ===== EXTRACTED INLINE STYLES ===== */
 body.transparent-bg {
     background: transparent;
@@ -600,9 +643,6 @@ body.transparent-bg {
     font-size: 9px; 
     color: #888;
 }
-.action-set-btn {
-    width: 80px;
-}
 .webrtc-status-text {
     position: absolute; 
     bottom: 6px; 
@@ -614,49 +654,4 @@ body.transparent-bg {
     border-radius: 4px; 
     pointer-events: none; 
     color: #00bcd4;
-}
-
-/* Modifications to existing classes */
-.telem-tabs {
-    margin-bottom: 8px;
-}
-.action-section-title {
-    margin-top: 12px;
-}
-.action-select-row {
-    display: flex;
-    gap: 8px;
-}
-.flex-1 {
-    flex: 1;
-}
-.action-page-wrapper {
-    padding-top: 10px;
-}
-
-/* Update video-modal from inline to CSS */
-.video-modal {
-    display: none;
-    position: fixed;
-    bottom: 20px;
-    left: 20px;
-    width: 320px;
-    height: 240px;
-    background: #000;
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-    z-index: 1000;
-    border: 1px solid #333;
-}
-
-/* Update img tag in video-content */
-.video-content img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: none;
-}
-.video-content video {
-    display: none;
 }

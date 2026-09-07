@@ -239,7 +239,16 @@ const DECODERS = {
     },
     1: (bytes) => {
         const dv = new DataView(new Uint8Array(bytes).buffer);
-        return { _kind:'telemetry', battery_voltage: readU16(dv,14)/1000, battery_current: dv.getInt16(16,true)/100, battery_remaining: dv.getInt8(30) };
+        const sensors_enabled = readU32(dv, 4);
+        const safety_off = (sensors_enabled & 32768) !== 0;
+        
+        return { 
+            _kind: 'telemetry', 
+            battery_voltage: readU16(dv, 14) / 1000, 
+            battery_current: dv.getInt16(16, true) / 100, 
+            battery_remaining: dv.getInt8(30), 
+            safety_off: safety_off 
+        };
     },
     22: (bytes) => {
         const dv = new DataView(new Uint8Array(bytes).buffer);
@@ -311,7 +320,7 @@ const DECODERS = {
 
     65: (bytes) => {
         const dv = new DataView(new Uint8Array(bytes).buffer);
-        return {
+        const result = {
             _kind: 'telemetry',
             rc1_in: dv.getUint16(4, true),
             rc2_in: dv.getUint16(6, true),
@@ -321,7 +330,35 @@ const DECODERS = {
             rc6_in: dv.getUint16(14, true),
             rc7_in: dv.getUint16(16, true),
             rc8_in: dv.getUint16(18, true),
-        }
+            rc9_in: dv.getUint16(20, true),
+            rc10_in: dv.getUint16(22, true),
+            rc11_in: dv.getUint16(24, true),
+            rc12_in: dv.getUint16(26, true),
+            rc13_in: dv.getUint16(28, true),
+            rc14_in: dv.getUint16(30, true),
+            rc15_in: dv.getUint16(32, true),
+            rc16_in: dv.getUint16(34, true),
+            rc_count: dv.getUint8(40),
+            rssi: dv.getUint8(41),
+
+        };
+        // console.log('[RC_CHANNELS 65]', {
+        //     rc1: result.rc1_in,
+        //     rc2: result.rc2_in,
+        //     rc3: result.rc3_in,
+        //     rc4: result.rc4_in,
+        //     rc5: result.rc5_in,
+        //     rc6: result.rc6_in,
+        //     rc7: result.rc7_in,
+        //     rc8: result.rc8_in,
+        //     rc9: result.rc9_in,
+        //     rc10: result.rc10_in,
+        //     rc11: result.rc11_in,
+        //     rc12: result.rc12_in,
+        //     count: result.rc_count
+        // });
+        // console.log(`[MAVLINK] MSG 65 MASUK! Ch9: ${result.rc9_in} | Ch10: ${result.rc10_in}`);
+        return result;
     },
     // 65: (bytes) => {
     //     const dv = new DataView(new Uint8Array(bytes).buffer);
@@ -352,9 +389,7 @@ const DECODERS = {
     //     return result;
     // },
     35: (bytes) => {
-        const dv = new DataView(
-            new Uint8Array(bytes).buffer
-        );
+        const dv = new DataView(new Uint8Array(bytes).buffer);
 
         return {
             _kind: 'rc_raw',

@@ -26,7 +26,7 @@ app.whenReady().then(() => {
         webPreferences: {
             contextIsolation: true,
             nodeIntegration: false,
-            // Wajib ditambahkan agar file preload dieksekusi sebelum HTML
+            devTools: !app.isPackaged,
             preload: preloadPath
         }
     });
@@ -113,48 +113,106 @@ ipcMain.on('serial-send', (event, bytes) => {
 // BACKEND UDP HANDLERS (Dikendalikan oleh dgram Node.js)
 // ==========================================================
 
+// ini yang kemaren
 // 1. Menangani permintaan buka koneksi UDP dari Frontend
-// 1. Menangani permintaan buka koneksi UDP dari Frontend
-ipcMain.handle('udp-connect', async (event, { ip, port }) => {
+// ipcMain.handle('udp-connect', async (event, { ip, port }) => {
+//     if (udpClient) {
+//         udpClient.close();
+//         udpClient = null;
+//     }
+
+//     return new Promise((resolve) => {
+//         try {
+//             udpClient = dgram.createSocket('udp4');
+
+//             // 2. Mendengarkan data masuk dari FC/Drone
+//             udpClient.on('message', (msg, rinfo) => {
+//                 // AUTO-TARGETING: Begitu drone membalas, kita kunci IP drone aslinya!
+//                 // Ini meniru cara kerja Mission Planner
+//                 udpClient.targetIp = rinfo.address;
+//                 udpClient.targetPort = rinfo.port;
+
+//                 if (mainWindow) {
+//                     // Wajib gunakan Array.from agar data aman saat dikirim ke UI
+//                     mainWindow.webContents.send('udp-data', Array.from(msg));
+//                 }
+//             });
+
+//             udpClient.on('error', (err) => {
+//                 console.error('[UDP Backend] Error:', err);
+//                 if (udpClient) {
+//                     udpClient.close();
+//                     udpClient = null;
+//                 } 
+//                 resolve({ ok: false, message: err.message });
+//             });
+
+//             udpClient.targetIp = ip;
+//             udpClient.targetPort = port;
+
+//             // 3. Bind ke 0.0.0.0
+//             udpClient.bind(port, '0.0.0.0', () => {
+//                 // WAJIB AKTIF agar bisa mencari drone ke seluruh jaringan (Broadcast)
+//                 udpClient.setBroadcast(true); 
+//                 console.log(`[UDP Backend] Socket terbuka di 0.0.0.0:${port}`);
+//                 resolve({ ok: true });
+//             });
+
+//         } catch (err) {
+//             console.error('[UDP Backend] Gagal membuat socket UDP:', err);
+//             resolve({ ok: false, message: err.message });
+//         }
+//     });
+// });
+
+// ini yang tadi bisa
+function pickDefaultLocalPort(remotePort) {
+    // Hindari bind ke port remote yang mungkin dipakai app lain
+    if (Number(remotePort) === 14550) return 14560;
+    return 14550;
+}
+
+ipcMain.handle('udp-connect', async (_event, { ip, port, localPort }) => {
     if (udpClient) {
-        udpClient.close();
+        try { udpClient.close(); } catch {}
         udpClient = null;
     }
 
     return new Promise((resolve) => {
         try {
+            const remoteIp = ip;
+            const remotePort = Number(port);
+            const bindPort = Number(localPort) || pickDefaultLocalPort(remotePort);
+
             udpClient = dgram.createSocket('udp4');
 
-            // 2. Mendengarkan data masuk dari FC/Drone
             udpClient.on('message', (msg, rinfo) => {
-                // AUTO-TARGETING: Begitu drone membalas, kita kunci IP drone aslinya!
-                // Ini meniru cara kerja Mission Planner
+                // lock endpoint ke sumber yang benar
                 udpClient.targetIp = rinfo.address;
                 udpClient.targetPort = rinfo.port;
 
                 if (mainWindow) {
-                    // Wajib gunakan Array.from agar data aman saat dikirim ke UI
                     mainWindow.webContents.send('udp-data', Array.from(msg));
                 }
             });
 
             udpClient.on('error', (err) => {
                 console.error('[UDP Backend] Error:', err);
-                if (udpClient) udpClient.close();
-                udpClient = null;
+                if (udpClient) {
+                    try { udpClient.close(); } catch {}
+                    udpClient = null;
+                }
+                resolve({ ok: false, message: err.message });
             });
 
-            udpClient.targetIp = ip;
-            udpClient.targetPort = port;
+            udpClient.targetIp = remoteIp;
+            udpClient.targetPort = remotePort;
 
-            // 3. Bind ke 0.0.0.0
-            udpClient.bind(port, '0.0.0.0', () => {
-                // WAJIB AKTIF agar bisa mencari drone ke seluruh jaringan (Broadcast)
-                udpClient.setBroadcast(true); 
-                console.log(`[UDP Backend] Socket terbuka di 0.0.0.0:${port}`);
-                resolve({ ok: true });
+            udpClient.bind(bindPort, '0.0.0.0', () => {
+                try { udpClient.setBroadcast(true); } catch {}
+                console.log(`[UDP Backend] bind 0.0.0.0:${bindPort} -> remote ${remoteIp}:${remotePort}`);
+                resolve({ ok: true, bindPort, targetIp: remoteIp, targetPort: remotePort });
             });
-
         } catch (err) {
             console.error('[UDP Backend] Gagal membuat socket UDP:', err);
             resolve({ ok: false, message: err.message });
@@ -208,6 +266,7 @@ app.on('activate', () => {
             webPreferences: {
                 contextIsolation: true,
                 nodeIntegration: false,
+                devTools: !app.isPackaged,
                 preload: preloadPath
             }
         });

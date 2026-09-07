@@ -34,6 +34,7 @@ const commands = {
         return this._getActiveLink().setMode(mode);
     },
 
+    // before
     async setSafetySwitch(turnOn) {
         const baseMode = 128.0;
         const customMode = turnOn ? 1.0 : 0.0;
@@ -63,6 +64,41 @@ const commands = {
         console.log("[Command] Safety Switch:", window.gcsState?.safety?.off ? "OFF" : "ON");
         return ack;
     },
+
+    // after
+    // async setSafetySwitch(turnOn) {
+    //     const MAV_CMD_DO_SET_SAFETY_SWITCH_STATE = 5300;
+    //     const safetyState = turnOn ? 0 : 1;
+
+    //     if (turnOn) {
+    //         console.log("[Command] HARDWARE SAFETY");
+    //     } else {
+    //         console.log("[Command] UNSAFETY");
+    //     }
+
+    //     const ack = await this._getActiveLink().sendCommandLong(MAV_CMD_DO_SET_SAFETY_SWITCH_STATE, { 
+    //         p1: safetyState, 
+    //         p2: 0.0,
+    //         p3: 0.0,
+    //         p4: 0.0,
+    //         p5: 0.0,
+    //         p6: 0.0,
+    //         p7: 0.0
+    //     });
+
+    //     console.log("[Command] Safety ACK:", ack);
+    //     if (!ack || !ack.ok) {
+    //         console.error("[Command] Safety Switch Failed", ack);
+    //         return ack;
+    //     }
+
+    //     if(window.gcsState?.safety) {
+    //         window.gcsState.safety.off = !turnOn;
+    //     }
+
+    //     console.log("[Command] Safety Switch:", window.gcsState?.safety?.off ? "OFF" : "ON");
+    //     return ack;
+    // },
 
     async setServo(channel, pwm) {
         return this._getActiveLink().setServo(channel, pwm);

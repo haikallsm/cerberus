@@ -538,38 +538,36 @@ function saveMission() {
         return;
     }
 
-    // Header standar MAVLink Waypoint format 110
     let fileContent = "QGC WPL 110\n";
 
-    // Konversi setiap waypoint ke format 12 kolom QGC / Mission Planner
     waypoints.forEach((wp, index) => {
         const isHome = (index === 0 || wp.command === 'HOME');
         const currentWp = isHome ? 1 : 0;
-        const frame = 3; // MAV_FRAME_GLOBAL_RELATIVE_ALT (3)
+        const frame = 3; 
 
-        // Mapping MAVLink Command ID
-        let commandId = 16; // MAV_CMD_NAV_WAYPOINT
-        if (wp.command === 'TAKEOFF') commandId = 22;      // MAV_CMD_NAV_TAKEOFF
-        else if (wp.command === 'LOITER') commandId = 19;  // MAV_CMD_NAV_LOITER_TIME
-        else if (wp.command === 'RTL') commandId = 20;     // MAV_CMD_NAV_RETURN_TO_LAUNCH
-        else if (wp.command === 'LAND') commandId = 21;    // MAV_CMD_NAV_LAND
+        let commandId = 16; 
+        if (wp.command === 'TAKEOFF') commandId = 22;      
+        else if (wp.command === 'LOITER') commandId = 19;  
+        else if (wp.command === 'RTL') commandId = 20;     
+        else if (wp.command === 'LAND') commandId = 21;    
+        else if (wp.command === 'DO_CHANGE_SPEED') commandId = 178;
+        else if (wp.command === 'DO_SET_SERVO') commandId = 183;
+        else if (wp.command === 'DO_JUMP') commandId = 177;
+        else if (wp.command === 'DO_TRIGGER_CAM') commandId = 206;
         else if (wp.command === 'HOME') commandId = 16;
 
-        // Di dalam loop saveMission():
         const p1 = (wp.p1 !== undefined) ? Number(wp.p1).toFixed(6) : "0.000000";
-        const p2 = (wp.p2 !== undefined) ? Number(wp.p2).toFixed(6) : "2.000000"; // Acceptance Radius
-        const p3 = (wp.p3 !== undefined) ? Number(wp.p3).toFixed(6) : "0.000000"; // Loiter Radius
+        const p2 = (wp.p2 !== undefined) ? Number(wp.p2).toFixed(6) : "2.000000"; 
+        const p3 = (wp.p3 !== undefined) ? Number(wp.p3).toFixed(6) : "0.000000"; 
         const p4 = (wp.p4 !== undefined) ? Number(wp.p4).toFixed(6) : "0.000000";
         const lat = Number(wp.lat).toFixed(7);
         const lon = Number(wp.lon).toFixed(7);
         const alt = Number(wp.alt || 0).toFixed(6);
         const autocontinue = 1;
 
-        // Susun 12 kolom dengan pemisah tab (\t)
         fileContent += `${index}\t${currentWp}\t${frame}\t${commandId}\t${p1}\t${p2}\t${p3}\t${p4}\t${lat}\t${lon}\t${alt}\t${autocontinue}\n`;
     });
 
-    // Trigger download file .waypoints
     const blob = new Blob([fileContent], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1313,7 +1311,6 @@ async function uploadMissionToFC() {
             reindexWaypoints(); renderWaypoints(); updateMapPath(); saveWaypointsLocal();
         }
 
-        // --- KONVERSI MAVLINK ---
         const items = waypoints.map(wp => {
             let mavCmd = 16; 
             if (wp.command === 'HOME') mavCmd = 16;
@@ -1321,9 +1318,13 @@ async function uploadMissionToFC() {
             else if (wp.command === 'LOITER') mavCmd = 19;
             else if (wp.command === 'RTL') mavCmd = 20;
             else if (wp.command === 'LAND') mavCmd = 21;
+            else if (wp.command === 'DO_CHANGE_SPEED') mavCmd = 178;
+            else if (wp.command === 'DO_SET_SERVO') mavCmd = 183;
+            else if (wp.command === 'DO_JUMP') mavCmd = 177;
+            else if (wp.command === 'DO_TRIGGER_CAM') mavCmd = 206;
 
             return {
-                frame: 3, // MAV_FRAME_GLOBAL
+                frame: 3, 
                 command: mavCmd,
                 param1: wp.p1 || 0,
                 param2: wp.p2 || 0,
@@ -1368,16 +1369,13 @@ async function readMissionFromFC() {
             const koorValid = isValidCoordinate(lat, lon);
 
             if (idx === 0) {
-                // --- LOGIKA HOME DENGAN PERGESERAN 3 METER ---
                 let homeLat = lat;
                 let homeLon = lon;
 
                 if (!koorValid) {
-                    // Cari waypoint valid pertama di daftar misi FC
                     const firstValid = items.find(i => isValidCoordinate(i.x / 1e7, i.y / 1e7));
                     
                     if (firstValid) {
-                        // Geser 3 meter dari Waypoint 1
                         homeLat = (firstValid.x / 1e7) - 0.00003; 
                         homeLon = (firstValid.y / 1e7) - 0.00003;
                     } else if (hometerakhir && isValidCoordinate(hometerakhir.lat, hometerakhir.lon)) {
@@ -1396,7 +1394,6 @@ async function readMissionFromFC() {
                 lastLat = homeLat; lastLon = homeLon;
 
             } else {
-                // --- LOGIKA WAYPOINT BIASA ---
                 let wpLat = koorValid ? lat : lastLat;
                 let wpLon = koorValid ? lon : lastLon;
 
@@ -1405,6 +1402,10 @@ async function readMissionFromFC() {
                 else if (item.command === 19) cmdString = 'LOITER';
                 else if (item.command === 20) cmdString = 'RTL';
                 else if (item.command === 21) cmdString = 'LAND';
+                else if (item.command === 178) cmdString = 'DO_CHANGE_SPEED';
+                else if (item.command === 183) cmdString = 'DO_SET_SERVO';
+                else if (item.command === 177) cmdString = 'DO_JUMP';
+                else if (item.command === 206 || item.command === 203) cmdString = 'DO_TRIGGER_CAM';
 
                 loadedWaypoints.push({
                     id: idx, command: cmdString, lat: wpLat, lon: wpLon, alt: item.z,

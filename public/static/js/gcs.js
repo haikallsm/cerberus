@@ -62,6 +62,9 @@ function adaptRadioTelemetry(raw) {
     if (raw.battery_current !== undefined) out.battery_current = raw.battery_current;
     if (raw.battery_remaining !== undefined) out.battery_remaining = raw.battery_remaining;
 
+    // Safety Switch
+    if (raw.safety_off !== undefined) out.safety_off = raw.safety_off;
+
     // Data Sensor Mentah untuk Preflight (Berasal dari RAW_IMU)
     if (raw.accel_x !== undefined) {
         out.accel_x = raw.accel_x; out.accel_y = raw.accel_y; out.accel_z = raw.accel_z;
@@ -74,7 +77,36 @@ function adaptRadioTelemetry(raw) {
     if (raw.rangefinder_healthy !== undefined) out.rangefinder_healthy = raw.rangefinder_healthy;
     if (raw.rangefinder_type !== undefined) out.rangefinder_type = raw.rangefinder_type;
 
-    if (raw.rc5_in !== undefined) out.rc5_in = raw.rc5_in;
+    // RC channel
+    // if (raw.rc1_in !== undefined) out.rc1_in = raw.rc1_in;
+    // if (raw.rc2_in !== undefined) out.rc2_in = raw.rc2_in;
+    // if (raw.rc3_in !== undefined) out.rc3_in = raw.rc3_in;
+    // if (raw.rc4_in !== undefined) out.rc4_in = raw.rc4_in;
+    // if (raw.rc5_in !== undefined) out.rc5_in = raw.rc5_in;
+    // if (raw.rc6_in !== undefined) out.rc6_in = raw.rc6_in;
+    // if (raw.rc7_in !== undefined) out.rc7_in = raw.rc7_in;
+    // if (raw.rc8_in !== undefined) out.rc8_in = raw.rc8_in;
+
+    for (let i = 1; i <= 16; i++) {
+        const rcInKey = `rc${i}_in`;
+        const rcRawKey = `rc${i}_raw`;
+
+        if (raw[rcInKey] !== undefined) {
+            out[rcInKey] = raw[rcInKey];
+        }
+
+        if (raw[rcRawKey] !== undefined) {
+            out[rcRawKey] = raw[rcRawKey];
+        }
+    }
+
+    if (raw.servo_output_raw !== undefined) out.servo_output_raw = raw.servo_output_raw;
+    if (raw.servo_output_raw) {
+        for (let i = 1; i < raw.servo_output_raw.length; i++) {
+            const key = `servo${i}_raw`;
+            if (raw.servo_output_raw[key] !== undefined) out[key] = raw.servo_output_raw[key];
+        }
+    }
 
     if (raw.mag_cal_progress !== undefined) out.mag_cal_progress = raw.mag_cal_progress;
     if (raw.mag_cal_report !== undefined) out.mag_cal_report = raw.mag_cal_report;
