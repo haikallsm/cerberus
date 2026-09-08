@@ -264,6 +264,33 @@ function calculateSmoothTrajectory(wp1, wp2, stepMeters = 15) {
     return points;
 }
 
+// Bikin icon bulat + label (angka urutan / "H" utk home) -- menggantikan circleMarker + tooltip permanen,
+// soalnya L.circleMarker tidak bisa di-drag secara native di Leaflet. L.marker dengan divIcon bisa.
+function buildWaypointIcon(label, color) {
+    return L.divIcon({
+        className: 'wp-marker-icon',
+        html: `<div class="wp-marker-dot" style="background:${color};">${label}</div>`,
+        iconSize: [22, 22],
+        iconAnchor: [11, 11]
+    });
+}
+
+// Update garis lintasan saja TANPA membangun ulang semua marker.
+// Dipakai selama drag berlangsung (event 'drag') biar gerakannya halus --
+// kalau updateMapPath() penuh dipanggil tiap mousemove, semua marker lain ikut
+// dihapus & dibuat ulang tiap frame -> flicker & berat.
+function refreshTrajectoryOnly() {
+    if (polyline && map.hasLayer(polyline)) map.removeLayer(polyline);
+    let fullTrajectory = [];
+    for (let i = 0; i < waypoints.length; i++) {
+        if (i > 0) fullTrajectory = fullTrajectory.concat(calculateSmoothTrajectory(waypoints[i-1], waypoints[i]));
+        else fullTrajectory.push([waypoints[i].lat, waypoints[i].lon]);
+    }
+    if (fullTrajectory.length > 1) {
+        polyline = L.polyline(fullTrajectory, { color: '#00bcd4', weight: 3, dashArray: '6, 6' }).addTo(map);
+    }
+}
+
 function updateMapPath() {
     markers.forEach(m => { if (map.hasLayer(m)) map.removeLayer(m); });
     markers = [];
@@ -276,9 +303,31 @@ function updateMapPath() {
         
         const wp = waypoints[i];
         const color = wp.command === 'HOME' ? (wp.homeSource === 'confirmed' ? '#ffeb3b' : '#ff9800') : (i === 0 ? '#4caf50' : '#00bcd4');
-        
-        const marker = L.circleMarker([wp.lat, wp.lon], { radius: 7, fillColor: color, color: '#fff', weight: 2, fillOpacity: 1 }).addTo(map);
-        marker.bindTooltip(`<b>${wp.command === 'HOME' ? 'H' : i}</b>`, { permanent: true, direction: 'center', className: 'wp-text-label' });
+        const label = wp.command === 'HOME' ? 'H' : i;
+
+        // draggable: true -> titik waypoint yang sudah dibuat bisa diseret ke posisi lain di peta
+        const marker = L.marker([wp.lat, wp.lon], {
+            icon: buildWaypointIcon(label, color),
+            draggable: true,
+            zIndexOffset: 700
+        }).addTo(map);
+
+        const wpIndex = i; // closure per-marker, biar tetap merujuk waypoint yang benar
+        marker.on('drag', (e) => {
+            const ll = e.target.getLatLng();
+            waypoints[wpIndex].lat = ll.lat;
+            waypoints[wpIndex].lon = ll.lng;
+            refreshTrajectoryOnly(); // garis lintasan ikut update real-time selama diseret
+        });
+        marker.on('dragend', (e) => {
+            const ll = e.target.getLatLng();
+            waypoints[wpIndex].lat = ll.lat;
+            waypoints[wpIndex].lon = ll.lng;
+            renderWaypoints();   // refresh panel list (jarak total, dsb)
+            updateMapPath();     // render ulang penuh biar warna/urutan/label konsisten
+            saveWaypointsLocal();
+        });
+
         markers.push(marker);
     }
 
