@@ -35,7 +35,7 @@ class UdpMavlink {
         this._physicalRc5 = 65535;
         this._physicalRc5Seq = 0;
         this._physicalRc5LastUpdate = 0;
-        this._hybridOverride = {active: false, channel: 4, targetPwm: 65535, targetState: null, startedAt: 0, minHoldMs: 1500, stableMatches: 0, requiredStableMatches: 3, rawSeqAtStart: 0, lastPhysicalState: null};
+        this._hybridOverride = {active: false, channel: 4, targetPwm: 65535, targetState: null};
 
         this._remoteIp = null;
         this._remotePort = null;
@@ -64,10 +64,13 @@ class UdpMavlink {
         this._awaitingReconnect = false;
         this._reconnecting = false;
         this._reconnectTimer = null;
+        this._isRebooting = false; 
+        this._missionBusy = false;
     }
 
     isLive() {
-        return this.telemetry.connected && (Date.now() - this.lastHeartbeatTime) < this._linkLossTimeoutMs;
+        const timeout = (this._isRebooting || this._missionBusy) ? 15000 : this._linkLossTimeoutMs;
+        return this.telemetry.connected && (Date.now() - this.lastHeartbeatTime) < timeout;
     }
 
     // ini kode yang kemaren
@@ -300,19 +303,27 @@ class UdpMavlink {
         if (this._watchdogTimer) { clearInterval(this._watchdogTimer); this._watchdogTimer = null; }
     }
 
+    // 6) TAMBAHKAN di _startRcOverrideLoop() agar saat latch aktif CH5 dipaksa terus
     _startRcOverrideLoop() {
         this._stopRcOverrideLoop();
         this._rcOverrideTimer = setInterval(() => {
-            if (this.telemetry.connected && this.rcChannels.some(ch => ch !== 65535)) {
+            if (!this.telemetry.connected) return;
+
+            // paksa CH5 kalau latch aktif
+            if (this._hybridOverride?.active) {
+                this.rcChannels[this._hybridOverride.channel] = this._hybridOverride.targetPwm;
+            }
+
+            if (this.rcChannels.some(ch => ch !== 65535)) {
                 const payload = [];
                 for (let i = 0; i < 8; i++) {
                     const ch = this.rcChannels[i];
                     payload.push(ch & 0xFF, (ch >> 8) & 0xFF);
                 }
                 payload.push(this.targetSystem, this.targetComponent);
-                this._sendFrame(70, payload, CRC_EXTRA[70]).catch(()=>{});
+                this._sendFrame(70, payload, CRC_EXTRA[70]).catch(() => {});
             }
-        }, 100);
+        }, 150);
     }
 
     _stopRcOverrideLoop() {
@@ -370,8 +381,10 @@ class UdpMavlink {
             console.warn('[UdpMavlink] Gagal request HOME_POSITION:', e);
         }
     }
-    pauseRCOverride() {this._stopRcOverrideLoop();}
-    resumeRCOverride() {this._startRcOverrideLoop();}
+    
+    // PERBAIKAN: Penamaan fungsi agar seragam dengan radio-mavlink.js
+    pauseRcOverride() {this._stopRcOverrideLoop();}
+    resumeRcOverride() {this._startRcOverrideLoop();}
 
     async sendCommandAck(command, result = 0) {
         const buf = new ArrayBuffer(10);
@@ -384,7 +397,7 @@ class UdpMavlink {
         dv.setUint8(9, this.targetComponent);      // target_component -- WAJIB, bukan 0
 
         const payload = Array.from(new Uint8Array(buf));
-        await this._sendFrame(77, payload, CRC_EXTRA[77], true); // useV2=true -- WAJIB, target_system/target_component cuma valid di MAVLink v2
+        await this._sendFrame(77, payload, CRC_EXTRA[77], true); 
         console.log(`[UdpMavlink] COMMAND_ACK (v2) sent for CMD ${command} -> target_system=${this.targetSystem}, target_component=${this.targetComponent}`);
     }
 
@@ -826,7 +839,19 @@ class UdpMavlink {
         const MAV_MODE_FLAG_CUSTOM_MODE_ENABLED = 1;
         return this.sendCommandLong(176, { p1: MAV_MODE_FLAG_CUSTOM_MODE_ENABLED, p2: modeCode });
     }
-    async reboot() { return this.sendCommandLong(246, { p1: 1 }); }
+    
+    // PERBAIKAN: Perilaku Reboot disamakan dengan versi radio
+    async reboot() {
+        console.log('[UdpMavlink] reboot');
+        this._isRebooting = true;
+        if (this.telemetry) {
+            this.telemetry.system_status = 'rebooting';
+            this._emitTelemetrySafe();
+        }
+        await this.sendCommandLong(246, { p1: 1 }, false);
+        return { ok: true, result: null };
+    }
+
     _isValidCoordinate(lat, lon) {
         return Number.isFinite(lat) && Number.isFinite(lon) &&
             (Math.abs(lat) > 0.0001 || Math.abs(lon) > 0.0001) &&
@@ -1014,123 +1039,359 @@ class UdpMavlink {
         return true;
     }
 
-    _resetHybridOverride() {
-        if (!this._hybridOverride) {
-            return;
-        }
+    // before
+    // _resetHybridOverride() {
+    //     if (!this._hybridOverride) return;
 
+    //     if (this._hybridOverride.releaseTimer) {
+    //         clearTimeout(this._hybridOverride.releaseTimer);
+    //         this._hybridOverride.releaseTimer = null;
+    //     }
+
+    //     this._hybridOverride.active = false;
+    //     this._hybridOverride.targetPwm = 65535;
+    //     this._hybridOverride.targetState = null;
+    //     this._hybridOverride.startedAt = 0;
+
+    //     this._hybridOverride.initialRemoteState = null;
+    //     this._hybridOverride.matchStableCount = 0;
+    //     this._hybridOverride.changeStableCount = 0;
+    //     this._hybridOverride.matchedOnce = false;
+    //     this._hybridOverride.lastPhysicalState = null;
+    // }
+
+    // 2) GANTI _resetHybridOverride()
+    _resetHybridOverride() {
+        if (!this._hybridOverride) return;
         this._hybridOverride.active = false;
+        this._hybridOverride.channel = 4;
         this._hybridOverride.targetPwm = 65535;
         this._hybridOverride.targetState = null;
-        this._hybridOverride.startedAt = 0;
-        this._hybridOverride.stableMatches = 0;
-        this._hybridOverride.lastRemoteState = null;
     }
 
+    // before
+    // async setHybridModeTemporary(targetState, targetPwm, channel = 4) {
+    //     const normalized = this._normalizeHybridState(targetState);
+
+    //     if (!normalized) {
+    //         throw new Error(
+    //             `Hybrid target state tidak valid: ${targetState}`
+    //         );
+    //     }
+
+    //     if (!Number.isFinite(Number(targetPwm))) {
+    //         throw new Error(
+    //             `Hybrid target PWM tidak valid: ${targetPwm}`
+    //         );
+    //     }
+
+    //     if (channel < 0 || channel > 7) {
+    //         throw new Error(`Channel ${channel} tidak valid.`);
+    //     }
+
+    //     const remotePwm = Number(
+    //         this.telemetry?.[`rc${channel + 1}_raw`]
+    //     );
+
+    //     const remoteState = this._getHybridStateFromRc(remotePwm);
+
+    //     this._hybridOverride.active = true;
+    //     this._hybridOverride.channel = channel;
+    //     this._hybridOverride.targetPwm = Number(targetPwm);
+    //     this._hybridOverride.targetState = normalized;
+    //     this._hybridOverride.startedAt = Date.now();
+    //     this._hybridOverride.minHoldMs = 800;
+    //     this._hybridOverride.stableMatches = 0;
+    //     this._hybridOverride.lastRemoteState = remoteState;
+    //     this._hybridOverride.initialRemoteState = remoteState;
+
+    //     console.log(
+    //         `[HybridOverride] START target=${normalized} pwm=${targetPwm} ` +
+    //         `| remote_rc${channel + 1}=` +
+    //         `${Number.isFinite(remotePwm) ? remotePwm : 'N/A'} ` +
+    //         `(${remoteState ?? 'unknown'})`
+    //     );
+
+    //     // Ambil alih CH5 sekarang.
+    //     // RC override loop akan mempertahankan nilai ini.
+    //     await this.sendRcOverride(
+    //         channel,
+    //         Number(targetPwm)
+    //     );
+
+    //     this._checkHybridOverrideRelease();
+
+    //     return {
+    //         ok: true,
+    //         temporary: true,
+    //         targetState: normalized,
+    //         targetPwm: Number(targetPwm),
+    //         remoteState
+    //     };
+    // }
+
+
+    // after
+    // async setHybridModeTemporary(targetState, targetPwm, channel = 4) {
+    //     const normalized = this._normalizeHybridState(targetState);
+
+    //     if (!normalized) {
+    //         throw new Error(`Hybrid target state tidak valid: ${targetState}`);
+    //     }
+
+    //     if (!Number.isFinite(Number(targetPwm))) {
+    //         throw new Error(`Hybrid target PWM tidak valid: ${targetPwm}`);
+    //     }
+
+    //     if (channel < 0 || channel > 7) {
+    //         throw new Error(`Channel ${channel} tidak valid.`);
+    //     }
+
+    //     const remotePwm = Number(
+    //         this.telemetry?.[`rc${channel + 1}_raw`] ?? this.telemetry?.rc5_physical
+    //     );
+    //     const remoteState = this._getHybridStateFromRc(remotePwm);
+
+    //     // Start/refresh latch
+    //     this._hybridOverride.active = true;
+    //     this._hybridOverride.channel = channel;
+    //     this._hybridOverride.targetPwm = Number(targetPwm);
+    //     this._hybridOverride.targetState = normalized;
+    //     this._hybridOverride.startedAt = Date.now();
+
+    //     this._hybridOverride.initialRemoteState = remoteState;
+    //     this._hybridOverride.matchStableCount = 0;
+    //     this._hybridOverride.changeStableCount = 0;
+    //     this._hybridOverride.matchedOnce = false;
+    //     this._hybridOverride.lastPhysicalState = remoteState;
+
+    //     // Failsafe timer: jangan lock selamanya kalau RC hilang total
+    //     if (this._hybridOverride.releaseTimer) {
+    //         clearTimeout(this._hybridOverride.releaseTimer);
+    //     }
+    //     this._hybridOverride.releaseTimer = setTimeout(() => {
+    //         if (this._hybridOverride?.active) {
+    //             console.warn('[HybridOverride] Failsafe release (maxHoldMs reached)');
+    //             this._releaseHybridOverride().catch(() => {});
+    //         }
+    //     }, this._hybridOverride.maxHoldMs);
+
+    //     console.log(
+    //         `[HybridOverride] START target=${normalized} pwm=${targetPwm} ` +
+    //         `| remote_rc${channel + 1}=${Number.isFinite(remotePwm) ? remotePwm : 'N/A'} ` +
+    //         `(${remoteState ?? 'unknown'})`
+    //     );
+
+    //     // Ambil alih CH5 sekarang; loop override akan mempertahankan
+    //     await this.sendRcOverride(channel, Number(targetPwm));
+
+    //     return {
+    //         ok: true,
+    //         temporary: true,
+    //         targetState: normalized,
+    //         targetPwm: Number(targetPwm),
+    //         remoteState
+    //     };
+    // }
+
+    // 3) GANTI setHybridModeTemporary() -> jadi pure latch (tanpa auto-release)
     async setHybridModeTemporary(targetState, targetPwm, channel = 4) {
         const normalized = this._normalizeHybridState(targetState);
-
         if (!normalized) throw new Error(`Hybrid target state tidak valid: ${targetState}`);
         if (!Number.isFinite(Number(targetPwm))) throw new Error(`Hybrid target PWM tidak valid: ${targetPwm}`);
         if (channel < 0 || channel > 7) throw new Error(`Channel ${channel} tidak valid.`);
-
-        const remotePwm = Number(this.telemetry?.[`rc${channel + 1}_raw`]);
-        const remoteState = this._getHybridStateFromRc(remotePwm);
 
         this._hybridOverride.active = true;
         this._hybridOverride.channel = channel;
         this._hybridOverride.targetPwm = Number(targetPwm);
         this._hybridOverride.targetState = normalized;
-        this._hybridOverride.startedAt = Date.now();
-        this._hybridOverride.minHoldMs = 800;
-        this._hybridOverride.stableMatches = 0;
-        this._hybridOverride.lastRemoteState = remoteState;
-        this._hybridOverride.initialRemoteState = remoteState;
 
-        console.log(`[HybridOverride] START target=${normalized} pwm=${targetPwm} | remote_rc${channel + 1}=${Number.isFinite(remotePwm) ? remotePwm : 'N/A'} (${remoteState ?? 'unknown'})`);
-
+        // kirim segera
         await this.sendRcOverride(channel, Number(targetPwm));
-        this._checkHybridOverrideRelease();
 
-        return { ok: true, temporary: true, targetState: normalized, targetPwm: Number(targetPwm), remoteState };
+        console.log(`[HybridOverride] LATCH ON CH${channel + 1} -> ${targetPwm} (${normalized})`);
+
+        return {
+            ok: true,
+            latched: true,
+            targetState: normalized,
+            targetPwm: Number(targetPwm),
+            channel: channel + 1
+        };
     }
 
+    // before
+    // _checkHybridOverrideRelease() {
+    //     const state = this._hybridOverride;
+    //     if (!state?.active) return false;
+
+    //     const remotePwm = Number(
+    //         this.telemetry?.[`rc${state.channel + 1}_raw`]
+    //     );
+    //     const remoteState = this._getHybridStateFromRc(remotePwm);
+
+    //     const matchesTarget =
+    //         remoteState === state.targetState &&
+    //         this._isHybridVehicleTypeCompatible(state.targetState);
+
+    //     const operatorMovedAway =
+    //         remoteState !== null &&
+    //         remoteState !== state.initialRemoteState;
+
+    //     const shouldTrack = matchesTarget || operatorMovedAway;
+
+    //     if (shouldTrack) {
+    //         state.stableMatches =
+    //             state.lastRemoteState === remoteState
+                    // ? state.stableMatches + 1
+    //                 : 1;
+    //     } else {
+    //         state.stableMatches = 0;
+    //     }
+    //     state.lastRemoteState = remoteState;
+
+    //     const heldLongEnough =
+    //         Date.now() - state.startedAt >= state.minHoldMs;
+    //     const stableEnough =
+    //         state.stableMatches >= state.requiredStableMatches;
+
+    //     if (heldLongEnough && stableEnough) {
+    //         this._releaseHybridOverride();
+    //         return true;
+    //     }
+
+    //     return false;
+    // }
+
+    // after
+    // _checkHybridOverrideRelease() {
+    //     const state = this._hybridOverride;
+    //     if (!state?.active) return false;
+
+    //     const physicalPwm = Number(
+    //         this.telemetry?.[`rc${state.channel + 1}_raw`] ??
+    //         this.telemetry?.rc5_physical
+    //     );
+    //     const physicalState = this._getHybridStateFromRc(physicalPwm);
+
+    //     // Tidak ada data RC valid -> tetap latch (biar mode tidak mental balik)
+    //     if (physicalState === null) {
+    //         state.matchStableCount = 0;
+    //         state.changeStableCount = 0;
+    //         return false;
+    //     }
+
+    //     // Stage 1: operator harus samakan dulu switch fisik ke mode yang sedang dilatch GCS
+    //     if (!state.matchedOnce) {
+    //         if (physicalState === state.targetState) {
+    //             state.matchStableCount =
+    //                 (state.lastPhysicalState === physicalState)
+    //                     ? state.matchStableCount + 1
+    //                     : 1;
+
+    //             if (state.matchStableCount >= state.requiredStableMatches) {
+    //                 state.matchedOnce = true;
+    //                 state.changeStableCount = 0;
+    //                 console.log(
+    //                     `[HybridOverride] Catch-up OK: remote sudah match target (${state.targetState}). ` +
+    //                     `Silakan pindah switch untuk takeover.`
+    //                 );
+    //             }
+    //         } else {
+    //             state.matchStableCount = 0;
+    //         }
+
+    //         state.lastPhysicalState = physicalState;
+    //         return false;
+    //     }
+
+    //     // Stage 2: setelah match, tunggu operator ubah ke state lain (intentional takeover)
+    //     if (physicalState !== state.targetState) {
+    //         state.changeStableCount =
+    //             (state.lastPhysicalState === physicalState)
+    //                 ? state.changeStableCount + 1
+    //                 : 1;
+
+    //         if (state.changeStableCount >= state.requiredStableMatches) {
+    //             this._releaseHybridOverride().catch(() => {});
+    //             state.lastPhysicalState = physicalState;
+    //             return true;
+    //         }
+    //     } else {
+    //         state.changeStableCount = 0;
+    //     }
+
+    //     state.lastPhysicalState = physicalState;
+    //     return false;
+    // }
+
+    // 4) GANTI _checkHybridOverrideRelease() -> jangan auto release
     _checkHybridOverrideRelease() {
-        const state = this._hybridOverride;
-        if (!state?.active) return false;
-
-        const remotePwm = Number(this.telemetry?.[`rc${state.channel + 1}_raw`]);
-        const remoteState = this._getHybridStateFromRc(remotePwm);
-
-        const matchesTarget = remoteState === state.targetState && this._isHybridVehicleTypeCompatible(state.targetState);
-        const operatorMovedAway = remoteState !== null && remoteState !== state.initialRemoteState;
-        const shouldTrack = matchesTarget || operatorMovedAway;
-
-        if (shouldTrack) {
-            state.stableMatches = state.lastRemoteState === remoteState ? state.stableMatches + 1 : 1;
-        } else {
-            state.stableMatches = 0;
-        }
-        state.lastRemoteState = remoteState;
-
-        const heldLongEnough = Date.now() - state.startedAt >= state.minHoldMs;
-        const stableEnough = state.stableMatches >= state.requiredStableMatches;
-
-        if (heldLongEnough && stableEnough) {
-            this._releaseHybridOverride();
-            return true;
-        }
+        // sengaja nonaktif supaya tidak "mental balik" mode
         return false;
     }
 
+    // before
+    // async _releaseHybridOverride() {
+    //     const state = this._hybridOverride;
+
+    //     if (!state?.active) {
+    //         return {
+    //             ok: true,
+    //             alreadyReleased: true
+    //         };
+    //     }
+
+    //     const channel = state.channel;
+    //     const targetState = state.targetState;
+
+    //     console.log(
+    //         `[HybridOverride] RELEASE -> remote CH${channel + 1} ` +
+    //         `sudah berada di ${targetState}`
+    //     );
+
+    //     // Matikan state terlebih dahulu agar loop
+    //     // berhenti mempertahankan override.
+    //     state.active = false;
+    //     state.targetState = null;
+    //     state.targetPwm = 65535;
+    //     state.stableMatches = 0;
+    //     state.lastRemoteState = null;
+
+    //     // 65535 = release / no override
+    //     await this.sendRcOverride(
+    //         channel,
+    //         65535
+    //     );
+
+    //     return {
+    //         ok: true,
+    //         released: true,
+    //         channel,
+    //         targetState
+    //     };
+    // }
+
+    // after
     async _releaseHybridOverride() {
         const state = this._hybridOverride;
 
         if (!state?.active) {
-            return {
-                ok: true,
-                alreadyReleased: true
-            };
+            return { ok: true, alreadyReleased: true };
         }
 
         const channel = state.channel;
         const targetState = state.targetState;
 
         console.log(
-            `[HybridOverride] RELEASE -> ` +
-            `physical remote sudah berada di ` +
-            `${targetState}`
+            `[HybridOverride] RELEASE CH${channel + 1} ` +
+            `(latch target sebelumnya: ${targetState}) -> kembali ke RC fisik`
         );
 
-        /*
-        * Matikan active dahulu.
-        * Setelah ini RC override loop
-        * tidak akan lagi mempertahankan target.
-        */
-        state.active = false;
-        state.targetState = null;
-        state.targetPwm = 65535;
-        state.startedAt = 0;
+        this._resetHybridOverride();
 
-        state.stableMatches = 0;
-        state.rawSeqAtStart = 0;
-        state.lastPhysicalState = null;
-
-        /*
-        * 65535 = ignore / release override.
-        *
-        * Saat ini remote fisik SUDAH pada posisi target,
-        * sehingga tidak ada transisi ke mode lama.
-        */
-        await this.sendRcOverride(
-            channel,
-            65535
-        );
-
-        console.log(
-            `[HybridOverride] COMPLETE -> ` +
-            `CH${channel + 1} kembali ke remote`
-        );
+        // 65535 = release / no override
+        await this.sendRcOverride(channel, 65535);
 
         return {
             ok: true,
@@ -1140,23 +1401,71 @@ class UdpMavlink {
         };
     }
 
-    async cancelHybridOverride() {
-        const state = this._hybridOverride;
-        const channel = state?.channel ?? 4;
-        const wasActive = !!state?.active;
-        this._resetHybridOverride();
+    // before
+    // async cancelHybridOverride() {
+    //     const state = this._hybridOverride;
 
-        await this.sendRcOverride(
-            channel,
-            65535
-        );
-        console.log(`[HybridOverride] CANCEL/RELEASE CH${channel + 1} ` + `-> remote kembali menjadi sumber kontrol`);
-        return {ok: true, cancelled: wasActive, channel};
+    //     const channel = state?.channel ?? 4;
+    //     const wasActive = !!state?.active;
+
+    //     this._resetHybridOverride();
+
+    //     // Pastikan FC menerima release override.
+    //     await this.sendRcOverride(
+    //         channel,
+    //         65535
+    //     );
+
+    //     console.log(
+    //         `[HybridOverride] CANCEL/RELEASE CH${channel + 1} ` +
+    //         `-> remote kembali menjadi sumber kontrol`
+    //     );
+
+    //     return {
+    //         ok: true,
+    //         cancelled: wasActive,
+    //         channel
+    //     };
+    // }
+
+    // after
+    // async cancelHybridOverride() {
+    //     const state = this._hybridOverride;
+    //     const channel = state?.channel ?? 4;
+    //     const wasActive = !!state?.active;
+
+    //     this._resetHybridOverride();
+
+    //     await this.sendRcOverride(channel, 65535);
+
+    //     console.log(
+    //         `[HybridOverride] CANCEL/RELEASE CH${channel + 1} -> remote kembali jadi sumber kontrol`
+    //     );
+
+    //     return { ok: true, cancelled: wasActive, channel };
+    // }
+
+    // 5) GANTI cancelHybridOverride()
+    async cancelHybridOverride() {
+        const ch = this._hybridOverride?.channel ?? 4;
+        const wasActive = !!this._hybridOverride?.active;
+
+        this._resetHybridOverride();
+        await this.sendRcOverride(ch, 65535); // release
+
+        console.log(`[HybridOverride] RELEASE CH${ch + 1} -> RC fisik aktif`);
+
+        return {
+            ok: true,
+            released: true,
+            wasActive,
+            channel: ch + 1
+        };
     }
-    
+
     async sendRcOverride(chIndex, pwmValue) {
         if (chIndex < 0 || chIndex > 7) {
-            throw new Error(`Channel index ${chIndex} tidak valid. Harus antara 0-7.`);
+            throw new Error('sendRcOverride hanya mendukung channel 1-8 (index 0-7) -- base RC_CHANNELS_OVERRIDE MAVLink1');
         }
         this.rcChannels[chIndex] = pwmValue;
 
@@ -1172,13 +1481,24 @@ class UdpMavlink {
             return payload;
         };
         await this._sendFrame(70, buildPayload(), CRC_EXTRA[70]);
-        this._sendFrame(70, buildPayload(), CRC_EXTRA[70]).catch(()=>{});
+        for (let i = 0; i < 3; i++) {
+            await new Promise(r => setTimeout(r, 50));
+            this._sendFrame(70, buildPayload(), CRC_EXTRA[70]).catch(()=>{});
+        }    
     }
 
-    async calibrateMag(compassId = -1) { return this.sendCommandLong(241, { p3: 1, p4: compassId >= 0 ? compassId : 0 }); }
-    async calibrateAccel(retries = 0) { return this.sendCommandLong(241, { p1: 1, p2: retries }); }
-    async calibrateGyro() { return this.sendCommandLong(241, { p5: 1 }); }
-    async calibrateLevel() { return this.sendCommandLong(241, { p6: 1 }); }
+    async calibrateMag(compassId = -1) {
+        return this.sendCommandLong(241, { p3: 1, p4: compassId >= 0 ? compassId : 0 });
+    }
+    async calibrateAccel(retries = 0) {
+        return this.sendCommandLong(241, { p1: 1, p2: retries });
+    }
+    async calibrateGyro() {
+        return this.sendCommandLong(241, { p5: 1 });
+    }
+    async calibrateLevel() {
+        return this.sendCommandLong(241, { p6: 1 });
+    }
 
     async getPID(axis) {
         const axisMap = { roll:'ROLL', pitch:'PITCH', yaw:'YAW' };
@@ -1269,11 +1589,17 @@ class UdpMavlink {
                 this.requestDataStreams().catch(e => console.warn('[UdpMavlink] requestDataStreams gagal:', e));
                 this.requestHomePosition();
             }
+            // PERBAIKAN: Perilaku Heartbeat disamakan dengan versi radio
             if (sysid === this.targetSystem && compid === this.targetComponent) {
                 this.lastHeartbeatTime = Date.now();
+                this.telemetry.connected = true;
+                this.telemetry.system_status = 'connected';
+                if (this._isRebooting) {
+                    console.log(`[UdpMavlink] FC kembali setelah reboot: sysid=${sysid}, compid=${compid}`);
+                    this._isRebooting = false;
+                }
             } else {
-                // console.warn(`[UdpMavlink] Heartbeat dari sysid=${sysid}/compid=${compid} diabaikan (target saat ini: ${this.targetSystem}/${this.targetComponent}) -- kemungkinan ada device lain di broadcast yang sama.`);
-                console.warn();
+                // console.warn(`[UdpMavlink] Heartbeat dari sysid=${sysid}/compid=${compid} diabaikan (target saat ini: ${this.targetSystem}/${this.targetComponent})`);
             }
         }
 
@@ -1303,7 +1629,6 @@ class UdpMavlink {
             Object.assign(this.telemetry, result);
             this.telemetry.connected = true;
             
-            // Khusus di UDP: Konfirmasi titik HOME jika diterima
             if (Number.isFinite(result.home_lat) && Number.isFinite(result.home_lon)) {
                 this._notifyHomePosition(result.home_lat, result.home_lon, result.home_alt);
             }

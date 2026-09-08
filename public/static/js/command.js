@@ -104,35 +104,142 @@ const commands = {
         return this._getActiveLink().setServo(channel, pwm);
     },
 
+    // before
+    // async setHybridMode(state) {
+    //     const stateStr = String(state).toLowerCase();
+    //     let targetState;
+    //     let pwm;
+
+    //     if (['low', 'rover'].includes(stateStr)) {
+    //         targetState = 'rover';
+    //         pwm = 999;
+    //         console.log(
+    //             '[COMMAND] HYBRID MODE: ROVER (LOW)'
+    //         );
+
+    //     } else if (['mid', 'middle', 'copter_safe'].includes(stateStr)) {
+    //         targetState = 'copter_safe';
+    //         pwm = 1500;
+    //         console.log(
+    //             '[COMMAND] HYBRID MODE: COPTER & SAFETY (MID)'
+    //         );
+
+    //     } else if (['high', 'copter_unsafe', 'ready'].includes(stateStr)) {
+    //         targetState = 'copter_unsafe';
+    //         pwm = 1998;
+    //         console.log(
+    //             '[COMMAND] HYBRID MODE: COPTER & UNSAFETY (HIGH)'
+    //         );
+
+    //     } else if (['release', 'off'].includes(stateStr)) {
+    //         console.log('[COMMAND] HYBRID MODE: RELEASED');
+    //         const link = this._getActiveLink();
+    //         if (typeof link.cancelHybridOverride === 'function') {
+    //             return link.cancelHybridOverride();
+    //         }
+    //         return link.sendRcOverride(4, 65535);
+    //     } else {
+    //         throw new Error(`Invalid hybrid mode state: ${state}`);
+    //     }
+    //     const link = this._getActiveLink();
+    //     if (typeof link.setHybridModeTemporary === 'function') {
+    //         return link.setHybridModeTemporary(
+    //             targetState,
+    //             pwm,
+    //             4
+    //         );
+    //     }
+    //     return link.sendRcOverride(4, pwm);
+    // },
+
+    // after
+    // async setHybridMode(state) {
+    //     const stateStr = String(state).toLowerCase().trim();
+    //     let targetState;
+    //     let pwm;
+    //     let label;
+
+    //     if (['low', 'rover'].includes(stateStr)) {
+    //         targetState = 'rover';
+    //         pwm = 999;
+    //         label = 'ROVER (LOW)';
+    //     } else if (['mid', 'middle', 'copter_safe'].includes(stateStr)) {
+    //         targetState = 'copter_safe';
+    //         pwm = 1500;
+    //         label = 'COPTER + SAFETY (MID)';
+    //     } else if (['high', 'copter_unsafe', 'ready'].includes(stateStr)) {
+    //         targetState = 'copter_unsafe';
+    //         pwm = 1998;
+    //         label = 'COPTER + UNSAFETY (HIGH)';
+    //     } else if (['release', 'off'].includes(stateStr)) {
+    //         const link = this._getActiveLink();
+    //         console.log('[COMMAND] HYBRID MODE: RELEASE OVERRIDE (CH5 -> RC FISIK)');
+
+    //         let res;
+    //         if (typeof link.cancelHybridOverride === 'function') {
+    //             res = await link.cancelHybridOverride();
+    //         } else {
+    //             res = await link.sendRcOverride(4, 65535);
+    //         }
+
+    //         return {
+    //             ok: true,
+    //             action: 'release',
+    //             mode: 'released',
+    //             channel: 5,
+    //             message: 'Hybrid override released. RC fisik sekarang jadi sumber CH5.',
+    //             result: res
+    //         };
+    //     } else {
+    //         throw new Error(`Invalid hybrid mode state: ${state}`);
+    //     }
+
+    //     const link = this._getActiveLink();
+
+    //     console.log(`[COMMAND] HYBRID MODE REQUEST: ${label}`);
+    //     console.log('[COMMAND] CH5 akan di-latch oleh GCS sampai operator catch-up lalu takeover.');
+
+    //     let res;
+    //     if (typeof link.setHybridModeTemporary === 'function') {
+    //         res = await link.setHybridModeTemporary(targetState, pwm, 4);
+    //     } else {
+    //         // fallback lama (kurang ideal, tapi tetap jalan)
+    //         res = await link.sendRcOverride(4, pwm);
+    //     }
+
+    //     return {
+    //         ok: true,
+    //         action: 'set',
+    //         mode: targetState,
+    //         pwm,
+    //         channel: 5,
+    //         message:
+    //             `Hybrid mode ${targetState} aktif via GCS latch. ` +
+    //             `Untuk ambil alih dari remote: samakan switch ke mode aktif dulu, lalu pindah ke mode tujuan.`,
+    //         result: res
+    //     };
+    // },
+
+    // after after
+    // GANTI setHybridMode() dengan ini
+    // GANTI setHybridMode() dengan ini
     async setHybridMode(state) {
-        const stateStr = String(state).toLowerCase();
+        const stateStr = String(state).toLowerCase().trim();
+        const link = this._getActiveLink();
+
         let targetState;
         let pwm;
 
         if (['low', 'rover'].includes(stateStr)) {
             targetState = 'rover';
             pwm = 999;
-            console.log(
-                '[COMMAND] HYBRID MODE: ROVER (LOW)'
-            );
-
-        } else if (['mid', 'middle', 'copter_safe'].includes(stateStr)) {
+        } else if (
+            ['mid', 'middle', 'copter', 'copter_safe', 'high', 'copter_unsafe', 'ready'].includes(stateStr)
+        ) {
+            // FORCE copter selalu SAFE (MID)
             targetState = 'copter_safe';
             pwm = 1500;
-            console.log(
-                '[COMMAND] HYBRID MODE: COPTER & SAFETY (MID)'
-            );
-
-        } else if (['high', 'copter_unsafe', 'ready'].includes(stateStr)) {
-            targetState = 'copter_unsafe';
-            pwm = 1998;
-            console.log(
-                '[COMMAND] HYBRID MODE: COPTER & UNSAFETY (HIGH)'
-            );
-
         } else if (['release', 'off'].includes(stateStr)) {
-            console.log('[COMMAND] HYBRID MODE: RELEASED');
-            const link = this._getActiveLink();
             if (typeof link.cancelHybridOverride === 'function') {
                 return link.cancelHybridOverride();
             }
@@ -140,13 +247,9 @@ const commands = {
         } else {
             throw new Error(`Invalid hybrid mode state: ${state}`);
         }
-        const link = this._getActiveLink();
+
         if (typeof link.setHybridModeTemporary === 'function') {
-            return link.setHybridModeTemporary(
-                targetState,
-                pwm,
-                4
-            );
+            return link.setHybridModeTemporary(targetState, pwm, 4);
         }
         return link.sendRcOverride(4, pwm);
     },

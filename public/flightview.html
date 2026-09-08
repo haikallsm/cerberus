@@ -119,11 +119,12 @@
                     <button id="armToggleBtn" class="action-btn btn-disarm" onclick="toggleArm()">DISARM</button>
                     <button id="safetyToggleBtn" class="action-btn btn-warning" onclick="toggleSS()">SAFETY ON</button>
                     <button class="action-btn btn-danger" onclick="doAction('reboot')">REBOOT</button>
-                    <button class="action-btn btn-rover" onclick="doAction('rover')">ROVER</button>
-                    <button class="action-btn btn-copter" onclick="doAction('copter')">COPTER</button>
                     <button class="action-btn" onclick="doAction('takeoff')">TAKEOFF</button>
                     <button class="action-btn" onclick="doAction('land')">LAND</button>
                     <button class="action-btn btn-rtl" onclick="doAction('rtl')">RTL</button>
+                    <button class="action-btn btn-rover" onclick="doAction('rover')">ROVER</button>
+                    <button class="action-btn btn-copter" onclick="doAction('copter')">COPTER</button>
+                    <button class="action-btn btn-warning" onclick="doAction('release_rc')">RELEASE RC</button>
                 </div>
 
                 <div class="action-section-title" style="margin-top: 12px;">Flight Modes</div>
@@ -1009,6 +1010,15 @@ async function doAction(action) {
                 const modeLabel = document.getElementById('flightModeSelect').selectedOptions[0]?.text ?? modeValue;
                 const ack = await window.parent.commands.setFlightMode(parseInt(modeValue, 10));
                 logAckResult(`${modeLabel}`, ack);
+                break;
+            }
+            case 'release_rc': {
+                const ack = await window.parent.commands.setHybridMode('release');
+                if (ack && ack.ok) {
+                    logLocalFeedback('[TRANSITION] RC Override dilepas (CH5 kembali ke switch fisik remote)', 6);
+                } else {
+                    logLocalFeedback('[TRANSITION] Gagal melepas RC Override', 3);
+                }
                 break;
             }
         }
