@@ -220,8 +220,12 @@
                     <div style="font-size: 10px; color: #8fa0b5; margin-bottom: 2px;">Radio 12</div>
                     <div class="radio-bar-h" style="max-width: 100%;"><div class="radio-bar-h-fill" id="cal_bar_12" style="width: 50%;"></div><span id="cal_txt_12">1500</span></div>
                 </div>
-                <div style="grid-column: span 2; margin-top: 15px; display: flex; justify-content: center;">
-                    <button class="btn btn-warning" onclick="startRadioCalibration()" style="padding: 10px 25px; font-weight: bold;">Calibrate Radio</button>
+                <div style="grid-column: span 2; margin-top: 15px; display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                    <div id="radioCalStatus" style="display:none; font-size: 11px; color:#ffb74d; text-align:center; max-width: 420px; line-height: 1.5;"></div>
+                    <div style="display:flex; gap:8px;">
+                        <button id="btnCalibrateRadio" class="btn btn-warning" onclick="startRadioCalibration()" style="padding: 10px 25px; font-weight: bold;">Calibrate Radio</button>
+                        <button id="btnCancelRadioCal" class="btn btn-secondary" onclick="cancelRadioCalibration()" style="padding: 10px 20px; font-weight: bold; display:none;">Batal</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -451,7 +455,7 @@ function initServoOutputTable() {
                 <td style="font-weight: bold; color: #00bcd4; text-align: center;">${i}</td>
                 <td>
                     <div class="servo-bar">
-                        <div class="servo-bar-h-fill" id="servo_bar_${i}" style="width: 50%;"></div>
+                        <div class="servo-bar-fill" id="servo_bar_${i}" style="width: 50%;"></div>
                         <span id="servo_pos_${i}">1500</span>
                     </div>
                 </td>
@@ -492,8 +496,122 @@ async function autoSaveServoParam(servoNum, paramType, val) {
     }
 }
 
+// ===== RADIO CALIBRATION (REAL -- rekam min/max live lalu tulis ke FC) =====
+let radioCalActive = false;
+const RADIO_CAL_CHANNELS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]; // sesuai channel yang punya bar di UI
+let radioCalData = {}; // { [ch]: { min, max, trim } }
+
+function _readLiveChannelPwm(ch) {
+    const telemetry = window.parent.gcsConnection?.telemetry;
+    const tData = telemetry?.data || {};
+    let pwm = tData['rc' + ch + '_in'] ?? tData['rc' + ch + '_raw'] ?? (ch === 3 ? 1000 : 1500);
+    pwm = parseInt(pwm);
+    return isNaN(pwm) ? (ch === 3 ? 1000 : 1500) : pwm;
+}
+
 function startRadioCalibration() {
-    alert("Mode Kalibrasi Radio Aktif.\nGerakkan seluruh stick transmitter ke posisi minimum dan maksimum secara bergantian, lalu pastikan posisi netral di tengah.");
+    if (radioCalActive) return;
+    if (!isConnected()) { alert('Hubungkan ke Flight Controller terlebih dahulu!'); return; }
+
+    const ok = confirm(
+        "Mode Kalibrasi Radio.\n\n" +
+        "1. Lepas baling-baling / pastikan drone dalam kondisi aman.\n" +
+        "2. Posisikan SEMUA stick & switch transmitter di tengah/netral, lalu tekan OK.\n" +
+        "3. Setelah OK, gerakkan SEMUA stick & switch ke posisi minimum & maksimum secara bergantian beberapa kali.\n" +
+        "4. Kembalikan semua stick ke posisi netral, lalu klik \"Save Calibration\"."
+    );
+    if (!ok) return;
+
+    radioCalActive = true;
+    radioCalData = {};
+    RADIO_CAL_CHANNELS.forEach(ch => {
+        const current = _readLiveChannelPwm(ch);
+        // Trim diambil dari posisi saat ini (asumsi stick masih netral sesuai instruksi di atas)
+        radioCalData[ch] = { min: current, max: current, trim: current };
+    });
+
+    const btn = document.getElementById('btnCalibrateRadio');
+    const cancelBtn = document.getElementById('btnCancelRadioCal');
+    const statusEl = document.getElementById('radioCalStatus');
+    if (btn) {
+        btn.textContent = 'Save Calibration';
+        btn.classList.remove('btn-warning');
+        btn.classList.add('btn-primary');
+        btn.onclick = saveRadioCalibration;
+    }
+    if (cancelBtn) cancelBtn.style.display = 'inline-block';
+    if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.textContent = 'Kalibrasi AKTIF -- gerakkan semua stick & switch ke ujung-ujungnya (bar akan berwarna oranye), lalu kembalikan ke netral sebelum menekan "Save Calibration".';
+    }
+}
+
+function cancelRadioCalibration() {
+    radioCalActive = false;
+    radioCalData = {};
+
+    const btn = document.getElementById('btnCalibrateRadio');
+    const cancelBtn = document.getElementById('btnCancelRadioCal');
+    const statusEl = document.getElementById('radioCalStatus');
+    if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Calibrate Radio';
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-warning');
+        btn.onclick = startRadioCalibration;
+    }
+    if (cancelBtn) cancelBtn.style.display = 'none';
+    if (statusEl) statusEl.style.display = 'none';
+
+    // Kembalikan warna bar radio ke default (hijau)
+    RADIO_CAL_CHANNELS.forEach(ch => {
+        const barEl = document.getElementById('cal_bar_' + ch);
+        if (barEl) barEl.style.background = '';
+    });
+}
+
+async function saveRadioCalibration() {
+    if (!radioCalActive) return;
+
+    // Validasi dasar: tolak channel yang rentang gerakannya kurang dari 50us (kemungkinan belum digerakkan sama sekali)
+    const invalidChannels = RADIO_CAL_CHANNELS.filter(ch => (radioCalData[ch].max - radioCalData[ch].min) < 50);
+    if (invalidChannels.length > 0) {
+        const proceed = confirm(
+            `Channel ${invalidChannels.join(', ')} rentang gerakannya sangat kecil (kemungkinan stick/switch belum digerakkan saat kalibrasi).\n` +
+            `Tetap simpan kalibrasi ini apa adanya?`
+        );
+        if (!proceed) return;
+    }
+
+    const btn = document.getElementById('btnCalibrateRadio');
+    if (btn) { btn.disabled = true; btn.textContent = 'Menyimpan...'; }
+
+    try {
+        const mav = window.parent.mavFeatures;
+        for (const ch of RADIO_CAL_CHANNELS) {
+            const d = radioCalData[ch];
+            // Jaga-jaga: pastikan min <= trim <= max walau trim diambil di awal
+            const minVal = Math.min(d.min, d.trim);
+            const maxVal = Math.max(d.max, d.trim);
+
+            await mav.setParam(`RC${ch}_MIN`, minVal);
+            await mav.setParam(`RC${ch}_MAX`, maxVal);
+            await mav.setParam(`RC${ch}_TRIM`, d.trim);
+
+            if (window.parent.paramCache?.params) {
+                window.parent.paramCache.params[`RC${ch}_MIN`] = minVal;
+                window.parent.paramCache.params[`RC${ch}_MAX`] = maxVal;
+                window.parent.paramCache.params[`RC${ch}_TRIM`] = d.trim;
+            }
+        }
+        alert('Kalibrasi radio berhasil disimpan ke Flight Controller.');
+    } catch (err) {
+        console.error('[RadioCal] Gagal menyimpan kalibrasi:', err);
+        alert('Gagal menyimpan sebagian/seluruh kalibrasi radio: ' + err.message);
+    } finally {
+        if (btn) btn.disabled = false;
+        cancelRadioCalibration(); // reset tombol/status balik ke kondisi idle
+    }
 }
 
 function initRadioReverseFromParams() {
@@ -607,26 +725,56 @@ setInterval(() => {
             pwmRadio = parseInt(pwmRadio);
             if (isNaN(pwmRadio)) pwmRadio = (ch === 3 ? 1000 : 1500);
 
-            // Cek apakah mode reverse untuk channel ini aktif (di-centang)
-            const revCheckbox = document.getElementById(`rev_ch_${ch}`);
-            let displayPwm = pwmRadio;
-            if (revCheckbox && revCheckbox.checked) {
-                displayPwm = 3000 - pwmRadio; 
+            // --- Rekam min/max live selama mode Kalibrasi Radio aktif ---
+            if (radioCalActive && radioCalData[ch]) {
+                if (pwmRadio < radioCalData[ch].min) radioCalData[ch].min = pwmRadio;
+                if (pwmRadio > radioCalData[ch].max) radioCalData[ch].max = pwmRadio;
             }
 
-            // UPDATE UI TEKS DAN GRAFIK BAR RADIO (BAR HIJAU)
+            // Cek apakah mode reverse untuk channel ini aktif (di-centang)
+            const revCheckbox = document.getElementById(`rev_ch_${ch}`);
+            const isRev = !!(revCheckbox && revCheckbox.checked);
+
+            // UPDATE UI TEKS DAN GRAFIK BAR RADIO (BAR HIJAU / ORANYE SAAT KALIBRASI)
             const txtEl = document.getElementById('cal_txt_' + ch);
             const barEl = document.getElementById('cal_bar_' + ch);
             
-            if (txtEl) txtEl.innerText = displayPwm;
+            if (txtEl) {
+                // Angka PWM selalu ditampilkan apa adanya (nilai mentah dari receiver,
+                // MAVLink tidak membalik nilai ini walau RCx_REVERSED aktif di FC)
+                if (radioCalActive && radioCalData[ch]) {
+                    txtEl.innerText = `${pwmRadio} [${radioCalData[ch].min}-${radioCalData[ch].max}]`;
+                } else {
+                    txtEl.innerText = pwmRadio;
+                }
+            }
             if (barEl) {
-                const percent = Math.max(0, Math.min(100, ((displayPwm - 1000) / 1000) * 100));
-                
-                if (barEl.parentElement.classList.contains('radio-bar-v')) {
+                const percent = Math.max(0, Math.min(100, ((pwmRadio - 1000) / 1000) * 100));
+                const isVertical = barEl.parentElement.classList.contains('radio-bar-v');
+
+                if (isVertical) {
                     barEl.style.height = percent + '%';
+                    // Reverse -> arah tumbuh bar dibalik: normal dari bawah, reverse dari atas
+                    if (isRev) {
+                        barEl.style.top = '0';
+                        barEl.style.bottom = 'auto';
+                    } else {
+                        barEl.style.bottom = '0';
+                        barEl.style.top = 'auto';
+                    }
                 } else {
                     barEl.style.width = percent + '%';
+                    // Reverse -> arah tumbuh bar dibalik: normal dari kiri, reverse dari kanan
+                    if (isRev) {
+                        barEl.style.right = '0';
+                        barEl.style.left = 'auto';
+                    } else {
+                        barEl.style.left = '0';
+                        barEl.style.right = 'auto';
+                    }
                 }
+
+                barEl.style.background = (radioCalActive && radioCalData[ch]) ? '#ff9800' : '';
             }
 
             // --- Bagian Servo Output ---

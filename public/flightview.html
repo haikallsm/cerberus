@@ -171,6 +171,14 @@
             </svg>
         </button>
 
+        <button id="victimToolBtn" class="map-tool-btn" type="button" onclick="toggleVictimPanel()" title="Victim Detection" aria-label="Victim Detection" aria-expanded="false" style="position: relative;">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="7" r="3"/>
+                <path d="M5 21v-2a7 7 0 0 1 14 0v2"/>
+            </svg>
+            <span id="victimBadge" style="display:none; position:absolute; top:-4px; right:-4px; min-width:16px; height:16px; padding:0 3px; border-radius:8px; background:#f44336; color:#fff; font-size:9px; font-weight:bold; line-height:16px; text-align:center; border:1px solid #fff;">0</span>
+        </button>
+
         <button id="autoCenterBtn" class="map-tool-btn active" type="button" onclick="toggleAutoCenter()" title="Auto-Center Map" aria-label="Auto Center" aria-pressed="true">
             <svg viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="12" cy="12" r="3" fill="currentColor"/>
@@ -185,6 +193,27 @@
             <button class="floating-panel-close" type="button" onclick="closeMavlinkLog()" title="Close message log" aria-label="Close message log">&times;</button>
         </div>
         <div id="mavlinkLogContent"></div>
+    </div>
+
+    <div id="victimPanel" class="mavlink-log-panel" aria-hidden="true" style="top: 320px; height: auto; padding-bottom: 12px;">
+        <div class="floating-panel-header">
+            <div class="floating-panel-title">Victim Detection (SAR)</div>
+            <button class="floating-panel-close" type="button" onclick="closeVictimPanel()" title="Close victim panel" aria-label="Close victim panel">&times;</button>
+        </div>
+        <div id="victimStatusBadge" style="text-align:center; padding:8px; border-radius:8px; font-weight:bold; font-size:13px; margin-bottom:10px; background:rgba(255,255,255,0.06); color:#8fa0b5;">
+            Belum ada korban terdeteksi
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:11px; color:#b1a5a5;">
+            <div>Korban saat ini<br><b id="victimCurrentCount" style="font-size:16px; color:#00e5ff;">0</b></div>
+            <div>Total korban (misi)<br><b id="victimTotalCount" style="font-size:16px; color:#00e5ff;">0</b></div>
+        </div>
+        <div style="margin-top:10px; font-size:10px; color:#71828d;">
+            Lokasi terakhir: <span id="victimLastLoc" style="color:#9be7f2;">-</span><br>
+            Update terakhir: <span id="victimLastTime" style="color:#9be7f2;">-</span>
+        </div>
+        <button id="victimGotoBtn" onclick="goToLastVictim()" disabled style="display:block; width:100%; margin-top:10px; background:#2196f3; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer; font-size:12px; opacity:0.5;">
+            Terbang ke lokasi terakhir
+        </button>
     </div>
 </div>
 
@@ -1076,6 +1105,64 @@ async function doJumpWaypoint() {
 let victimMarkers = [];
 const VICTIM_BUFFER_RADIUS_METERS = 10;
 
+// State ringkasan misi -- dipakai buat panel status persisten (bukan cuma popup sekilas di peta)
+const victimState = {
+    currentCount: 0,   // jumlah korban terlihat SAAT frame deteksi terakhir
+    totalCount: 0,     // total ID korban unik sepanjang misi (dari companion computer)
+    lastStatus: null,  // 'H' (melambai/minta tolong) atau 'D' (terdeteksi saja)
+    lastLat: null,
+    lastLon: null,
+    lastUpdateMs: null
+};
+
+function updateVictimPanelUI() {
+    const badgeBtn = document.getElementById('victimBadge');
+    if (badgeBtn) {
+        if (victimState.totalCount > 0) {
+            badgeBtn.style.display = 'inline-block';
+            badgeBtn.textContent = victimState.totalCount;
+        } else {
+            badgeBtn.style.display = 'none';
+        }
+    }
+
+    const statusBadge = document.getElementById('victimStatusBadge');
+    if (statusBadge) {
+        if (victimState.lastStatus === 'H') {
+            statusBadge.style.background = 'rgba(244, 67, 54, 0.18)';
+            statusBadge.style.color = '#ff8a80';
+            statusBadge.innerHTML = '🆘 MELAMBAI &middot; MINTA TOLONG';
+        } else if (victimState.lastStatus === 'D') {
+            statusBadge.style.background = 'rgba(255, 152, 0, 0.15)';
+            statusBadge.style.color = '#ffcc80';
+            statusBadge.innerHTML = '📍 Terdeteksi (tidak melambai)';
+        } else {
+            statusBadge.style.background = 'rgba(255,255,255,0.06)';
+            statusBadge.style.color = '#8fa0b5';
+            statusBadge.textContent = 'Belum ada korban terdeteksi';
+        }
+    }
+
+    const curEl = document.getElementById('victimCurrentCount');
+    const totEl = document.getElementById('victimTotalCount');
+    if (curEl) curEl.textContent = victimState.currentCount;
+    if (totEl) totEl.textContent = victimState.totalCount;
+
+    const locEl = document.getElementById('victimLastLoc');
+    const timeEl = document.getElementById('victimLastTime');
+    const gotoBtn = document.getElementById('victimGotoBtn');
+    if (victimState.lastLat !== null && victimState.lastLon !== null) {
+        if (locEl) locEl.textContent = `${victimState.lastLat.toFixed(6)}, ${victimState.lastLon.toFixed(6)}`;
+        if (timeEl && victimState.lastUpdateMs) timeEl.textContent = new Date(victimState.lastUpdateMs).toTimeString().split(' ')[0];
+        if (gotoBtn) { gotoBtn.disabled = false; gotoBtn.style.opacity = '1'; }
+    }
+}
+
+window.goToLastVictim = function() {
+    if (victimState.lastLat === null || victimState.lastLon === null) return;
+    goToVictim(victimState.lastLat, victimState.lastLon);
+};
+
 function getDistanceMeters(lat1, lon1, lat2, lon2) {
     const R = 6371e3;
     const p1 = lat1 * Math.PI / 180, p2 = lat2 * Math.PI / 180;
@@ -1085,14 +1172,20 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
 }
 
 function buildPopupHtml(lat, lon, opts = {}) {
-    const { status = 'unknown', jumlah = 1, confidence = null, source = 'AI' } = opts;
-    const isDead = status === 'D';
-    const accentColor = isDead ? '#616161' : '#f44336';
-    const detailLine = source === 'SAR' ? `Status: ${isDead ? 'Korban Tewas' : 'Korban Hidup'} &middot; Jumlah: ${jumlah} Orang` : `Keyakinan (AI): ${(confidence !== null ? confidence * 100 : 0).toFixed(1)}%`;
+    const { status = 'unknown', jumlah = 1, total = null, confidence = null, source = 'AI' } = opts;
+    // PENTING: AI hanya mendeteksi "terlihat" (D) vs "terlihat & melambaikan tangan" (H).
+    // Sistem TIDAK bisa dan TIDAK BOLEH mengklaim status medis (hidup/tewas) -- itu klaim
+    // yang berbahaya di konteks SAR kalau salah. H = minta tolong (darurat), D = terdeteksi biasa.
+    const isEmergency = status === 'H';
+    const accentColor = isEmergency ? '#f44336' : '#ffb74d';
+    const totalLine = total !== null ? ` &middot; Total misi: ${total}` : '';
+    const detailLine = source === 'SAR'
+        ? `Status: ${isEmergency ? 'MELAMBAI &middot; MINTA TOLONG' : 'Terdeteksi (tidak melambai)'} &middot; Saat ini: ${jumlah} orang${totalLine}`
+        : `Keyakinan (AI): ${(confidence !== null ? confidence * 100 : 0).toFixed(1)}%`;
 
     return `
         <div style="text-align: center;">
-            <b style="color:${accentColor}; font-size:12px;">🚨 KORBAN TERDETEKSI</b><br>
+            <b style="color:${accentColor}; font-size:12px;">${isEmergency ? '🆘' : '📍'} KORBAN TERDETEKSI</b><br>
             <span style="font-size:11px; color:#666;">Radius: ${VICTIM_BUFFER_RADIUS_METERS}m</span><br><br>
             ${detailLine}<br>Lat: ${lat.toFixed(8)}<br>Lon: ${lon.toFixed(8)}<br><br>
             <button onclick="goToVictim(${lat}, ${lon})" style="background:#2196f3;color:white;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:12px;">
@@ -1103,7 +1196,7 @@ function buildPopupHtml(lat, lon, opts = {}) {
 }
 
 function addVictimMarker(lat, lon, opts = {}) {
-    const { status = 'unknown', jumlah = 1, confidence = null, source = 'AI' } = opts;
+    const { status = 'unknown', jumlah = 1, total = null, confidence = null, source = 'AI' } = opts;
     const existing = victimMarkers.find(m => {
         const mLatLng = m.marker.getLatLng();
         return getDistanceMeters(lat, lon, mLatLng.lat, mLatLng.lng) < VICTIM_BUFFER_RADIUS_METERS;
@@ -1112,26 +1205,26 @@ function addVictimMarker(lat, lon, opts = {}) {
     if (existing) {
         if (existing.status !== status || existing.jumlah !== jumlah) {
             existing.status = status; existing.jumlah = jumlah;
-            existing.marker.setPopupContent(buildPopupHtml(lat, lon, { status, jumlah, confidence, source }));
+            existing.marker.setPopupContent(buildPopupHtml(lat, lon, { status, jumlah, total, confidence, source }));
         }
         return existing.marker;
     }
 
-    const isDead = status === 'D';
-    const iconBg = isDead ? '33,33,33' : '244,67,54';
-    const iconGlyph = isDead ? '📍' : '🆘';
+    const isEmergency = status === 'H';
+    const iconBg = isEmergency ? '244,67,54' : '255,152,0';
+    const iconGlyph = isEmergency ? '🆘' : '📍';
 
     const bufferCircle = L.circle([lat, lon], {
-        color: isDead ? '#424242' : 'red', fillColor: isDead ? '#424242' : '#f44336', fillOpacity: 0.15, radius: VICTIM_BUFFER_RADIUS_METERS, weight: 1, dashArray: '5, 5'
+        color: isEmergency ? 'red' : '#ff9800', fillColor: isEmergency ? '#f44336' : '#ff9800', fillOpacity: 0.15, radius: VICTIM_BUFFER_RADIUS_METERS, weight: 1, dashArray: '5, 5'
     }).addTo(map);
 
     const victimIcon = L.divIcon({
-        html: `<div style="font-size: 18px; background: rgba(${iconBg}, 0.9); border-radius: 50%; width: 30px; height: 30px; text-align: center; line-height: 30px; color: white; border: 2px solid white; box-shadow: 0 0 10px ${isDead ? '#000' : 'red'};">${iconGlyph}</div>`,
+        html: `<div style="font-size: 18px; background: rgba(${iconBg}, 0.9); border-radius: 50%; width: 30px; height: 30px; text-align: center; line-height: 30px; color: white; border: 2px solid white; box-shadow: 0 0 10px ${isEmergency ? 'red' : '#ff9800'};" class="${isEmergency ? 'victim-marker-pulse' : ''}">${iconGlyph}</div>`,
         className: 'victim-icon', iconSize: [30, 30], iconAnchor: [15, 15]
     });
 
     const marker = L.marker([lat, lon], { icon: victimIcon, zIndexOffset: 1000 })
-        .bindPopup(buildPopupHtml(lat, lon, { status, jumlah, confidence, source }))
+        .bindPopup(buildPopupHtml(lat, lon, { status, jumlah, total, confidence, source }))
         .addTo(map);
 
     marker.openPopup();
@@ -1182,15 +1275,21 @@ function reassembleSarText(logItem) {
     return { status: 'complete', text: flushSarBuffer(msgId) };
 }
 
+// Format asli dari vision.cpp (reportVictim):
+//   "[SAR]; H; <jumlahSaatIni>; <totalKorbanMisi>; <lat>; <lon>"   (H = melambai / minta tolong)
+//   "[SAR]; D; <jumlahSaatIni>; <totalKorbanMisi>; <lat>; <lon>"   (D = terdeteksi, tidak melambai)
+// -> 6 elemen setelah displit koma-titik-koma, BUKAN 5.
 function parseSarStatustext(fullText) {
     const data = fullText.trim().split(";");
-    if (data.length !== 5) return null;
-    const [, status, jumlahStr, latStr, lonStr] = data;
+    if (data.length !== 6) return null;
+    const [, statusRaw, jumlahStr, totalStr, latStr, lonStr] = data;
+    const status = statusRaw.trim();
     const jumlah = parseInt(jumlahStr, 10);
+    const total = parseInt(totalStr, 10);
     const lat = parseFloat(latStr);
     const lon = parseFloat(lonStr);
-    if (!Number.isFinite(jumlah) || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-    return { status, jumlah, lat, lon };
+    if (!Number.isFinite(jumlah) || !Number.isFinite(total) || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    return { status, jumlah, total, lat, lon };
 }
 
 // ===== HUD ERROR NOTIFICATION HANDLER =====
@@ -1225,17 +1324,34 @@ function showHudError(text, severity) {
 }
 
 window.updateMavlogUI = function(logItem) {
-    showHudError(logItem.text, logItem.severity ?? 6);
-
     const sarResult = reassembleSarText(logItem);
-    if (sarResult.status === 'pending') return; 
+    if (sarResult.status === 'pending') return;
     if (sarResult.status === 'complete') {
         const parsed = parseSarStatustext(sarResult.text);
         if (parsed) {
-            addVictimMarker(parsed.lat, parsed.lon, { status: parsed.status, jumlah: parsed.jumlah, source: 'SAR' });
+            addVictimMarker(parsed.lat, parsed.lon, { status: parsed.status, jumlah: parsed.jumlah, total: parsed.total, source: 'SAR' });
+
+            victimState.currentCount = parsed.jumlah;
+            victimState.totalCount = parsed.total;
+            victimState.lastStatus = parsed.status;
+            victimState.lastLat = parsed.lat;
+            victimState.lastLon = parsed.lon;
+            victimState.lastUpdateMs = Date.now();
+            updateVictimPanelUI();
+
+            // Banner HUD yang ramah-manusia (bukan teks mentah "[SAR]; H; 2; 5; ..."),
+            // hanya untuk kasus darurat (melambai / minta tolong)
+            if (parsed.status === 'H') {
+                showHudError(
+                    `🆘 Korban melambai/minta tolong terdeteksi! ${parsed.jumlah} orang di (${parsed.lat.toFixed(6)}, ${parsed.lon.toFixed(6)})`,
+                    0
+                );
+            }
         }
-        return;
+        return; // pesan SAR tidak perlu masuk ke log MAVLink biasa
     }
+
+    showHudError(logItem.text, logItem.severity ?? 6);
 
     const logContent = document.getElementById('mavlinkLogContent');
     if (!logContent) return;
@@ -1339,6 +1455,22 @@ function updateMap(data) {
 // ===== FLOATING MAP TOOLS & VIDEO =====
 const mavlinkLogPanel = document.getElementById('mavlinkLogPanel');
 const logToolBtn = document.getElementById('logToolBtn');
+const victimPanel = document.getElementById('victimPanel');
+const victimToolBtn = document.getElementById('victimToolBtn');
+
+window.toggleVictimPanel = function() {
+    if (!victimPanel) return;
+    const isOpen = victimPanel.classList.toggle('is-open');
+    victimPanel.setAttribute('aria-hidden', String(!isOpen));
+    if (victimToolBtn) victimToolBtn.setAttribute('aria-expanded', String(isOpen));
+};
+
+window.closeVictimPanel = function() {
+    if (!victimPanel) return;
+    victimPanel.classList.remove('is-open');
+    victimPanel.setAttribute('aria-hidden', 'true');
+    if (victimToolBtn) victimToolBtn.setAttribute('aria-expanded', 'false');
+};
 
 window.toggleMavlinkLog = function() {
     if (!mavlinkLogPanel) return;
