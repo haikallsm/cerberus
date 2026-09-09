@@ -306,6 +306,15 @@ html, body{
     50% { opacity: 0.8; }
 }
 
+/* Marker korban darurat (status H / melambai-minta tolong) -- berdenyut biar mencolok di peta */
+.victim-marker-pulse {
+    animation: victim-pulse-anim 1s infinite;
+}
+@keyframes victim-pulse-anim {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 10px red; }
+    50% { transform: scale(1.15); box-shadow: 0 0 18px red; }
+}
+
 .mavlink-log-panel {
     position: absolute;
     top: 70px;
