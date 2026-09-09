@@ -451,7 +451,7 @@ function initServoOutputTable() {
                 <td style="font-weight: bold; color: #00bcd4; text-align: center;">${i}</td>
                 <td>
                     <div class="servo-bar">
-                        <div class="servo-bar-h-fill" id="servo_bar_${i}" style="width: 50%;"></div>
+                        <div class="servo-bar--fill" id="servo_bar_${i}" style="width: 50%;"></div>
                         <span id="servo_pos_${i}">1500</span>
                     </div>
                 </td>
@@ -492,8 +492,190 @@ async function autoSaveServoParam(servoNum, paramType, val) {
     }
 }
 
+// ===== RADIO CALIBRATION (RC{ch}_MIN / RC{ch}_MAX / RC{ch}_TRIM) =====
+// Diadaptasi 1:1 dari alur ConfigRadioInput.cs (Mission Planner):
+// 1) rekam min/max live selama user gerakkan stick & switch
+// 2) SETELAH user klik "selesai", minta stick dinetralkan, BARU baca trim
+// 3) validasi per-channel sebelum ditulis ke FC
+
+const RADIO_CAL_CHANNEL_COUNT = 16;
+
+let radioCalState = {
+    active: false,
+    // sentinel sama seperti sumber asli: min mulai dari nilai tinggi, max dari nilai rendah,
+    // supaya sampel pertama otomatis jadi acuan awal
+    min: new Array(RADIO_CAL_CHANNEL_COUNT).fill(3000),
+    max: new Array(RADIO_CAL_CHANNEL_COUNT).fill(0),
+    trim: new Array(RADIO_CAL_CHANNEL_COUNT).fill(1500),
+};
+
+function _radioCalButton() {
+    return document.querySelector('button[onclick="startRadioCalibration()"]');
+}
+
+function _radioCalSetStatus(text) {
+    let el = document.getElementById('radioCalStatus');
+    if (!el) {
+        const btn = _radioCalButton();
+        if (!btn) return;
+        btn.insertAdjacentHTML('afterend',
+            '<div id="radioCalStatus" style="width:100%;text-align:center;margin-top:8px;font-size:12px;color:#f0ad4e;"></div>'
+        );
+        el = document.getElementById('radioCalStatus');
+    }
+    if (el) el.innerText = text;
+}
+
+function _radioCalReadChannel(ch) {
+    const tData = window.parent.gcsConnection?.telemetry?.data || {};
+    let v = tData['rc' + ch + '_in'] ?? tData['rc' + ch + '_raw'];
+    v = parseInt(v);
+    return Number.isFinite(v) ? v : null;
+}
+
 function startRadioCalibration() {
-    alert("Mode Kalibrasi Radio Aktif.\nGerakkan seluruh stick transmitter ke posisi minimum dan maksimum secara bergantian, lalu pastikan posisi netral di tengah.");
+    if (radioCalState.active) {
+        _stopRadioCalRecording();
+        return;
+    }
+
+    if (!isConnected()) {
+        alert('Belum ada koneksi ke FC (Radio/UDP). Hubungkan dulu sebelum kalibrasi.');
+        return;
+    }
+
+    alert('Pastikan transmitter menyala, receiver terhubung, dan motor TIDAK bertenaga / propeller TERLEPAS!!!');
+
+    radioCalState.active = true;
+    radioCalState.min = new Array(RADIO_CAL_CHANNEL_COUNT).fill(3000);
+    radioCalState.max = new Array(RADIO_CAL_CHANNEL_COUNT).fill(0);
+    radioCalState.trim = new Array(RADIO_CAL_CHANNEL_COUNT).fill(1500);
+
+    const btn = _radioCalButton();
+    if (btn) {
+        btn.innerText = 'Click when Done';
+        btn.classList.add('btn-danger');
+    }
+
+    alert('Klik OK lalu gerakkan SEMUA stick & switch transmitter ke posisi ekstrem (min & max) sampai bar merah menyentuh batasnya.');
+    _radioCalSetStatus('MEREKAM min/max... gerakkan semua stick & switch ke ujung-ujungnya.');
+
+    console.log('[RadioCal] Mulai merekam RC_CHANNELS_RAW untuk kalibrasi.');
+}
+
+// Dipanggil dari dalam poller RC_CHANNELS (lihat patch di bawah) setiap tick, per channel.
+// pwm HARUS nilai RAW, jangan yang sudah di-reverse untuk tampilan bar.
+function _sampleRadioCalChannel(ch, pwm) {
+    if (!radioCalState.active) return;
+    if (!Number.isFinite(pwm) || pwm <= 800 || pwm >= 2200) return; // sama seperti guard "ch1in > 800 && < 2200" di sumber
+
+    const idx = ch - 1;
+    if (idx < 0 || idx >= RADIO_CAL_CHANNEL_COUNT) return;
+
+    if (pwm < radioCalState.min[idx]) radioCalState.min[idx] = pwm;
+    if (pwm > radioCalState.max[idx]) radioCalState.max[idx] = pwm;
+}
+
+function _stopRadioCalRecording() {
+    radioCalState.active = false;
+
+    const btn = _radioCalButton();
+    if (btn) btn.innerText = 'Completed';
+
+    // Sanity check channel 1 (roll) -- kalau ini saja tidak valid, kemungkinan
+    // besar tidak ada input RC yang masuk sama sekali (receiver belum terhubung dsb).
+    const roll = radioCalState.min[0];
+    if (!(roll > 800 && roll < 2200)) {
+        _radioCalSetStatus('Dibatalkan: channel 1 (roll) tidak mendapat input valid.');
+        alert('Bad channel 1 input, kalibrasi dibatalkan.');
+        if (btn) { btn.innerText = 'Calibrate Radio'; btn.classList.remove('btn-danger'); }
+        return;
+    }
+
+    // Step trim: BUKAN diambil dari sampel selama rekam, tapi dibaca ulang
+    // SETELAH user diminta menormalkan stick -- persis seperti sumber asli.
+    alert('Pastikan semua stick sudah di posisi TENGAH dan throttle di posisi TERENDAH, lalu klik OK untuk lanjut menyimpan.');
+    _radioCalSetStatus('Membaca posisi netral...');
+
+    for (let ch = 1; ch <= RADIO_CAL_CHANNEL_COUNT; ch++) {
+        const idx = ch - 1;
+        const live = _radioCalReadChannel(ch);
+        const raw = (live !== null) ? live : radioCalState.min[idx];
+        // Constrain(): clamp ke rentang [min, max] yang sudah terekam
+        radioCalState.trim[idx] = Math.min(Math.max(raw, radioCalState.min[idx]), radioCalState.max[idx]);
+    }
+
+    _saveRadioCalibration();
+}
+
+async function _saveRadioCalibration() {
+    const btn = _radioCalButton();
+    if (btn) btn.innerText = 'Saving';
+    _radioCalSetStatus('Menyimpan parameter ke FC...');
+
+    const mav = window.parent.mavFeatures;
+    const savedChannels = [];
+    const failed = [];
+    let summary = '';
+
+    for (let ch = 1; ch <= RADIO_CAL_CHANNEL_COUNT; ch++) {
+        const idx = ch - 1;
+        const min = radioCalState.min[idx];
+        const max = radioCalState.max[idx];
+        const trim = radioCalState.trim[idx];
+
+        summary += `CH${ch} ${min} | ${max}\n`;
+
+        // Validasi persis seperti sumber asli
+        const valid =
+            min < max && min !== 0 && max !== 0 &&
+            trim <= max && trim >= min && trim !== 0 &&
+            min !== max;
+
+        if (!valid) continue;
+
+        const params = {
+            [`RC${ch}_MIN`]: min,
+            [`RC${ch}_MAX`]: max,
+            [`RC${ch}_TRIM`]: trim,
+        };
+
+        for (const [name, value] of Object.entries(params)) {
+            try {
+                const ok = await mav.setParam(name, value);
+                if (!ok) failed.push(name);
+                if (window.parent.paramCache?.params) {
+                    window.parent.paramCache.params[name] = value;
+                }
+            } catch (err) {
+                console.error(`[RadioCal] Gagal set ${name}:`, err);
+                failed.push(name);
+            }
+        }
+        savedChannels.push(ch);
+    }
+
+    if (btn) { btn.innerText = 'Completed'; btn.classList.remove('btn-danger'); }
+
+    if (savedChannels.length === 0) {
+        _radioCalSetStatus('Tidak ada channel valid untuk disimpan.');
+        alert('Tidak ada channel yang lolos validasi (kemungkinan tidak ada input RC yang terdeteksi bergerak).');
+        return;
+    }
+
+    _radioCalSetStatus(
+        failed.length > 0
+            ? `Tersimpan sebagian -- ${failed.length} parameter gagal (lihat console).`
+            : `Kalibrasi tersimpan untuk channel: ${savedChannels.join(', ')}.`
+    );
+
+    alert(
+        'Berikut hasil radio yang terdeteksi\n' +
+        'CATATAN: channel yang tidak terhubung akan tampil sekitar 1500 +-2\n' +
+        'Nilai normal biasanya sekitar 1100 | 1900\n' +
+        'Channel:Min | Max\n' + summary +
+        (failed.length > 0 ? `\nGAGAL disimpan: ${failed.join(', ')}` : '')
+    );
 }
 
 function initRadioReverseFromParams() {
@@ -607,6 +789,7 @@ setInterval(() => {
             pwmRadio = parseInt(pwmRadio);
             if (isNaN(pwmRadio)) pwmRadio = (ch === 3 ? 1000 : 1500);
 
+             _sampleRadioCalChannel(ch, pwmRadio);
             // Cek apakah mode reverse untuk channel ini aktif (di-centang)
             const revCheckbox = document.getElementById(`rev_ch_${ch}`);
             let displayPwm = pwmRadio;
@@ -645,12 +828,25 @@ setInterval(() => {
             pwmServo = parseInt(pwmServo);
             if (isNaN(pwmServo)) pwmServo = 1500;
 
+            const funcSelect = document.getElementById(`servo_func_${ch}`);
+            const isDisabled = funcSelect && funcSelect.value === '0'; // 0 = Disabled
+
             const servoPosEl = document.getElementById(`servo_pos_${ch}`);
             const servoBarEl = document.getElementById(`servo_bar_${ch}`);
-            if (servoPosEl) servoPosEl.innerText = pwmServo;
-            if (servoBarEl) {
-                const sPercent = Math.max(0, Math.min(100, ((pwmServo - 1000) / 1000) * 100));
-                servoBarEl.style.width = sPercent + '%';
+
+            if (isDisabled) {
+                if (servoPosEl) servoPosEl.innerText = '—';
+                if (servoBarEl) {
+                    servoBarEl.style.width = '0%';
+                    servoBarEl.style.opacity = '0.35'; // dim visual, biar kelihatan beda dari yang aktif
+                }
+            } else {
+                if (servoPosEl) servoPosEl.innerText = pwmServo;
+                if (servoBarEl) {
+                    servoBarEl.style.opacity = '1';
+                    const sPercent = Math.max(0, Math.min(100, ((pwmServo - 1000) / 1000) * 100));
+                    servoBarEl.style.width = sPercent + '%';
+                }
             }
         }
     } catch (e) {

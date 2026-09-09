@@ -959,7 +959,7 @@ async function doAction(action) {
             case 'reboot': {
                 if (confirm("Yakin ingin melakukan Reboot pada Flight Controller?")) {
                     const ack = await window.parent.commands.reboot();
-                    logAckResult('REBOOT FC', ack);
+                    logAckResult('REBOOT', ack);
                 }
                 break;
             }
@@ -1023,7 +1023,7 @@ async function doAction(action) {
             }
         }
     } catch (e) {
-        logLocalFeedback(`❌ Gagal mengirim perintah ${action}: ${e.message}`, 3);
+        logLocalFeedback(`Gagal mengirim perintah ${action}: ${e.message}`, 3);
         alert(`Gagal mengirim perintah ${action}: ${e.message}`);
     }
 }

@@ -60,17 +60,39 @@ class UdpMavlink {
         this.onConnect = null;
         this.onDisconnect = null;
 
+        
         this._intentionalDisconnect = false;
         this._awaitingReconnect = false;
+        this._linkReady = false;
+        this._connectStartedAt = 0;
+        this._handlingUnexpectedDrop = false;
+        this._connectStartedAt = Date.now();
         this._reconnecting = false;
         this._reconnectTimer = null;
         this._isRebooting = false; 
         this._missionBusy = false;
+
+        this._magCalTelemetryTimer = null;
+        this._magCalTelemetryPending = false;
     }
 
     isLive() {
         const timeout = (this._isRebooting || this._missionBusy) ? 15000 : this._linkLossTimeoutMs;
         return this.telemetry.connected && (Date.now() - this.lastHeartbeatTime) < timeout;
+    }
+
+    async tryAutoReconnect() {
+        if (!this._remoteIp || !this._remotePort) {
+            return false;
+        }
+        try {
+            console.log(`[UdpMavlink] Mencoba auto-reconnect ke UDP: ${this._remoteIp}:${this._remotePort}`);
+            await this.connect(this._remoteIp, this._remotePort, this._localPort);
+            return true;
+        } catch (e) {
+            console.warn('[UdpMavlink] Auto-reconnect awal gagal:', e.message);
+            return false;
+        }
     }
 
     // ini kode yang kemaren
@@ -133,7 +155,7 @@ class UdpMavlink {
         this._startRcOverrideLoop();
 
         console.log(`[UdpMavlink] CONNECTED local:${this._localPort} -> remote:${this._remoteIp}:${this._remotePort}`);
-        if (this.onConnect) this.onConnect();
+        // if (this.onConnect) this.onConnect();
     }
 
     // ini juga yang tadi bisa
@@ -181,19 +203,46 @@ class UdpMavlink {
         this._streamsRequested = false;
     }
 
+    // async _handleUnexpectedDrop() {
+    //     if (this._intentionalDisconnect) return;
+    //     if (this._awaitingReconnect) return;
+
+    //     console.warn('[UdpMavlink] Drop tak terduga (Heartbeat Timeout). Memulai teardown & auto-reconnect...');
+    //     this._awaitingReconnect = true; 
+        
+    //     this._rejectPendingTransfers('Koneksi UDP terputus (Heartbeat Timeout) -- upload/download dibatalkan.');
+        
+    //     await this._teardownTransport();
+        
+    //     if (this.onDisconnect) this.onDisconnect();
+    //     this._scheduleReconnect(1);
+    // }
+
     async _handleUnexpectedDrop() {
         if (this._intentionalDisconnect) return;
-        if (this._awaitingReconnect) return;
+        
+        // Lock dari radio-mavlink.js untuk mencegah pemanggilan berulang
+        if (this._handlingUnexpectedDrop) {
+            console.warn('[UdpMavlink] Unexpected Drop dipanggil berulang, abaikan');
+            return;
+        }
+        
+        this._handlingUnexpectedDrop = true;
+        this._awaitingReconnect = true;
 
-        console.warn('[UdpMavlink] Drop tak terduga (Heartbeat Timeout). Memulai teardown & auto-reconnect...');
-        this._awaitingReconnect = true; 
-        
-        this._rejectPendingTransfers('Koneksi UDP terputus (Heartbeat Timeout) -- upload/download dibatalkan.');
-        
-        await this._teardownTransport();
-        
-        if (this.onDisconnect) this.onDisconnect();
-        this._scheduleReconnect(1);
+        try {
+            console.warn('[UdpMavlink] Drop tak terduga (Heartbeat Timeout). Memulai teardown & auto-reconnect...');
+            this._rejectPendingTransfers('Koneksi UDP terputus (Heartbeat Timeout) -- upload/download dibatalkan.');
+            
+            await this._teardownTransport();
+            
+            if (this.onDisconnect) this.onDisconnect();
+            this._scheduleReconnect(1);
+        } catch (e) {
+            console.error('[UdpMavlink] Error saat handleUnexpectedDrop:', e);
+        } finally {
+            this._handlingUnexpectedDrop = false;
+        }
     }
 
     _scheduleReconnect(attempt) {
@@ -289,11 +338,35 @@ class UdpMavlink {
         if (this._gcsHeartbeatTimer) { clearInterval(this._gcsHeartbeatTimer); this._gcsHeartbeatTimer = null; }
     }
 
+    // _startWatchdog() {
+    //     this._stopWatchdog();
+    //     this._watchdogTimer = setInterval(() => {
+    //         if (this.telemetry.connected && !this.isLive()) {
+    //             console.warn('[UdpMavlink] Heartbeat FC timeout — memicu unexpected drop.');
+    //             this._handleUnexpectedDrop().catch(() => {});
+    //         }
+    //     }, 1000);
+    // }
+
     _startWatchdog() {
         this._stopWatchdog();
         this._watchdogTimer = setInterval(() => {
+            if (!this._connected) return;
+
+            // Timeout 15 detik untuk heartbeat pertama setelah UDP bind
+            if (!this._linkReady) {
+                const elapsed = Date.now() - this._connectStartedAt;
+                if (elapsed > 15000) {
+                    console.warn('[UdpMavlink] Tidak ada HEARTBEAT selama 15 detik setelah UDP terhubung. Memicu unexpected drop.');
+                    this._isRebooting = false;
+                    this._handleUnexpectedDrop().catch(() => {});
+                }
+                return;
+            }
+
             if (this.telemetry.connected && !this.isLive()) {
                 console.warn('[UdpMavlink] Heartbeat FC timeout — memicu unexpected drop.');
+                this._isRebooting = false;
                 this._handleUnexpectedDrop().catch(() => {});
             }
         }, 1000);
@@ -1590,13 +1663,31 @@ class UdpMavlink {
                 this.requestHomePosition();
             }
             // PERBAIKAN: Perilaku Heartbeat disamakan dengan versi radio
+            // if (sysid === this.targetSystem && compid === this.targetComponent) {
+            //     this.lastHeartbeatTime = Date.now();
+            //     this.telemetry.connected = true;
+            //     this.telemetry.system_status = 'connected';
+            //     if (this._isRebooting) {
+            //         console.log(`[UdpMavlink] FC kembali setelah reboot: sysid=${sysid}, compid=${compid}`);
+            //         this._isRebooting = false;
+            //     }
+            // }
+            // after
             if (sysid === this.targetSystem && compid === this.targetComponent) {
+                this._linkReady = true; // Tambahkan ini
                 this.lastHeartbeatTime = Date.now();
                 this.telemetry.connected = true;
                 this.telemetry.system_status = 'connected';
                 if (this._isRebooting) {
                     console.log(`[UdpMavlink] FC kembali setelah reboot: sysid=${sysid}, compid=${compid}`);
                     this._isRebooting = false;
+                }
+                if (!wasReady && this.onConnect) {
+                    try {
+                        this.onConnect();
+                    } catch (err) {
+                        console.error('[UdpMavlink] onConnect callback error:', err);
+                    }
                 }
             } else {
                 // console.warn(`[UdpMavlink] Heartbeat dari sysid=${sysid}/compid=${compid} diabaikan (target saat ini: ${this.targetSystem}/${this.targetComponent})`);

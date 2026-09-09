@@ -1723,6 +1723,15 @@ class RadioMavlink {
     //         this._sendFrame(70, buildPayload(), CRC_EXTRA[70]).catch(()=>{});
     //     }    
     // }
+
+    async sendRcOverride(chIndex, pwmValue) {
+        if (chIndex < 0 || chIndex > 7) {
+            throw new Error('sendRcOverride hanya mendukung channel 1-8');
+        }
+        this.rcChannels[chIndex] = pwmValue;
+        console.log(`[RC_OVERRIDE] ch${chIndex + 1} -> ${pwmValue}us`);
+    }
+
     // after
     // 5) GANTI cancelHybridOverride()
     async cancelHybridOverride() {
