@@ -1909,6 +1909,26 @@ class RadioMavlink {
                 this._transportOpen = true;
                 this.telemetry.connected = true;
                 this.telemetry.system_status = 'connected';
+                if (payload && payload.length >= 9) {
+                    const bytes = Uint8Array.from(payload);
+                    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+                    const customMode = dv.getUint32(0, true);
+                    const vehicleTypeCode = bytes[4];
+                    const baseMode = bytes[6];
+                    const mavState = bytes[7];
+
+                    const MAV_MODE_FLAG_SAFETY_ARMED = 0x80;
+                    const armedNow = (baseMode & MAV_MODE_FLAG_SAFETY_ARMED) !== 0;
+
+                    this.telemetry.armed = armedNow;
+                    this.telemetry.base_mode = baseMode;
+                    this.telemetry.custom_mode = customMode;
+                    this.telemetry.vehicle_type_code = vehicleTypeCode;
+                    this.telemetry.mav_state = mavState;
+
+                    this._emitTelemetrySafe();
+                }
 
                 if (this._isRebooting) {
                     console.log(

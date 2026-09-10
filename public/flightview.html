@@ -218,7 +218,7 @@
 </div>
 
 <!-- VIDEO POPUP -->
-<div id="videoModal" class="video-modal" aria-hidden="true" style="position: fixed; bottom: 20px; left: 20px; width: 320px; height: 240px; background: #000; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.5); z-index: 1000; border: 1px solid #333; display: none;">
+<!-- <div id="videoModal" class="video-modal" aria-hidden="true" style="position: fixed; bottom: 20px; left: 20px; width: 320px; height: 240px; background: #000; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.5); z-index: 1000; border: 1px solid #333; display: none;">
     <div class="video-content" style="position: relative; width: 100%; height: 100%;">
         <button class="video-close-btn" type="button" onclick="closeVideo()" title="Close camera" aria-label="Close camera" 
                 style="position: absolute; top: 6px; right: 8px; z-index: 10; background: rgba(0,0,0,0.6); color: #fff; border: none; border-radius: 50%; width: 22px; height: 22px; cursor: pointer; font-size: 14px; line-height: 20px; text-align: center;">&times;</button>
@@ -227,6 +227,13 @@
         <img id="mjpeg-video" style="width: 100%; height: 100%; object-fit: cover; display: none;" alt="Camera Stream" />
         
         <div id="webrtc-status" class="webrtc-status" style="position: absolute; bottom: 6px; left: 8px; z-index: 10; font-size: 11px; padding: 2px 6px; background: rgba(0,0,0,0.65); border-radius: 4px; pointer-events: none; color: #00bcd4;">Connecting...</div>
+    </div>
+</div> -->
+<div id="videoModal" class="video-modal">
+    <div class="video-content">
+        <span class="close-btn" onclick="closeVideo()">&times;</span>
+        <video id="webrtc-video" playsinline muted autoplay></video>
+        <div id="webrtc-status" class="webrtc-status">Connecting...</div>
     </div>
 </div>
 
@@ -1500,99 +1507,214 @@ window.toggleVideoPanel = function() {
     else openVideo();
 };
 
+// let pc = null;
+// window.openVideo = async function() {
+//     const modal = document.getElementById('videoModal');
+//     const statusText = document.getElementById('webrtc-status');
+//     const videoElement = document.getElementById('webrtc-video');
+//     const imgElement = document.getElementById('mjpeg-video');
+
+//     if (!modal || !statusText || !videoElement || !imgElement) return;
+
+//     modal.style.display = 'block';
+//     modal.classList.add('is-open');
+//     modal.setAttribute('aria-hidden', 'false');
+//     updateCameraButtonState(true);
+
+//     const streamType = (localStorage.getItem('videoStreamType')).toLowerCase();
+//     const streamUrl = localStorage.getItem('videoStreamUrl') || localStorage.getItem('raspyUrl') || 'http://127.0.0.1:5001/video_feed';
+
+//     statusText.innerText = `Connecting (${streamType.toUpperCase()})...`;
+//     statusText.style.color = '#00bcd4';
+
+//     if (streamType.includes('http') || streamType === 'udp' || streamUrl.includes('/video_feed')) {
+//         videoElement.style.display = 'none';
+//         imgElement.style.display = 'block';
+//         imgElement.onload = () => { statusText.innerText = `Video Live (${streamType.toUpperCase()})`; statusText.style.color = '#4caf50'; };
+//         imgElement.onerror = () => { statusText.innerText = `Gagal memuat ${streamType.toUpperCase()}`; statusText.style.color = '#f44336'; };
+
+//         let targetUrl = streamUrl;
+//         if (targetUrl.startsWith('udp://')) {
+//             const host = targetUrl.replace('udp://', '').split(':')[0] || '127.0.0.1';
+//             targetUrl = `http://${host}:5001/video_feed`;
+//         }
+//         imgElement.src = targetUrl + (targetUrl.includes('?') ? '&' : '?') + 't=' + Date.now();
+//         return;
+//     }
+
+//     videoElement.style.display = 'block';
+//     imgElement.style.display = 'none';
+//     videoElement.muted = true; videoElement.autoplay = true; videoElement.playsInline = true;
+
+//     try {
+//         let endpoint = streamUrl.trim().replace(/\/+$/, '');
+//         if (!endpoint.endsWith('/webrtc/offer') && !endpoint.endsWith('/offer')) {
+//             endpoint += '/webrtc/offer';
+//         }
+
+//         pc = new RTCPeerConnection({ sdpSemantics: 'unified-plan' });
+//         pc.addTransceiver('video', { direction: 'recvonly' });
+
+//         let inboundStream = new MediaStream();
+//         videoElement.srcObject = inboundStream;
+//         pc.addEventListener('track', (evt) => {
+//             if (evt.track.kind === 'video') {
+//                 inboundStream.addTrack(evt.track);
+//                 videoElement.play().catch(() => {});
+//                 statusText.innerText = 'Video Live (WebRTC)';
+//                 statusText.style.color = '#4caf50';
+//             }
+//         });
+
+//         const offer = await pc.createOffer();
+//         await pc.setLocalDescription(offer);
+
+//         const response = await fetch(endpoint, {
+//             method: 'POST',
+//             headers: { 'Content-Type': 'application/json' },
+//             body: JSON.stringify({ sdp: pc.localDescription.sdp, type: pc.localDescription.type })
+//         });
+
+//         if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
+//         await pc.setRemoteDescription(await response.json());
+//     } catch (err) {
+//         statusText.innerText = 'Connection Failed: ' + err.message;
+//         statusText.style.color = '#f44336';
+//     }
+// };
+
+// ===== VIDEO STREAMING (WebRTC) =====
 let pc = null;
 window.openVideo = async function() {
     const modal = document.getElementById('videoModal');
     const statusText = document.getElementById('webrtc-status');
     const videoElement = document.getElementById('webrtc-video');
-    const imgElement = document.getElementById('mjpeg-video');
-
-    if (!modal || !statusText || !videoElement || !imgElement) return;
 
     modal.style.display = 'block';
-    modal.classList.add('is-open');
-    modal.setAttribute('aria-hidden', 'false');
-    updateCameraButtonState(true);
-
-    const streamType = (localStorage.getItem('videoStreamType') || 'flask_http').toLowerCase();
-    const streamUrl = localStorage.getItem('videoStreamUrl') || localStorage.getItem('raspyUrl') || 'http://127.0.0.1:5001/video_feed';
-
-    statusText.innerText = `Connecting (${streamType.toUpperCase()})...`;
+    statusText.innerText = 'Connecting Video...';
     statusText.style.color = '#00bcd4';
 
-    if (streamType.includes('http') || streamType === 'udp' || streamUrl.includes('/video_feed')) {
-        videoElement.style.display = 'none';
-        imgElement.style.display = 'block';
-        imgElement.onload = () => { statusText.innerText = `Video Live (${streamType.toUpperCase()})`; statusText.style.color = '#4caf50'; };
-        imgElement.onerror = () => { statusText.innerText = `Gagal memuat ${streamType.toUpperCase()}`; statusText.style.color = '#f44336'; };
-
-        let targetUrl = streamUrl;
-        if (targetUrl.startsWith('udp://')) {
-            const host = targetUrl.replace('udp://', '').split(':')[0] || '127.0.0.1';
-            targetUrl = `http://${host}:5001/video_feed`;
-        }
-        imgElement.src = targetUrl + (targetUrl.includes('?') ? '&' : '?') + 't=' + Date.now();
-        return;
-    }
-
-    videoElement.style.display = 'block';
-    imgElement.style.display = 'none';
-    videoElement.muted = true; videoElement.autoplay = true; videoElement.playsInline = true;
-
     try {
-        let endpoint = streamUrl.trim().replace(/\/+$/, '');
-        if (!endpoint.endsWith('/webrtc/offer') && !endpoint.endsWith('/offer')) {
-            endpoint += '/webrtc/offer';
-        }
+        let apiBase = localStorage.getItem('raspyUrl') || 'http://127.0.0.1:5000';
+        console.log("[WebRTC] Using API Base URL:", apiBase);
 
-        pc = new RTCPeerConnection({ sdpSemantics: 'unified-plan' });
-        pc.addTransceiver('video', { direction: 'recvonly' });
-
-        let inboundStream = new MediaStream();
-        videoElement.srcObject = inboundStream;
-        pc.addEventListener('track', (evt) => {
-            if (evt.track.kind === 'video') {
-                inboundStream.addTrack(evt.track);
-                videoElement.play().catch(() => {});
-                statusText.innerText = 'Video Live (WebRTC)';
-                statusText.style.color = '#4caf50';
+        const config = {
+            sdpSemantics: 'unified-plan',
+            bundlePolicy: 'max-bundle',
+            rtcpMuxPolicy: 'require',
+        };
+        pc = new RTCPeerConnection(config);
+        pc.addEventListener('iceconnectionstatechange', () => console.log("[WebRTC] ICE iceConnection State:", pc.iceConnectionState));
+        pc.addEventListener('connectionstatechange', () => console.log("[WebRTC] Connection State:", pc.connectionState));
+        pc.addEventListener('track', (evt) => console.log('[WebRTC] track diterima! kind:', evt.track.kind, '| jumlah streams:', evt.streams.length));
+        pc.addEventListener('icecandidate', (event) => {
+            if (event.candidate) {
+                console.log('[WebRTC] Local ICE candidate:', event.candidate.candidate);
             }
         });
+
+        let inboundStream = null;
+
+        pc.addEventListener('track', function(evt) {
+            if (evt.track.kind === 'video') {
+                if (evt.streams && evt.streams[0]) {
+                    videoElement.srcObject = evt.streams[0];
+                } else {
+                    if (!inboundStream) inboundStream = new MediaStream();
+                    inboundStream.addTrack(evt.track);
+                    videoElement.srcObject = inboundStream;
+                }
+                const playPromise = videoElement.play()
+                if (playPromise !== undefined){
+                    playPromise.catch(err => {
+                        if(err.name !== 'AbortError') {
+                            console.error("[WebRTC] Error playing video:", err);
+                        }
+                    });
+                    
+                }
+
+            }
+        });
+
+        pc.addTransceiver('video', { direction: 'recvonly' });
 
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sdp: pc.localDescription.sdp, type: pc.localDescription.type })
+        await new Promise((resolve) => {
+            if (pc.iceGatheringState === 'complete') resolve();
+            else {
+                function checkState() {
+                    if (pc.iceGatheringState === 'complete') {
+                        pc.removeEventListener('icegatheringstatechange', checkState);
+                        resolve();
+                    }
+                }
+                pc.addEventListener('icegatheringstatechange', checkState);
+                // setTimeout(resolve, 5000); 
+            }
         });
 
-        if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
-        await pc.setRemoteDescription(await response.json());
+        console.log("[WebRTC] ICE gathering complete, sending offer...");
+
+        const response = await fetch(apiBase + '/webrtc/offer', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json', 
+            },
+            body: JSON.stringify({
+                sdp: pc.localDescription.sdp,
+                type: pc.localDescription.type
+            })
+        });
+
+        const answer = await response.json();
+
+        if (!response.ok || answer.status === 'failed' || answer.status === 'error') {
+            throw new Error(answer.message || `HTTP Error ${response.status}`);
+        }
+
+        await pc.setRemoteDescription(answer);
+        statusText.innerText = 'Video Connected - Live (WebRTC)';
+        statusText.style.color = '#4caf50'; 
+
     } catch (err) {
         statusText.innerText = 'Connection Failed: ' + err.message;
         statusText.style.color = '#f44336';
+        alert("webRTC Connection Error: " + err.message);
     }
-};
+}
+
+// window.closeVideo = function() {
+//     const modal = document.getElementById('videoModal');
+//     if (modal) {
+//         modal.style.display = 'none';
+//         modal.classList.remove('is-open');
+//         modal.setAttribute('aria-hidden', 'true');
+//     }
+//     updateCameraButtonState(false);
+//     const videoElement = document.getElementById('webrtc-video');
+//     if (videoElement && videoElement.srcObject) {
+//         videoElement.srcObject.getTracks().forEach(t => t.stop());
+//         videoElement.srcObject = null;
+//     }
+//     const imgElement = document.getElementById('mjpeg-video');
+//     if (imgElement) imgElement.src = '';
+//     if (pc) { pc.close(); pc = null; }
+// };
+
 
 window.closeVideo = function() {
-    const modal = document.getElementById('videoModal');
-    if (modal) {
-        modal.style.display = 'none';
-        modal.classList.remove('is-open');
-        modal.setAttribute('aria-hidden', 'true');
-    }
-    updateCameraButtonState(false);
+    document.getElementById('videoModal').style.display = 'none';
     const videoElement = document.getElementById('webrtc-video');
-    if (videoElement && videoElement.srcObject) {
-        videoElement.srcObject.getTracks().forEach(t => t.stop());
+    if (videoElement.srcObject) {
+        videoElement.srcObject.getTracks().forEach(track => track.stop());
         videoElement.srcObject = null;
     }
-    const imgElement = document.getElementById('mjpeg-video');
-    if (imgElement) imgElement.src = '';
     if (pc) { pc.close(); pc = null; }
-};
+}
+
 
 // ===== GOTO VICTIM =====
 async function goToVictim(lat, lon, alt = null) {

@@ -15,14 +15,34 @@
 #include <sensor_msgs/msg/nav_sat_fix.hpp>
 #include <mavros_msgs/msg/status_text.hpp>
 #include <memory>
+#include <nlohmann/json.hpp>
+#include <microhttpd.h>
+#include <gst/gst.h>
+#include <gst/app/gstappsrc.h>
+#include <gst/sdp/sdp.h>
+#include <gst/webrtc/webrtc.h>
+
+#define GST_USE_UNSTABLE_API 1
+
+#include <nlohmann/json.hpp>
+#include <microhttpd.h>
+#include <gst/gst.h>
+#include <gst/app/gstappsrc.h>
+#include <gst/sdp/sdp.h>
+#include <gst/webrtc/webrtc.h>
+
+using json = nlohmann::json;
+
+// ... [Biarkan semua #include rclcpp dan OpenCV Anda di sini] ...
 
 // ============================================================
 // PATH MODEL
 // ============================================================
-const std::string PALM_MODEL = "/home/hawkeye/ros2_ws/src/hawkeyev2/models/palm_detection_mediapipe_2023feb.onnx";
-const std::string HANDPOSE_MODEL = "/home/hawkeye/ros2_ws/src/hawkeyev2/models/handpose_estimation_mediapipe_2023feb.onnx";
+const std::string PALM_MODEL = "/home/hawkeye-expro/ros2_ws/src/hawkeyev2/models/palm_detection_mediapipe_2023feb.onnx";
+const std::string HANDPOSE_MODEL = "/home/hawkeye-expro/ros2_ws/src/hawkeyev2/models/handpose_estimation_mediapipe_2023feb.onnx";
 // Model deteksi orang (YOLOv8n), mengikuti vision.py (ONNX_MODEL_PATH)
-const std::string PERSON_MODEL = "/home/hawkeye/ros2_ws/src/hawkeyev2/models/yolov8n.onnx";
+const std::string PERSON_MODEL = "/home/hawkeye-expro/ros2_ws/src/hawkeyev2/models/yolov8n.onnx";
+// const std::string PERSON_MODEL = "/home/hawkeye-expro/ros2_ws/src/hawkeyev2/models/yolov8n480.onnx";
 // ============================================================
 // PARAMETER
 // ============================================================
@@ -58,11 +78,11 @@ constexpr float WAVE_MOVEMENT_THRESHOLD = 0.20f;
 constexpr float ONNX_CONF_THRESHOLD    = 0.4f;
 constexpr float ONNX_NMS_THRESHOLD     = 0.45f;
 constexpr int   ONNX_PERSON_CLASS_ID   = 0;
-constexpr int   ONNX_INPUT_SIZE_FALLBACK = 480;
+constexpr int   ONNX_INPUT_SIZE_FALLBACK = 360;
 constexpr float TRACK_MATCH_MAX_DIST   = 90.0f;
 constexpr int   TRACK_MAX_MISS         = 5;
 constexpr int   WAVE_MISS_RESET_FRAMES = 10;
-constexpr int   DETECTION_INTERVAL     = 3;
+constexpr int   DETECTION_INTERVAL     = 5;
 constexpr float ARM_ROI_PADDING_RATIO  = 0.15f;
 
 // ============================================================
@@ -160,6 +180,7 @@ private:
     cv::VideoCapture cap;
     int width;
     int height;
+    int fps;
     int maxReadFailures;
     double backoffBase;
     double backoffMax;
@@ -180,7 +201,8 @@ private:
         cap.set(cv::CAP_PROP_FRAME_WIDTH, width);
         cap.set(cv::CAP_PROP_FRAME_HEIGHT, height);
         // Kurangi latency stale frame pasca-reconnect
-        cap.set(cv::CAP_PROP_BUFFERSIZE, 1);
+        // cap.set(cv::CAP_PROP_BUFFERSIZE, 1);
+        cap.set(cv::CAP_PROP_FPS, fps);
         cameraIndex = index;
         consecutiveFailures = 0;
         reconnectAttempts = 0;
@@ -258,7 +280,7 @@ public:
         // karena cv::dnn tidak punya optimisasi kernel setara
         // XNNPACK/ORT. Ini salah satu penyebab utama FPS kalah
         // dibanding versi Python (MediaPipe pakai TFLite+XNNPACK).
-        sessionOptions.SetIntraOpNumThreads(4);
+        // sessionOptions.SetIntraOpNumThreads(4);
         sessionOptions.SetInterOpNumThreads(1);
         sessionOptions.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
         session = Ort::Session(env, modelPath.c_str(), sessionOptions);
@@ -432,7 +454,7 @@ public:
         // ----------------------------------------------------
         // Pass 2: tiled search (menangkap tangan kecil/jauh)
         // ----------------------------------------------------
-        const int tilesX = 3;
+        const int tilesX = 2;
         const int tilesY = 2;
         const float overlap = 0.25f; // 25% overlap antar tile
         int tileW = static_cast<int>(frame.cols / (tilesX - (tilesX - 1) * overlap));
@@ -508,7 +530,7 @@ public:
         // dan hand pose berjalan bergantian (bukan bersamaan)
         // di loop utama, jadi aman memakai semua core untuk
         // masing-masing tanpa saling rebutan.
-        sessionOptions.SetIntraOpNumThreads(4);
+        // sessionOptions.SetIntraOpNumThreads(4);
         sessionOptions.SetInterOpNumThreads(1);
         sessionOptions.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
         session = Ort::Session(env, modelPath.c_str(), sessionOptions);
@@ -1088,8 +1110,9 @@ private:
 public:
     PersonDetector(Ort::Env& env, const std::string& modelPath) {
         std::cout << "Loading person (YOLOv8) model with ONNX Runtime...\n";
-        sessionOptions.SetIntraOpNumThreads(4);
-        sessionOptions.SetInterOpNumThreads(1);
+        // sessionOptions.SetIntraOpNumThreads(4);
+        // sessionOptions.SetInterOpNumThreads(1);
+        sessionOptions.SetInterOpNumThreads(2);
         sessionOptions.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
         session = Ort::Session(env, modelPath.c_str(), sessionOptions);
         Ort::AllocatorWithDefaultOptions allocator;
@@ -1321,14 +1344,16 @@ void updateTrackWaveStatus(PersonTrack& track, const cv::Mat& frame, PalmDetecto
     int x1 = std::max(0, track.box.x - padX);
     int y1 = std::max(0, track.box.y - padY);
     int x2 = std::min(frame.cols, track.box.x + track.box.width + padX);
-    int y2 = std::min(frame.rows, track.box.y + track.box.height + padY);
+    // int y2 = std::min(frame.rows, track.box.y + track.box.height + padY);
+    int y2 = std::min(frame.rows, track.box.y + static_cast<int>(track.box.height * 0.6) + padY);
     if (x2 <= x1 || y2 <= y1) {
         track.hasHandLandmarks = false;
         return;
     }
     cv::Rect roiRect(x1, y1, x2 - x1, y2 - y1);
     cv::Mat personRoi = frame(roiRect);
-    std::vector<PalmDetection> palms = track.handTracker.isTracking() ? palmDetector.detect(personRoi) : palmDetector.detectMultiScale(personRoi);
+    // std::vector<PalmDetection> palms = track.handTracker.isTracking() ? palmDetector.detect(personRoi) : palmDetector.detectMultiScale(personRoi);
+    std::vector<PalmDetection> palms = palmDetector.detect(personRoi);
     bool newDetection = false;
     HandResult hand;
     if (!palms.empty()) {
@@ -1388,158 +1413,369 @@ void putTextWithBg(cv::Mat& img, const std::string& text, cv::Point org, cv::Sca
     cv::putText(img, text, org, cv::FONT_HERSHEY_SIMPLEX, fontScale, color, thickness, cv::LINE_AA);
 }
 
-// ============================================================
-// ROS2 / MAVROS BRIDGE
-//
-// Port dari vision.py: node HawkeyeVision -- publisher
-// StatusText ke /mavros/statustext/send, subscriber NavSatFix
-// dari /mavros/global_position/global untuk lat/lon korban.
-//
-// Diaktifkan dengan compile flag -DHAWKEYE_USE_ROS2 (dan link ke
-// rclcpp, std_msgs, sensor_msgs, mavros_msgs -- lihat catatan
-// build di akhir chat). TANPA flag ini dipakai stub no-op yang
-// cuma print ke console, supaya main.cpp tetap bisa dikompilasi
-// & dijalankan berdiri sendiri tanpa workspace ROS2 sama sekali.
-// ============================================================
-// #ifdef HAWKEYE_USE_ROS2
-// #include <rclcpp/rclcpp.hpp>
-// #include <sensor_msgs/msg/nav_sat_fix.hpp>
-// #include <mavros_msgs/msg/status_text.hpp>
-// class HawkeyeRosBridge : public rclcpp::Node {
-// private:
-//     rclcpp::Publisher<mavros_msgs::msg::StatusText>::SharedPtr pubStatusText;
-//     rclcpp::Subscription<sensor_msgs::msg::NavSatFix>::SharedPtr subGps;
-//     double currentLat = 0.0;
-//     double currentLon = 0.0;
-//     std::chrono::steady_clock::time_point lastSentTime = std::chrono::steady_clock::now() - std::chrono::hours(1);
-// public:
-//     HawkeyeRosBridge() : rclcpp::Node("yolo_vision_node") {
-//         rclcpp::QoS qos(10);
-//         qos.reliable();
-//         qos.durability_volatile();
-//         pubStatusText = create_publisher<mavros_msgs::msg::StatusText>("/mavros/statustext/send", qos);
-//         subGps = create_subscription<sensor_msgs::msg::NavSatFix>("/mavros/global_position/global", rclcpp::SensorDataQoS(), [this](const sensor_msgs::msg::NavSatFix::SharedPtr msg) {
-//                     currentLat = msg->latitude;
-//                     currentLon = msg->longitude;
-//                 }
-//             );
-//     }
+// =============================================================================
+// KELAS BUFFER WEBRTC
+// =============================================================================
+class SharedFrameBuffer {
+public:
+  void update(const cv::Mat & frame) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    frame_ = frame.clone();
+  }
+  bool get(cv::Mat & out) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (frame_.empty()) {return false;}
+    out = frame_.clone();
+    return true;
+  }
+private:
+  mutable std::mutex mutex_;
+  cv::Mat frame_;
+};
 
-//     // Port dari vision.py: report_victim() (rate-limited 2 detik)
-//     void reportVictim(int jumlahOrang, bool jikaMelambai) {
-//         auto now = std::chrono::steady_clock::now();
-//         double elapsed = std::chrono::duration<double>(now - lastSentTime).count();
-//         if (elapsed <= 2.0) {
-//             return;
-//         }
-//         mavros_msgs::msg::StatusText msg;
-//         char buf[64];
-//         if (jikaMelambai) {
-//             msg.severity = 0; // EMERGENCY
-//             std::snprintf(buf, sizeof(buf), "[SAR];H;%d;%.6f;%.6f", jumlahOrang, currentLat, currentLon);
-//         } else {
-//             msg.severity = 6; // NOTICE
-//             std::snprintf(buf, sizeof(buf), "[SAR];D;%d;%.6f;%.6f", jumlahOrang, currentLat, currentLon);
-//         }
-//         std::string text(buf);
-//         if (text.size() > 50) {
-//             text.resize(50);
-//         }
-//         msg.text = text;
-//         pubStatusText->publish(msg);
-//         std::cout << "[REPORT] StatusText -> severity=" << static_cast<int>(msg.severity) << " | text='" << msg.text << "'\n";
-//         lastSentTime = now;
-//     }
-// };
-// #else
+// =============================================================================
+// KELAS SERVER WEBRTC (GStreamer)
+// =============================================================================
+class GstWebRtcServer {
+public:
+  GstWebRtcServer(SharedFrameBuffer & buf, uint16_t port, double disconnect_grace_sec)
+  : frame_buffer_(buf), port_(port), disconnect_grace_sec_(disconnect_grace_sec) {}
 
-// class HawkeyeRosBridge {
-// private:
-//     double currentLat = 0.0;
-//     double currentLon = 0.0;
-//     std::chrono::steady_clock::time_point lastSentTime = std::chrono::steady_clock::now() - std::chrono::hours(1);
-// public:
-//     // Stub: ROS2 tidak aktif, cuma print ke console supaya
-//     // perilaku tetap terlihat/tercatat saat testing standalone
-//     // (tanpa workspace ROS2/MAVROS).
-//     void reportVictim(int jumlahOrang, bool jikaMelambai) {
-//         auto now = std::chrono::steady_clock::now();
-//         double elapsed = std::chrono::duration<double>(now - lastSentTime).count();
-//         if (elapsed <= 2.0) {
-//             return;
-//         }
-//         std::cout << "[REPORT][STUB, ROS2 tidak aktif] " << (jikaMelambai ? "EMERGENCY" : "NOTICE") << " | jumlah=" << jumlahOrang << " | lat=" << currentLat << " lon=" << currentLon << "\n";
-//         lastSentTime = now;
-//     }
-// };
-// #endif
+  ~GstWebRtcServer() {stop();}
 
+  void start() {
+    running_ = true;
+    daemon_ = MHD_start_daemon(
+      MHD_USE_INTERNAL_POLLING_THREAD, port_, nullptr, nullptr,
+      &GstWebRtcServer::onHttpRequest, this, MHD_OPTION_END);
+    if (!daemon_) {
+      throw std::runtime_error("Gagal start libmicrohttpd di port " + std::to_string(port_));
+    }
+    std::cout << "[webrtc] Signaling server 0.0.0.0:" << port_ << " (POST /webrtc/offer)\n";
+  }
+
+  void stop() {
+    if (!running_.exchange(false)) {return;}
+    std::lock_guard<std::mutex> lock(peers_mutex_);
+    for (auto & [id, peer] : peers_) {
+      peer->closing = true;
+      if (peer->pipeline) {
+        gst_element_set_state(peer->pipeline, GST_STATE_NULL);
+        gst_object_unref(peer->pipeline);
+      }
+      if (peer->push_thread.joinable()) {peer->push_thread.join();}
+    }
+    peers_.clear();
+    if (daemon_) {MHD_stop_daemon(daemon_); daemon_ = nullptr;}
+  }
+
+private:
+  struct Peer {
+    std::string id;
+    GstElement * pipeline = nullptr;
+    GstElement * appsrc = nullptr;
+    GstElement * webrtcbin = nullptr;
+    std::atomic<bool> closing{false};
+    std::atomic<bool> ice_done{false};
+    std::mutex ice_mutex;
+    std::condition_variable ice_cv;
+    std::thread push_thread;
+  };
+
+  static MHD_Result onHttpRequest(
+    void * cls, struct MHD_Connection * connection, const char * url,
+    const char * method, const char * /*version*/,
+    const char * upload_data, size_t * upload_data_size, void ** con_cls) {
+    auto * self = static_cast<GstWebRtcServer *>(cls);
+
+    if (std::string(method) == "OPTIONS") {
+      auto * resp = MHD_create_response_from_buffer(0, nullptr, MHD_RESPMEM_PERSISTENT);
+      MHD_add_response_header(resp, "Access-Control-Allow-Origin", "*");
+      MHD_add_response_header(resp, "Access-Control-Allow-Headers", "*");
+      auto ret = MHD_queue_response(connection, MHD_HTTP_NO_CONTENT, resp);
+      MHD_destroy_response(resp);
+      return ret;
+    }
+
+    if (std::string(url) != "/webrtc/offer" || std::string(method) != "POST") {
+      auto * resp = MHD_create_response_from_buffer(0, nullptr, MHD_RESPMEM_PERSISTENT);
+      auto ret = MHD_queue_response(connection, MHD_HTTP_NOT_FOUND, resp);
+      MHD_destroy_response(resp);
+      return ret;
+    }
+
+    auto * body_accum = static_cast<std::string *>(*con_cls);
+    if (body_accum == nullptr) {
+      *con_cls = new std::string();
+      return MHD_YES;
+    }
+    if (*upload_data_size != 0) {
+      body_accum->append(upload_data, *upload_data_size);
+      *upload_data_size = 0;
+      return MHD_YES;
+    }
+
+    std::string response_body = self->handleOffer(*body_accum);
+    delete body_accum;
+
+    auto * resp = MHD_create_response_from_buffer(
+      response_body.size(), const_cast<char *>(response_body.data()), MHD_RESPMEM_MUST_COPY);
+    MHD_add_response_header(resp, "Content-Type", "application/json");
+    MHD_add_response_header(resp, "Access-Control-Allow-Origin", "*");
+    auto ret = MHD_queue_response(connection, MHD_HTTP_OK, resp);
+    MHD_destroy_response(resp);
+    return ret;
+  }
+
+  std::string handleOffer(const std::string & body) {
+    json params;
+    try {
+      params = json::parse(body);
+    } catch (...) {
+      return json{{"status", "error"}, {"message", "Payload SDP tidak lengkap"}}.dump();
+    }
+    
+    static std::atomic<int> peer_counter{0};
+    auto peer = std::make_shared<Peer>();
+    peer->id = "peer-" + std::to_string(peer_counter++);
+
+    const char * encoders[] = {"vp8enc", "x264enc"};
+    std::string encoder_bin;
+    std::string encoding_name;
+
+    for (const char * enc : encoders) {
+      GstElementFactory * f = gst_element_factory_find(enc);
+      if (f) {
+        gst_object_unref(f);
+        if (std::string(enc) == "vp8enc") {
+          encoder_bin = "vp8enc deadline=1 error-resilient=1 cpu-used=8 threads=4 ! rtpvp8pay";
+          encoding_name = "VP8";
+        } else if (std::string(enc) == "x264enc") {
+          encoder_bin = "x264enc speed-preset=ultrafast tune=zerolatency threads=4 key-int-max=15 ! h264parse config-interval=1 ! rtph264pay pt=96 name=pay0 config-interval=1";
+          encoding_name = "H264";
+        }
+        break;
+      }
+    }
+
+    std::ostringstream pipeline_desc;
+    pipeline_desc
+      << "appsrc name=src is-live=true block=true format=time do-timestamp=true "
+      << "caps=video/x-raw,format=BGR,width=640,height=360,framerate=15/1 ! "
+      << "videoconvert ! " << encoder_bin << " ! "
+      << "application/x-rtp,media=video,encoding-name=" << encoding_name
+      << " ! webrtcbin name=sendrecv bundle-policy=max-bundle";
+
+    GError * err = nullptr;
+    peer->pipeline = gst_parse_launch(pipeline_desc.str().c_str(), &err);
+    peer->appsrc = gst_bin_get_by_name(GST_BIN(peer->pipeline), "src");
+    peer->webrtcbin = gst_bin_get_by_name(GST_BIN(peer->pipeline), "sendrecv");
+
+    g_signal_connect(peer->webrtcbin, "notify::ice-gathering-state",
+      G_CALLBACK(+[](GstElement * webrtcbin, GParamSpec *, gpointer user_data) {
+        auto * p = static_cast<Peer *>(user_data);
+        GstWebRTCICEGatheringState state;
+        g_object_get(webrtcbin, "ice-gathering-state", &state, nullptr);
+        if (state == GST_WEBRTC_ICE_GATHERING_STATE_COMPLETE) {
+          std::lock_guard<std::mutex> lk(p->ice_mutex);
+          p->ice_done = true;
+          p->ice_cv.notify_all();
+        }
+      }), peer.get());
+
+    gst_element_set_state(peer->pipeline, GST_STATE_READY);
+
+    GstSDPMessage * sdp_msg = nullptr;
+    gst_sdp_message_new(&sdp_msg);
+    std::string sdp_str = params["sdp"].get<std::string>();
+    gst_sdp_message_parse_buffer(reinterpret_cast<const guint8 *>(sdp_str.c_str()), sdp_str.size(), sdp_msg);
+    GstWebRTCSessionDescription * offer_desc = gst_webrtc_session_description_new(GST_WEBRTC_SDP_TYPE_OFFER, sdp_msg);
+
+    struct AnswerCtx { GstWebRtcServer * self; std::shared_ptr<Peer> peer; };
+    auto * answer_ctx = new AnswerCtx{this, peer};
+
+    GstPromise * set_remote_promise = gst_promise_new_with_change_func(
+      +[](GstPromise *, gpointer data) {
+        auto * ctx = static_cast<AnswerCtx *>(data);
+        GstPromise * answer_promise = gst_promise_new_with_change_func(
+          +[](GstPromise * promise, gpointer data2) {
+            auto * ctx2 = static_cast<AnswerCtx *>(data2);
+            const GstStructure * reply = gst_promise_get_reply(promise);
+            GstWebRTCSessionDescription * answer = nullptr;
+            gst_structure_get(reply, "answer", GST_TYPE_WEBRTC_SESSION_DESCRIPTION, &answer, nullptr);
+            gst_promise_unref(promise);
+            GstPromise * local_promise = gst_promise_new();
+            g_signal_emit_by_name(ctx2->peer->webrtcbin, "set-local-description", answer, local_promise);
+            gst_promise_interrupt(local_promise);
+            gst_promise_unref(local_promise);
+            gst_webrtc_session_description_free(answer);
+          }, ctx, nullptr);
+        g_signal_emit_by_name(ctx->peer->webrtcbin, "create-answer", nullptr, answer_promise);
+      }, answer_ctx, nullptr);
+    g_signal_emit_by_name(peer->webrtcbin, "set-remote-description", offer_desc, set_remote_promise);
+    gst_promise_interrupt(set_remote_promise);
+    gst_promise_unref(set_remote_promise);
+    gst_webrtc_session_description_free(offer_desc);
+
+    gst_element_set_state(peer->pipeline, GST_STATE_PLAYING);
+
+    {
+      std::unique_lock<std::mutex> lk(peer->ice_mutex);
+      peer->ice_cv.wait_for(lk, std::chrono::duration<double>(5.0), [&] {return peer->ice_done.load();});
+    }
+
+    GstWebRTCSessionDescription * local_desc = nullptr;
+    g_object_get(peer->webrtcbin, "local-description", &local_desc, nullptr);
+    gchar * sdp_text = gst_sdp_message_as_text(local_desc->sdp);
+    std::string answer_sdp(sdp_text);
+    g_free(sdp_text);
+    gst_webrtc_session_description_free(local_desc);
+
+    peer->push_thread = std::thread(&GstWebRtcServer::pushLoop, this, peer);
+
+    {
+      std::lock_guard<std::mutex> lock(peers_mutex_);
+      peers_[peer->id] = peer;
+    }
+
+    return json{{"sdp", answer_sdp}, {"type", "answer"}}.dump();
+  }
+
+  void pushLoop(std::shared_ptr<Peer> peer) {
+    constexpr int kW = 640, kH = 360, kFps = 15;
+    auto interval = std::chrono::milliseconds(1000 / kFps);
+    while (running_ && !peer->closing) {
+      auto t0 = std::chrono::steady_clock::now();
+      cv::Mat frame;
+      if (!frame_buffer_.get(frame)) {
+        frame = cv::Mat::zeros(kH, kW, CV_8UC3);
+      }
+      gsize size = frame.total() * frame.elemSize();
+      GstBuffer * buffer = gst_buffer_new_allocate(nullptr, size, nullptr);
+      GstMapInfo map;
+      gst_buffer_map(buffer, &map, GST_MAP_WRITE);
+      std::memcpy(map.data, frame.data, size);
+      gst_buffer_unmap(buffer, &map);
+
+      GstFlowReturn ret;
+      g_signal_emit_by_name(peer->appsrc, "push-buffer", buffer, &ret);
+      gst_buffer_unref(buffer);
+      if (ret != GST_FLOW_OK) {break;}
+
+      auto elapsed = std::chrono::steady_clock::now() - t0;
+      if (elapsed < interval) {std::this_thread::sleep_for(interval - elapsed);}
+    }
+    if (peer->pipeline) {gst_element_set_state(peer->pipeline, GST_STATE_NULL);}
+    std::lock_guard<std::mutex> lock(peers_mutex_);
+    peers_.erase(peer->id);
+  }
+
+  SharedFrameBuffer & frame_buffer_;
+  uint16_t port_;
+  double disconnect_grace_sec_;
+  struct MHD_Daemon * daemon_ = nullptr;
+  std::atomic<bool> running_{false};
+  std::mutex peers_mutex_;
+  std::map<std::string, std::shared_ptr<Peer>> peers_;
+};
+
+class FPSCounter {
+private:
+    int count = 0;
+    double start;
+    double current_fps = 0.0;
+
+public:
+    FPSCounter() {
+        start = static_cast<double>(cv::getTickCount());
+    }
+
+    double update() {
+        count++;
+        double now = static_cast<double>(cv::getTickCount());
+        double sec = (now - start) / cv::getTickFrequency();
+
+        // Update FPS setiap 1 detik
+        if (sec >= 1.0) {
+            current_fps = count / sec;
+            count = 0;
+            start = now;
+        }
+        return current_fps;
+    }
+};
 
 // ... (Pastikan semua header OpenCV & ONNX Runtime sudah di-include)
 
 class HawkeyeNativeVision : public rclcpp::Node {
 public:
     HawkeyeNativeVision() : rclcpp::Node("hawkeye_native_vision_node") {
-        // 1. Inisialisasi QoS untuk MAVROS
         rclcpp::QoS qos_reliable(rclcpp::KeepLast(10));
         qos_reliable.reliability(RMW_QOS_POLICY_RELIABILITY_RELIABLE);
         qos_reliable.durability(RMW_QOS_POLICY_DURABILITY_VOLATILE);
 
-        // 2. Setup Publisher dan Subscriber ROS 2
-        pub_statustext_ = create_publisher<mavros_msgs::msg::StatusText>("/mavros/statustext/send", qos_reliable);
+        pub_statustext_ = create_publisher<mavros_msgs::msg::StatusText>("/mavros/mavros/statustext/send", qos_reliable);
         sub_gps_ = create_subscription<sensor_msgs::msg::NavSatFix>(
-            "/mavros/global_position/global", rclcpp::SensorDataQoS(),
+            "/mavros/mavros/global_position/global", rclcpp::SensorDataQoS(),
             [this](const sensor_msgs::msg::NavSatFix::SharedPtr msg) {
                 current_lat_ = msg->latitude;
                 current_lon_ = msg->longitude;
             });
 
-        // 3. Deklarasi parameter path model (Lebih fleksibel di ROS 2)
         std::string yolo_path = declare_parameter<std::string>("person_model", PERSON_MODEL);
         std::string palm_path = declare_parameter<std::string>("palm_model", PALM_MODEL);
         std::string hand_path = declare_parameter<std::string>("handpose_model", HANDPOSE_MODEL);
 
-        // 4. Inisialisasi Model ONNX (Menggunakan 3 thread untuk RPi 5 agar tidak bottleneck)
         env_ = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "HAWKEYE_NATIVE");
         personDetector_ = std::make_unique<PersonDetector>(*env_, yolo_path);
         palmDetector_ = std::make_unique<PalmDetector>(*env_, palm_path);
         handPose_ = std::make_unique<HandPose>(*env_, hand_path);
 
-        // 5. Inisialisasi Kamera (Dioptimalkan ke 480p untuk FPS maksimal)
-        camera_ = std::make_unique<CameraReconnect>(0, 640, 480, 15, 0.5, 10.0, std::vector<int>{0, 1, 2});
+        // Kamera dioptimalkan di resolusi 360p untuk RPi 5
+        camera_ = std::make_unique<CameraReconnect>(0, 640, 360, 15, 0.5, 10.0, std::vector<int>{0, 1, 2});
         
-        if (!camera_->isOpened()) {
-            RCLCPP_ERROR(get_logger(), "Kamera gagal dibuka pada saat inisialisasi awal!");
-        } else {
-            RCLCPP_INFO(get_logger(), "Kamera dan Model siap (Native ROS2 Mode)!");
-        }
+        // INISIALISASI WEBRTC (Berjalan di port 5000)
+        webrtc_server_ = std::make_unique<GstWebRtcServer>(frame_buffer_, 5000, 8.0);
+    }
+
+    ~HawkeyeNativeVision() {
+        if (webrtc_server_) webrtc_server_->stop();
+        if (camera_) camera_->release();
     }
 
     void run() {
+        // Nyalakan server WebRTC
+        webrtc_server_->start();
+        RCLCPP_INFO(get_logger(), "WebRTC Server berjalan di port 5000");
+
         cv::Mat frame;
         long long frameCount = 0;
         int consecutiveErrors = 0;
         constexpr int MAX_CONSECUTIVE_FRAME_ERRORS = 30;
-        
-        // Interval Deteksi (Dioptimalkan menjadi 6 dari sebelumnya 3)
-        constexpr int DETECTION_INTERVAL = 6; 
+        constexpr int DETECTION_INTERVAL = 5; 
 
-        // Loop Utama ROS 2 Native (Tidak menggunakan while(true) biasa)
+        // Gunakan FPSCounter
+        FPSCounter fps_counter;
+        double current_fps = 0.0;
+
         while (rclcpp::ok()) {
-            // Mengeksekusi callback (contoh: menerima koordinat GPS terbaru)
             rclcpp::spin_some(get_node_base_interface());
 
             if (!camera_->read(frame) || frame.empty()) {
                 if (camera_->needsReconnect()) {
-                    RCLCPP_WARN(get_logger(), "Frame kosong, mencoba reconnect...");
                     camera_->tryReconnect();
                 }
-                std::this_thread::sleep_for(std::chrono::milliseconds(30)); // Beri nafas ke CPU jika kamera mati
+                std::this_thread::sleep_for(std::chrono::milliseconds(30)); 
                 continue;
             }
 
             try {
                 frameCount++;
+                // Update dan ambil nilai FPS terbaru
+                current_fps = fps_counter.update();
+
+                // Gandakan frame untuk digambar dan dikirim ke WebRTC
+                cv::Mat displayFrame = frame.clone();
                 bool shouldRunDetection = (frameCount % DETECTION_INTERVAL == 0);
                 int jumlahOrang = static_cast<int>(trackManager_.getTracks().size());
                 bool anyWaving = false;
@@ -1548,94 +1784,119 @@ public:
                     std::vector<PersonDetection> rawBoxes = personDetector_->detect(frame);
                     trackManager_.update(rawBoxes);
                     
+                    // for (auto& track : trackManager_.getTracks()) {
+                    //     updateTrackWaveStatus(track, frame, *palmDetector_, *handPose_);
+                    // }
+                    // Batasi agar MediaPipe hanya mengevaluasi maksimal 2 orang
+                    int max_processed = 0;
                     for (auto& track : trackManager_.getTracks()) {
-                        // Memanggil fungsi eksternal untuk update tracking
+                        if (max_processed >= 2) break;
                         updateTrackWaveStatus(track, frame, *palmDetector_, *handPose_);
+                        max_processed++;
                     }
                     
                     jumlahOrang = static_cast<int>(rawBoxes.size());
-                    for (const auto& track : trackManager_.getTracks()) {
-                        if (track.waving) {
-                            anyWaving = true;
-                            break;
-                        }
-                    }
+                }
 
-                    if (jumlahOrang > 0) {
-                        reportVictim(jumlahOrang, anyWaving);
-                    }
-                } else {
-                    for (const auto& track : trackManager_.getTracks()) {
-                        if (track.waving) {
-                            anyWaving = true;
-                            break;
-                        }
+                // Cek status melambai
+                for (const auto& track : trackManager_.getTracks()) {
+                    if (track.waving) {
+                        anyWaving = true;
+                        break;
                     }
                 }
 
-                // HEADLESS MODE: Tidak ada cv::imshow() dan cv::waitKey()
+                // Report MAVROS jika ada deteksi
+                if (shouldRunDetection && jumlahOrang > 0) {
+                    reportVictim(jumlahOrang, anyWaving);
+                }
+
+                // ==========================================================
+                // GAMBAR OVERLAY (DIKIRIM KE WEBRTC, TANPA TAMPIL LOKAL)
+                // ==========================================================
+                for (auto& track : trackManager_.getTracks()) {
+                    cv::rectangle(displayFrame, track.box, cv::Scalar(0, 255, 0), 2);
+                    std::string label = "ID " + std::to_string(track.id) + (track.waving ? " - MELAMBAI" : "");
+                    putTextWithBg(displayFrame, label, cv::Point(track.box.x, std::max(18, track.box.y - 10)), track.waving ? cv::Scalar(0, 0, 255) : cv::Scalar(0, 255, 0), track.waving ? cv::Scalar(0, 0, 60) : cv::Scalar(0, 60, 0));
+                    
+                    // if (track.hasHandLandmarks) {
+                    //     drawHand(displayFrame, track.handLandmarks);
+                    // }
+                }
+                
+                putTextWithBg(displayFrame, jumlahOrang > 0 ? "KORBAN TERDETEKSI" : "MENCARI", cv::Point(20, 30), jumlahOrang > 0 ? cv::Scalar(0, 255, 0) : cv::Scalar(0, 0, 255));
+                putTextWithBg(displayFrame, "JUMLAH: " + std::to_string(jumlahOrang), cv::Point(20, 60), cv::Scalar(0, 255, 255));
+                putTextWithBg(displayFrame, "STATUS: " + std::string(anyWaving ? "MINTA TOLONG" : "NO STATUS"), cv::Point(20, 90), anyWaving ? cv::Scalar(0, 0, 255) : cv::Scalar(200, 200, 200));
+                putTextWithBg(displayFrame, cv::format("FPS: %.2f", current_fps), cv::Point(20, 120), cv::Scalar(255, 255, 0));
+
+                // cv::resize(displayFrame, displayFrame, cv::Size(640, 360));
+                // UPDATE KE BUFFER WEBRTC
+                frame_buffer_.update(displayFrame);
+                
                 consecutiveErrors = 0;
-
-                // Opsional: Log FPS ke terminal setiap 30 frame agar tetap terpantau
-                if (frameCount % 30 == 0) {
-                    RCLCPP_INFO(get_logger(), "Processing berjalan... Target: %d | Waving: %s", jumlahOrang, anyWaving ? "YA" : "TIDAK");
-                }
 
             } catch (const std::exception& exc) {
                 consecutiveErrors++;
-                RCLCPP_ERROR(get_logger(), "Error processing frame: %s", exc.what());
                 if (consecutiveErrors >= MAX_CONSECUTIVE_FRAME_ERRORS) break;
             }
         }
     }
 
 private:
-    void reportVictim(int jumlahOrang, bool jikaMelambai) {
-        auto now = std::chrono::steady_clock::now();
-        double elapsed = std::chrono::duration<double>(now - last_sent_time_).count();
-        if (elapsed <= 2.0) return; // Rate-limit 2 detik
 
-        mavros_msgs::msg::StatusText msg;
-        char buf[64];
-        if (jikaMelambai) {
-            msg.severity = 0; // EMERGENCY
-            std::snprintf(buf, sizeof(buf), "[SAR];H;%d;%.6f;%.6f", jumlahOrang, current_lat_, current_lon_);
-        } else {
-            msg.severity = 6; // NOTICE
-            std::snprintf(buf, sizeof(buf), "[SAR];D;%d;%.6f;%.6f", jumlahOrang, current_lat_, current_lon_);
-        }
-        msg.text = std::string(buf).substr(0, 50);
-        pub_statustext_->publish(msg);
-        last_sent_time_ = now;
-        
-        RCLCPP_INFO(get_logger(), "[REPORT] StatusText -> severity=%d | text='%s'", msg.severity, msg.text.c_str());
-    }
-
-    // ROS 2 Variables
     rclcpp::Publisher<mavros_msgs::msg::StatusText>::SharedPtr pub_statustext_;
     rclcpp::Subscription<sensor_msgs::msg::NavSatFix>::SharedPtr sub_gps_;
-    double current_lat_ = 0.0;
-    double current_lon_ = 0.0;
+    double current_lat_ = 0.0, current_lon_ = 0.0;
     std::chrono::steady_clock::time_point last_sent_time_ = std::chrono::steady_clock::now() - std::chrono::hours(1);
 
-    // Objects
     std::unique_ptr<Ort::Env> env_;
     std::unique_ptr<PersonDetector> personDetector_;
     std::unique_ptr<PalmDetector> palmDetector_;
     std::unique_ptr<HandPose> handPose_;
     std::unique_ptr<CameraReconnect> camera_;
     PersonTrackManager trackManager_;
+
+    // Variabel WebRTC
+    SharedFrameBuffer frame_buffer_;
+    std::unique_ptr<GstWebRtcServer> webrtc_server_;
+
+    void reportVictim(int jumlahOrang, bool jikaMelambai) {
+        auto now = std::chrono::steady_clock::now();
+        double elapsed = std::chrono::duration<double>(now - last_sent_time_).count();
+        if (elapsed <= 2.0) {
+            return;
+        }
+        mavros_msgs::msg::StatusText msg;
+        char buf[64];
+        if (jikaMelambai) {
+            msg.severity = 0; // EMERGENCY
+            std::snprintf(buf, sizeof(buf), "[SAR]; H; %d; %.6f; %.6f", jumlahOrang, current_lat_, current_lon_);
+        } else {
+            msg.severity = 6; // NOTICE
+            std::snprintf(buf, sizeof(buf), "[SAR]; D; %d; %.6f; %.6f", jumlahOrang, current_lat_, current_lon_);
+        }
+        std::string text(buf);
+        if (text.size() > 50) {
+            text.resize(50);
+        }
+        msg.text = text;
+        pub_statustext_->publish(msg);
+        RCLCPP_INFO(get_logger(), "[REPORT] StatusText -> severity=%d | text='%s'", msg.severity, msg.text.c_str());
+        last_sent_time_ = now;
+    }
 };
 
 // ============================================================
 // MAIN
 // ============================================================
 int main(int argc, char ** argv) {
+    // Inisialisasi Gstreamer untuk WebRTC WAJIB dilakukan paling awal
+    gst_init(&argc, &argv); 
+    
+    // Inisialisasi ROS 2
     rclcpp::init(argc, argv);
     try {
-        // Menginisialisasi Native Node
         auto node = std::make_shared<HawkeyeNativeVision>();
-        // Menjalankan loop eksekusi utama
         node->run(); 
     } catch (const std::exception & e) {
         RCLCPP_FATAL(rclcpp::get_logger("hawkeye_native_vision_node"), "Fatal Error: %s", e.what());
@@ -1643,180 +1904,3 @@ int main(int argc, char ** argv) {
     rclcpp::shutdown();
     return 0;
 }
-
-// int main() {
-//     try {
-//         std::cout << "====================================\n";
-//         std::cout << " HAWKEYE SAR Vision (C++ port)\n";
-//         std::cout << "====================================\n";
-//         std::cout << "OpenCV version: " << CV_VERSION << "\n\n";
-//         // ----------------------------------------------------
-//         // ONNX Runtime environment
-//         // ----------------------------------------------------
-//         Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "HAWKEYE");
-//         std::cout << "ONNX Runtime initialized successfully\n";
-//         // ----------------------------------------------------
-//         // Load models
-//         // ----------------------------------------------------
-//         PalmDetector palmDetector(env, PALM_MODEL);
-//         HandPose handPose(env, HANDPOSE_MODEL);
-//         PersonDetector personDetector(env, PERSON_MODEL);
-//         // ----------------------------------------------------
-//         // Camera (port dari vision.py: CameraReconnect)
-//         // ----------------------------------------------------
-//         CameraReconnect camera(0, 1280, 720, 15, 0.5, 10.0, {0, 1, 2});
-//         if (!camera.isOpened()) {
-//             std::cerr << "Camera tidak dapat dibuka!\n";
-//             return 1;
-//         }
-//         std::cout << "Camera berhasil dibuka\n";
-//         std::cout << "\nTekan Q atau ESC untuk keluar " << "(kalau window preview aktif).\n\n";
-//         // ----------------------------------------------------
-//         // Person tracking + ROS2/MAVROS bridge
-//         // ----------------------------------------------------
-//         PersonTrackManager trackManager;
-//         // HawkeyeRosBridge rosBridge;
-//         // ----------------------------------------------------
-//         // Window preview (setara LOCAL_PREVIEW di vision.py)
-//         // ----------------------------------------------------
-//         bool windowVisible = true;
-//         const std::string windowName = "HAWKEYE SAR VISION";
-//         if (windowVisible) {
-//             try {
-//                 cv::namedWindow(windowName, cv::WINDOW_NORMAL);
-//                 cv::resizeWindow(windowName, 960, 640);
-//             }
-//             catch (const cv::Exception&) {
-//                 windowVisible = false;
-//             }
-//         }
-//         // ----------------------------------------------------
-//         // FPS (port dari vision.py: update_fps())
-//         // ----------------------------------------------------
-//         long long frameCount = 0;
-//         double fps = 0.0;
-//         constexpr double FPS_SMOOTHING_ALPHA = 0.1;
-//         auto lastFrameTime = std::chrono::steady_clock::now();
-//         int consecutiveErrors = 0;
-//         constexpr int MAX_CONSECUTIVE_FRAME_ERRORS = 30;
-//         cv::Mat frame;
-//         // ======================================================
-//         // MAIN LOOP (port dari vision.py: run())
-//         // ======================================================
-//         while (true) {
-//             bool success = camera.read(frame);
-//             if (!success) {
-//                 if (camera.needsReconnect()) {
-//                     std::cerr << "Gagal baca frame dari kamera, " << "coba reconnect...\n";
-//                     camera.tryReconnect();
-//                 }
-//                 continue;
-//             }
-//             try {
-//                 frameCount++;
-//                 // -------------------------------------------
-//                 // FPS
-//                 // -------------------------------------------
-//                 auto now = std::chrono::steady_clock::now();
-//                 double delta = std::chrono::duration<double>(now - lastFrameTime).count();
-//                 if (delta > 0.0) {
-//                     double instantFps = 1.0 / delta;
-//                     fps = (fps == 0.0) ? instantFps : fps + (instantFps - fps) * FPS_SMOOTHING_ALPHA;
-//                 }
-//                 lastFrameTime = now;
-//                 cv::Mat displayFrame = frame.clone();
-//                 // -------------------------------------------
-//                 // Throttle deteksi (port dari vision.py:
-//                 // DETECTION_INTERVAL, supaya YOLO+palm+hand
-//                 // tidak jalan tiap frame -- lumayan berat
-//                 // kalau banyak orang di frame)
-//                 // -------------------------------------------
-//                 bool shouldRunDetection = (frameCount % DETECTION_INTERVAL == 0);
-//                 int jumlahOrang = static_cast<int>(trackManager.getTracks().size());
-//                 bool anyWaving = false;
-//                 if (shouldRunDetection) {
-//                     std::vector<PersonDetection> rawBoxes = personDetector.detect(frame);
-//                     trackManager.update(rawBoxes);
-//                     for (auto& track : trackManager.getTracks()) {
-//                         updateTrackWaveStatus(track, frame, palmDetector, handPose);
-//                     }
-//                     jumlahOrang = static_cast<int>(rawBoxes.size());
-//                     for (const auto& track : trackManager.getTracks()) {
-//                         if (track.waving) {
-//                             anyWaving = true;
-//                             break;
-//                         }
-//                     }
-//                     if (jumlahOrang > 0) {
-//                         rosBridge.reportVictim(jumlahOrang, anyWaving);
-//                         std::cout << "[DETEKSI] Korban terdeteksi! " << "Jumlah: " << jumlahOrang << " | Gesture: " << (anyWaving ? "MELAMBAI (minta tolong)" : "tidak melambai") << "\n";
-//                     } else {
-//                         std::cout << "[DETEKSI] Tidak ada korban " << "terdeteksi.\n";
-//                     }
-//                 } else {
-//                     for (const auto& track : trackManager.getTracks()) {
-//                         if (track.waving) {
-//                             anyWaving = true;
-//                             break;
-//                         }
-//                     }
-//                 }
-//                 // -------------------------------------------
-//                 // Draw overlays (port dari vision.py:
-//                 // draw_overlays())
-//                 // -------------------------------------------
-//                 for (auto& track : trackManager.getTracks()) {
-//                     cv::rectangle(displayFrame, track.box, cv::Scalar(0, 255, 0), 2);
-//                     std::string label = "ID " + std::to_string(track.id) + (track.waving ? " - MELAMBAI" : "");
-//                     putTextWithBg(displayFrame, label, cv::Point(track.box.x, std::max(18, track.box.y - 10)), track.waving ? cv::Scalar(0, 0, 255) : cv::Scalar(0, 255, 0), track.waving ? cv::Scalar(0, 0, 60) : cv::Scalar(0, 60, 0));
-//                     if (track.hasHandLandmarks) {
-//                         drawHand(displayFrame, track.handLandmarks);
-//                     }
-//                 }
-//                 std::string status = jumlahOrang > 0 ? "KORBAN TERDETEKSI" : "MENCARI";
-//                 putTextWithBg(displayFrame, status, cv::Point(20, 30), jumlahOrang > 0 ? cv::Scalar(0, 255, 0) : cv::Scalar(0, 0, 255));
-//                 putTextWithBg(displayFrame, "JUMLAH: " + std::to_string(jumlahOrang), cv::Point(20, 60), cv::Scalar(0, 255, 255));
-//                 std::string gestureStatus = anyWaving ? "MINTA TOLONG" : "NO STATUS";
-//                 putTextWithBg(displayFrame, "STATUS: " + gestureStatus, cv::Point(20, 90), anyWaving ? cv::Scalar(0, 0, 255) : cv::Scalar(200, 200, 200));
-//                 putTextWithBg(displayFrame, cv::format("FPS: %.1f", fps), cv::Point(20, 120), cv::Scalar(255, 255, 0));
-//                 consecutiveErrors = 0;
-//                 if (windowVisible) {
-//                     try {
-//                         cv::imshow(windowName, displayFrame);
-//                         int key = cv::waitKey(1) & 0xFF;
-//                         if (key == 27 || key == 'q' || key == 'Q') {
-//                             break;
-//                         }
-//                     }
-//                     catch (const cv::Exception&) {
-//                         windowVisible = false;
-//                     }
-//                 }
-//             }
-//             catch (const std::exception& exc) {
-//                 consecutiveErrors++;
-//                 std::cerr << "Gagal proses frame #" << frameCount << " (" << consecutiveErrors << "x berturut-turut): " << exc.what() << "\n";
-//                 if (consecutiveErrors >= MAX_CONSECUTIVE_FRAME_ERRORS) {
-//                     std::cerr << MAX_CONSECUTIVE_FRAME_ERRORS << " frame gagal berturut-turut -- " << "kemungkinan bug struktural, " << "menghentikan program.\n";
-//                     break;
-//                 }
-//             }
-//         }
-//         camera.release();
-//         cv::destroyAllWindows();
-//         std::cout << "\nHAWKEYE stopped.\n";
-//     }
-//     catch (const cv::Exception& e) {
-//         std::cerr << "\nOpenCV ERROR:\n" << e.what() << "\n";
-//         return 1;
-//     }
-//     catch (const Ort::Exception& e) {
-//         std::cerr << "\nONNX Runtime ERROR:\n" << e.what() << "\n";
-//         return 1;
-//     }
-//     catch (const std::exception& e) {
-//         std::cerr<< "\nERROR:\n" << e.what() << "\n";
-//         return 1;
-//     }
-//     return 0;
-// }
