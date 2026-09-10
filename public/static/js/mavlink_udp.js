@@ -1674,6 +1674,7 @@ class UdpMavlink {
             // }
             // after
             if (sysid === this.targetSystem && compid === this.targetComponent) {
+                const wasReady = this._linkReady;
                 this._linkReady = true; // Tambahkan ini
                 this.lastHeartbeatTime = Date.now();
                 this.telemetry.connected = true;

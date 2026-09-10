@@ -291,6 +291,25 @@ function switchTab(tab) {
     document.getElementById('tab-' + tab).classList.add('active');
 }
 
+function populateFlightModeDropdowns() {
+    const modeKeys = Object.keys(COPTER_MODE_MAP);
+    for (let i = 1; i <= 6; i++) {
+        const selectEl = document.getElementById('mode' + i);
+        if (!selectEl) continue;
+        
+        const currentValue = selectEl.value;
+        let optionsHtml = '';
+        modeKeys.forEach(modeName => {
+            optionsHtml += `<option value="${modeName}">${modeName}</option>`;
+        });
+        selectEl.innerHTML = optionsHtml;
+        
+        if (currentValue) {
+            selectEl.value = currentValue;
+        }
+    }
+}
+
 function refreshFlightModesUI() {
     const params = window.parent.paramCache?.params || {};
     
@@ -1310,6 +1329,7 @@ function exportParams() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    populateFlightModeDropdowns();
     initServoOutputTable();
     initRadioReverseFromParams();
     await initParamTable();
