@@ -17,11 +17,12 @@
     <!-- Kontainer Pesan Error HUD (Di bawah Navbar) -->
     <div id="hudErrorContainer" aria-live="polite"></div>
 
+    <!-- KONTAINER UTAMA: TELEMETRY PANEL & KOMPAS BERDAMPINGAN -->
     <div class="telemetry-outer-container">
         
         <!-- TELEMETRY PANEL ASLI -->
-        <div class="telemetry-panel" style="position: relative; top: 0; right: 0;">
-            <div class="ah-container" style="position: relative;">
+        <div class="telemetry-panel telemetry-panel-static">
+            <div class="ah-container ah-container-relative">
                 <!-- Teks [SAFE] Overlay di tengah gyro -->
                 <div id="horizonSafeOverlay">[SAFE]</div>
 
@@ -33,7 +34,7 @@
             </div>
 
             <div id="page-telems" class="telem-page" style="display: block">
-                <div class="telem-tabs" style="margin-bottom: 8px;">
+                <div class="telem-tabs">
                     <button class="telem-tab-btn active" onclick="switchTelemPage('telems', this)">Quick</button>
                     <button class="telem-tab-btn" onclick="switchTelemPage('actions', this)">Actions</button>
                 </div>
@@ -53,11 +54,15 @@
                     </div>
                     <div class="telemetry-item">
                         <div class="telemetry-label">Lat / Lon</div>
-                        <div id="coords" class="telemetry-value" style="font-size: 10px;">0.00000, 0.00000</div>
+                        <div id="coords" class="telemetry-value coords-small">0.00000, 0.00000</div>
                     </div>
                     <div class="telemetry-item">
                         <div class="telemetry-label">Speed</div>
                         <div id="speed" class="telemetry-value">0 m/s</div>
+                    </div>
+                    <div class="telemetry-item">
+                        <div class="telemetry-label">Heading</div>
+                        <div id="yaw" class="telemetry-value">0°</div>
                     </div>
                     <div class="telemetry-item">
                         <div class="telemetry-label">Climb Rate</div>
@@ -70,10 +75,6 @@
                     <div class="telemetry-item">
                         <div class="telemetry-label">Throttle</div>
                         <div id="throttleGridValue" class="telemetry-value">0%</div>
-                    </div>
-                    <div class="telemetry-item">
-                        <div class="telemetry-label">Heading</div>
-                        <div id="yaw" class="telemetry-value">0°</div>
                     </div>
                     <div class="telemetry-item">
                         <div class="telemetry-label">Armed</div>
@@ -91,26 +92,26 @@
                 </div>
         
                 <!-- GPS Status -->
-                <div style="margin-top: 6px; padding: 6px; background: #0a0a1a; border-radius: 2px; border-left: 3px solid #2196f3;">
-                    <div style="font-size: 10px; color: #888; margin-bottom: 4px;">GPS</div>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <div id="gpsIndicator" style="width: 8px; height: 8px; border-radius: 50%; background: #f44336;"></div>
-                        <div style="flex: 1;">
-                            <div id="gpsFix" style="font-size: 10px; color: #ccc;">No Fix</div>
-                            <div id="gpsSats" style="font-size: 9px; color: #888;">0 satellites</div>
+                <div class="gps-status-container">
+                    <div class="gps-status-title">GPS</div>
+                    <div class="gps-status-row">
+                        <div id="gpsIndicator" class="gps-indicator"></div>
+                        <div class="flex-1">
+                            <div id="gpsFix" class="gps-fix-text">No Fix</div>
+                            <div id="gpsSats" class="gps-sats-text">0 satellites</div>
                         </div>
                     </div>
                 </div>
         
-                <div style="border-top: 1px solid #444; margin-top: 8px; padding-top: 8px; font-size: 9px; color: #888;">
+                <div class="stats-container">
                     <div><span id="msgCount">0</span> msgs</div>
                     <div><span id="errorCount">0</span> errors</div>
                 </div>
             </div>
 
             <!-- PAGE 2: ACTIONS -->
-            <div id="page-actions" class="telem-page" style="display: none; padding-top: 10px;">
-                <div class="telem-tabs" style="margin-bottom: 8px;">
+            <div id="page-actions" class="telem-page action-page-wrapper" style="display: none;">
+                <div class="telem-tabs">
                     <button class="telem-tab-btn active" onclick="switchTelemPage('telems', this)">Quick</button>
                     <button class="telem-tab-btn" onclick="switchTelemPage('actions', this)">Actions</button>
                 </div>
@@ -119,16 +120,16 @@
                     <button id="armToggleBtn" class="action-btn btn-disarm" onclick="toggleArm()">DISARM</button>
                     <button id="safetyToggleBtn" class="action-btn btn-warning" onclick="toggleSS()">SAFETY ON</button>
                     <button class="action-btn btn-danger" onclick="doAction('reboot')">REBOOT</button>
+                    <button class="action-btn btn-rover" onclick="doAction('rover')">ROVER</button>
+                    <button class="action-btn btn-copter" onclick="doAction('copter')">COPTER</button>
                     <button class="action-btn" onclick="doAction('takeoff')">TAKEOFF</button>
                     <button class="action-btn" onclick="doAction('land')">LAND</button>
                     <button class="action-btn btn-rtl" onclick="doAction('rtl')">RTL</button>
-                    <button class="action-btn btn-rover" onclick="doAction('rover')">ROVER</button>
-                    <button class="action-btn btn-copter" onclick="doAction('copter')">COPTER</button>
                     <button class="action-btn btn-warning" onclick="doAction('release_rc')">RELEASE RC</button>
                 </div>
 
-                <div class="action-section-title" style="margin-top: 12px;">Flight Modes</div>
-                <div style="display: flex; gap: 8px;">
+                <div class="action-section-title">Flight Modes</div>
+                <div class="action-select-row">
                     <select id="flightModeSelect" class="action-select">
                         <option value="0">STABILIZE</option>
                         <option value="2">ALT_HOLD</option>
@@ -136,21 +137,21 @@
                         <option value="4">GUIDED</option>
                         <option value="5">LOITER</option>
                     </select>
-                    <button class="action-btn" onclick="doAction('setmode')" style="width: 80px;">SET</button>
+                    <button class="action-btn action-set-btn" onclick="doAction('setmode')">SET</button>
                 </div>
 
                 <!-- FITUR SET WAYPOINT (JUMP) -->
-                <div class="action-section-title" style="margin-top: 12px;">Set Waypoint (Jump)</div>
-                <div style="display: flex; gap: 8px;">
-                    <input type="number" id="targetWaypointInput" class="action-select" value="1" min="0" placeholder="No. WP" style="background: #06090d; border: 1px solid #2a394a; color: #fff; padding: 4px 8px; border-radius: 3px; width: 80px; text-align: center;">
-                    <button class="action-btn" onclick="doJumpWaypoint()" style="flex: 1; background: #ff9800; color: #fff;">GO WP</button>
+                <div class="action-section-title">Set Waypoint (Jump)</div>
+                <div class="action-select-row">
+                    <input type="number" id="targetWaypointInput" class="action-select wp-input" value="1" min="0" placeholder="No. WP">
+                    <button class="action-btn btn-go-wp" onclick="doJumpWaypoint()">GO WP</button>
                 </div>
             </div>
         </div>
 
         <!-- KOMPAS DI LUAR BERDAMPINGAN DI SEBELAH KIRI TELEMETRY PANEL -->
         <div class="external-compass-panel">
-            <canvas id="compassCanvas" width="95" height="95" style="display: block;"></canvas>
+            <canvas id="compassCanvas" width="95" height="95"></canvas>
         </div>
 
     </div>
@@ -171,12 +172,12 @@
             </svg>
         </button>
 
-        <button id="victimToolBtn" class="map-tool-btn" type="button" onclick="toggleVictimPanel()" title="Victim Detection" aria-label="Victim Detection" aria-expanded="false" style="position: relative;">
+        <button id="victimToolBtn" class="map-tool-btn" type="button" onclick="toggleVictimPanel()" title="Victim Detection" aria-label="Victim Detection" aria-expanded="false">
             <svg viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="12" cy="7" r="3"/>
                 <path d="M5 21v-2a7 7 0 0 1 14 0v2"/>
             </svg>
-            <span id="victimBadge" style="display:none; position:absolute; top:-4px; right:-4px; min-width:16px; height:16px; padding:0 3px; border-radius:8px; background:#f44336; color:#fff; font-size:9px; font-weight:bold; line-height:16px; text-align:center; border:1px solid #fff;">0</span>
+            <span id="victimBadge" class="victim-badge-pill" style="display:none;">0</span>
         </button>
 
         <button id="autoCenterBtn" class="map-tool-btn active" type="button" onclick="toggleAutoCenter()" title="Auto-Center Map" aria-label="Auto Center" aria-pressed="true">
@@ -195,45 +196,37 @@
         <div id="mavlinkLogContent"></div>
     </div>
 
-    <div id="victimPanel" class="mavlink-log-panel" aria-hidden="true" style="top: 320px; height: auto; padding-bottom: 12px;">
+    <div id="victimPanel" class="mavlink-log-panel victim-panel-override" aria-hidden="true">
         <div class="floating-panel-header">
             <div class="floating-panel-title">Victim Detection (SAR)</div>
             <button class="floating-panel-close" type="button" onclick="closeVictimPanel()" title="Close victim panel" aria-label="Close victim panel">&times;</button>
         </div>
-        <div id="victimStatusBadge" style="text-align:center; padding:8px; border-radius:8px; font-weight:bold; font-size:13px; margin-bottom:10px; background:rgba(255,255,255,0.06); color:#8fa0b5;">
+        <div id="victimStatusBadge" class="victim-status-badge">
             Belum ada korban terdeteksi
         </div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:11px; color:#b1a5a5;">
-            <div>Korban saat ini<br><b id="victimCurrentCount" style="font-size:16px; color:#00e5ff;">0</b></div>
-            <div>Total korban (misi)<br><b id="victimTotalCount" style="font-size:16px; color:#00e5ff;">0</b></div>
+        <div class="victim-stats-grid">
+            <div>Korban saat ini<br><b id="victimCurrentCount" class="victim-stat-value">0</b></div>
+            <div>Total korban (misi)<br><b id="victimTotalCount" class="victim-stat-value">0</b></div>
         </div>
-        <div style="margin-top:10px; font-size:10px; color:#71828d;">
-            Lokasi terakhir: <span id="victimLastLoc" style="color:#9be7f2;">-</span><br>
-            Update terakhir: <span id="victimLastTime" style="color:#9be7f2;">-</span>
+        <div class="victim-loc-info">
+            Lokasi terakhir: <span id="victimLastLoc" class="victim-loc-val">-</span><br>
+            Update terakhir: <span id="victimLastTime" class="victim-loc-val">-</span>
         </div>
-        <button id="victimGotoBtn" onclick="goToLastVictim()" disabled style="display:block; width:100%; margin-top:10px; background:#2196f3; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer; font-size:12px; opacity:0.5;">
+        <button id="victimGotoBtn" class="victim-goto-btn" onclick="goToLastVictim()" disabled>
             Terbang ke lokasi terakhir
         </button>
     </div>
 </div>
 
 <!-- VIDEO POPUP -->
-<!-- <div id="videoModal" class="video-modal" aria-hidden="true" style="position: fixed; bottom: 20px; left: 20px; width: 320px; height: 240px; background: #000; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.5); z-index: 1000; border: 1px solid #333; display: none;">
-    <div class="video-content" style="position: relative; width: 100%; height: 100%;">
-        <button class="video-close-btn" type="button" onclick="closeVideo()" title="Close camera" aria-label="Close camera" 
-                style="position: absolute; top: 6px; right: 8px; z-index: 10; background: rgba(0,0,0,0.6); color: #fff; border: none; border-radius: 50%; width: 22px; height: 22px; cursor: pointer; font-size: 14px; line-height: 20px; text-align: center;">&times;</button>
-        
-        <video id="webrtc-video" playsinline muted autoplay style="width: 100%; height: 100%; object-fit: cover; display: none;"></video>
-        <img id="mjpeg-video" style="width: 100%; height: 100%; object-fit: cover; display: none;" alt="Camera Stream" />
-        
-        <div id="webrtc-status" class="webrtc-status" style="position: absolute; bottom: 6px; left: 8px; z-index: 10; font-size: 11px; padding: 2px 6px; background: rgba(0,0,0,0.65); border-radius: 4px; pointer-events: none; color: #00bcd4;">Connecting...</div>
-    </div>
-</div> -->
-<div id="videoModal" class="video-modal">
+<div id="videoModal" class="video-modal video-modal-override" aria-hidden="true" style="display: none;">
     <div class="video-content">
-        <span class="close-btn" onclick="closeVideo()">&times;</span>
-        <video id="webrtc-video" playsinline muted autoplay></video>
-        <div id="webrtc-status" class="webrtc-status">Connecting...</div>
+        <button class="video-close-btn video-close-btn-small" type="button" onclick="closeVideo()" title="Close camera" aria-label="Close camera">&times;</button>
+        
+        <video id="webrtc-video" class="media-contain" playsinline muted autoplay style="display: none;"></video>
+        <img id="mjpeg-video" class="media-contain" alt="Camera Stream" style="display: none;" />
+        
+        <div id="webrtc-status" class="webrtc-status-text">Connecting...</div>
     </div>
 </div>
 
@@ -308,7 +301,7 @@ window.loadAndRenderMissionOnFlightView = function() {
             }).addTo(map);
 
             marker.bindTooltip(`<b>${isHome ? 'H' : i}</b>`, { permanent: true, direction: 'center', className: 'wp-text-label' });
-            marker.bindPopup(`<b>${wp.command} #${isHome ? 'HOME' : i}</b><br>Alt: ${wp.alt || 0}m<br>Lat: ${wp.lat.toFixed(6)}<br>Lon: ${wp.lon.toFixed(6)}`);
+            marker.bindPopup(`<b>${wp.command} #${isHome ? 'HOME' : i}</b><br>Alt: ${wp.alt || 0}m<br>Lat: ${wp.lat.toFixed(8)}<br>Lon: ${wp.lon.toFixed(8)}`);
             missionMarkers.push(marker);
         }
 
@@ -329,7 +322,6 @@ window.addEventListener('message', (e) => {
     if (e.data === 'MISSION_UPDATED') loadAndRenderMissionOnFlightView();
 });
 
-// ===== ARTIFICIAL HORIZON (GYRO) =====
 // ===== ARTIFICIAL HORIZON (GYRO) =====
 const gyroCanvas = document.getElementById('gyroCanvas');
 const gyroCtx = gyroCanvas.getContext('2d');
@@ -470,7 +462,8 @@ function drawArtificialHorizon(rollDeg, pitchDeg, yawDeg) {
     if (!isFinite(yawDeg)) yawDeg = 0;
 
     resizeCanvas();
-    drawCompass(yawDeg);
+    drawCompass(yawDeg); // Update jarum kompas terpisah di luar panel
+
     const deg2rad = Math.PI / 180;
     const canvas = gyroCanvas, ctx = gyroCtx;
     
@@ -565,9 +558,9 @@ function drawArtificialHorizon(rollDeg, pitchDeg, yawDeg) {
     // 2. PITA KIRI (KECEPATAN / SPEED TAPE)
     // =========================================================================
     var speedBoxX = 4;
-    var speedBoxY = 18;
+    var speedBoxY = 45;
     var speedBoxW = 42;
-    var speedBoxH = height - 44;
+    var speedBoxH = height - 90;
 
     ctx.save();
     ctx.beginPath();
@@ -622,8 +615,8 @@ function drawArtificialHorizon(rollDeg, pitchDeg, yawDeg) {
     ctx.fillText(currentSpeed.toFixed(1), speedBoxX + (speedBoxW / 2), cy + 3);
 
     // Teks AS & GS di bawah pita kecepatan
-    ctx.font = "8px sans-serif";
-    ctx.fillStyle = "#00bcd4";
+    ctx.font = "10px sans-serif";
+    ctx.fillStyle = "#fffff";
     ctx.textAlign = "left";
     ctx.fillText("AS:" + currentSpeed.toFixed(1), speedBoxX, speedBoxY + speedBoxH + 10);
     ctx.fillText("GS:" + currentSpeed.toFixed(1), speedBoxX, speedBoxY + speedBoxH + 19);
@@ -633,8 +626,8 @@ function drawArtificialHorizon(rollDeg, pitchDeg, yawDeg) {
     // =========================================================================
     var altBoxW = 42;
     var altBoxX = width - altBoxW - 4;
-    var altBoxY = 18;
-    var altBoxH = height - 44;
+    var altBoxY = 45;
+    var altBoxH = height - 90;
 
     ctx.save();
     ctx.beginPath();
@@ -702,7 +695,7 @@ function drawArtificialHorizon(rollDeg, pitchDeg, yawDeg) {
     ctx.restore();
 }
 
-// Inisialisasi awal agar kanvas gyro langsung tampil meskipun belum ada data masuk
+// Inisialisasi awal
 drawArtificialHorizon(0, 0, 0);
 
 // ===== MAIN TELEMETRY HANDLER =====
@@ -734,12 +727,16 @@ window.updateTelemetryUI = function(data) {
         const rollEl = document.getElementById('roll');
         const pitchEl = document.getElementById('pitch');
         const yawEl = document.getElementById('yaw');
+        
+        // Normalisasi yaw ke rentang 0° - 360°
+        const rawYaw = data.yaw || 0;
+        const normalizedYaw = ((rawYaw % 360) + 360) % 360;
+
         if (rollEl) rollEl.innerText = data.roll.toFixed(2) + '°';
         if (pitchEl) pitchEl.innerText = data.pitch.toFixed(2) + '°';
-        let heading360 = ((data.yaw || 0) % 360 + 360) % 360;
-        if (yawEl) yawEl.innerText = heading360.toFixed(2) + '°';
+        if (yawEl) yawEl.innerText = normalizedYaw.toFixed(2) + '°';
         
-        drawArtificialHorizon(data.roll, data.pitch, data.yaw || 0);
+        drawArtificialHorizon(data.roll, data.pitch, normalizedYaw);
     }
 
     if(data.rangefinder_distance !== undefined) {
@@ -775,20 +772,11 @@ window.updateTelemetryUI = function(data) {
         if (gpsSatsEl) gpsSatsEl.innerText = (data.satellites_visible || 0) + ' satellites';
     }
 
-    // if (data.flight_mode !== undefined) {
-    //     const flightModeEl = document.getElementById('flightModeLabel');
-    //     if (flightModeEl) flightModeEl.innerText = data.flight_mode;
-    // }
-
-    if (data.flight_mode !== undefined && data.flight_mode !== "UNKNOWN") {
+    if (data.flight_mode !== undefined) {
         const flightModeEl = document.getElementById('flightModeLabel');
-        if (flightModeEl) {
-            if(flightModeEl.innerText !== data.flight_mode) {
-                flightModeEl.innerText = data.flight_mode;
-            }
-        }
+        if (flightModeEl) flightModeEl.innerText = data.flight_mode;
     }
-    
+
     if (data.vehicle_type !== undefined && data.vehicle_type !== 'UNKNOWN') {
         window._stableVehicleType = data.vehicle_type; 
     }
@@ -817,9 +805,9 @@ window.updateTelemetryUI = function(data) {
         if (throttleGridEl) throttleGridEl.innerText = Math.round(data.throttle) + '%';
     }
 
-    // Pengecekan ketat tipe data boolean untuk memastikan status ARMED hanya berubah saat benar-benar arm
     if (data.is_armed !== undefined && typeof data.is_armed === 'boolean') {
         const isArmed = data.is_armed;
+        
         const armGridEl = document.getElementById('armGridStatus');
         if (armGridEl) {
             armGridEl.innerText = isArmed ? 'ARMED' : 'DISARMED';
@@ -838,17 +826,6 @@ window.updateTelemetryUI = function(data) {
         }
     }
 
-    if (data.safety_off !== undefined) {
-        // console.log("[HUD] Menerima data safety dari FC:", data.safety_off);
-        if (!window.parent.gcsState) window.parent.gcsState = {};
-        if (!window.parent.gcsState.safety) window.parent.gcsState.safety = {};
-        
-        // Jika status fisik di drone berbeda dengan state di GCS, perbarui GCS-nya
-        if (window.parent.gcsState.safety.off !== data.safety_off) {
-            window.parent.gcsState.safety.off = data.safety_off;
-            updateSafetyButton(); // Update teks/warna tombol di tab Actions
-        }
-    }
     updateSafetyHUDIndicator();
 }
 
@@ -995,7 +972,7 @@ async function doAction(action) {
             case 'reboot': {
                 if (confirm("Yakin ingin melakukan Reboot pada Flight Controller?")) {
                     const ack = await window.parent.commands.reboot();
-                    logAckResult('REBOOT', ack);
+                    logAckResult('REBOOT FC', ack);
                 }
                 break;
             }
@@ -1059,7 +1036,7 @@ async function doAction(action) {
             }
         }
     } catch (e) {
-        logLocalFeedback(`Gagal mengirim perintah ${action}: ${e.message}`, 3);
+        logLocalFeedback(`❌ Gagal mengirim perintah ${action}: ${e.message}`, 3);
         alert(`Gagal mengirim perintah ${action}: ${e.message}`);
     }
 }
@@ -1080,14 +1057,11 @@ async function doJumpWaypoint() {
     try {
         let ack = null;
 
-        // Cek apakah fungsi lompat waypoint tersedia langsung di objek commands utama
         if (typeof window.parent.commands.setMissionCurrent === 'function') {
             ack = await window.parent.commands.setMissionCurrent(seq);
         } else {
-            // Menggunakan command MAVLink standard (Command ID 46 / MAV_CMD_MISSION_START)
             const link = window.parent.commands._getActiveLink();
             if (link && typeof link.sendCommandLong === 'function') {
-                // Parameter 1 (p1): nomor urut waypoint tujuan (seq)
                 ack = await link.sendCommandLong(46, { p1: seq, p2: 0, p3: 0, p4: 0, p5: 0, p6: 0, p7: 0 });
             } else {
                 throw new Error("Tidak ditemukan interface pengiriman perintah misi.");
@@ -1096,14 +1070,13 @@ async function doJumpWaypoint() {
 
         logAckResult(`JUMP TO WAYPOINT #${seq}`, ack);
 
-        // Pastikan mode AUTO disegarkan agar drone langsung bernavigasi menuju waypoint tersebut
         const link = window.parent.commands._getActiveLink();
         if (link && typeof link.setFlightMode === 'function') {
             await link.setFlightMode(3); // 3 = AUTO
         }
     } catch (e) {
         console.error("[DEBUG Error] Gagal melompat ke waypoint:", e);
-        logLocalFeedback(`Gagal melompat ke Waypoint #${seq}: ${e.message}`, 3);
+        logLocalFeedback(`❌ Gagal melompat ke Waypoint #${seq}: ${e.message}`, 3);
         alert(`Gagal melompat ke Waypoint: ${e.message}`);
     }
 }
@@ -1112,11 +1085,10 @@ async function doJumpWaypoint() {
 let victimMarkers = [];
 const VICTIM_BUFFER_RADIUS_METERS = 10;
 
-// State ringkasan misi -- dipakai buat panel status persisten (bukan cuma popup sekilas di peta)
 const victimState = {
-    currentCount: 0,   // jumlah korban terlihat SAAT frame deteksi terakhir
-    totalCount: 0,     // total ID korban unik sepanjang misi (dari companion computer)
-    lastStatus: null,  // 'H' (melambai/minta tolong) atau 'D' (terdeteksi saja)
+    currentCount: 0,
+    totalCount: 0,
+    lastStatus: null,
     lastLat: null,
     lastLon: null,
     lastUpdateMs: null
@@ -1180,9 +1152,6 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
 
 function buildPopupHtml(lat, lon, opts = {}) {
     const { status = 'unknown', jumlah = 1, total = null, confidence = null, source = 'AI' } = opts;
-    // PENTING: AI hanya mendeteksi "terlihat" (D) vs "terlihat & melambaikan tangan" (H).
-    // Sistem TIDAK bisa dan TIDAK BOLEH mengklaim status medis (hidup/tewas) -- itu klaim
-    // yang berbahaya di konteks SAR kalau salah. H = minta tolong (darurat), D = terdeteksi biasa.
     const isEmergency = status === 'H';
     const accentColor = isEmergency ? '#f44336' : '#ffb74d';
     const totalLine = total !== null ? ` &middot; Total misi: ${total}` : '';
@@ -1226,7 +1195,7 @@ function addVictimMarker(lat, lon, opts = {}) {
     }).addTo(map);
 
     const victimIcon = L.divIcon({
-        html: `<div style="font-size: 18px; background: rgba(${iconBg}, 0.9); border-radius: 50%; width: 30px; height: 30px; text-align: center; line-height: 30px; color: white; border: 2px solid white; box-shadow: 0 0 10px ${isEmergency ? 'red' : '#ff9800'};" class="${isEmergency ? 'victim-marker-pulse' : ''}">${iconGlyph}</div>`,
+        html: `<div style="font-size: 18px; background: rgba(${iconBg}, 0.9); border-radius: 50%; width: 30px; height: 30px; text-align: center; line-height: 30px; color: white; border: 2px solid white; box-shadow: 0 0 10px ${isEmergency ? 'red' : '#ff9800'};">${iconGlyph}</div>`,
         className: 'victim-icon', iconSize: [30, 30], iconAnchor: [15, 15]
     });
 
@@ -1239,7 +1208,7 @@ function addVictimMarker(lat, lon, opts = {}) {
     return marker;
 }
 
-// ===== SAR STATUSTEXT PARSING =====
+// ===== SAR STATUSTEXT PARSING (Fleksibel: Support 5 atau 6 bagian) =====
 const SAR_PREFIX = "[SAR]";
 const STATUSTEXT_MAX_LEN = 50;
 const SAR_CHUNK_TIMEOUT_MS = 2000;
@@ -1282,20 +1251,22 @@ function reassembleSarText(logItem) {
     return { status: 'complete', text: flushSarBuffer(msgId) };
 }
 
-// Format asli dari vision.cpp (reportVictim):
-//   "[SAR]; H; <jumlahSaatIni>; <totalKorbanMisi>; <lat>; <lon>"   (H = melambai / minta tolong)
-//   "[SAR]; D; <jumlahSaatIni>; <totalKorbanMisi>; <lat>; <lon>"   (D = terdeteksi, tidak melambai)
-// -> 6 elemen setelah displit koma-titik-koma, BUKAN 5.
 function parseSarStatustext(fullText) {
-    const data = fullText.trim().split(";");
-    if (data.length !== 6) return null;
-    const [, statusRaw, jumlahStr, totalStr, latStr, lonStr] = data;
-    const status = statusRaw.trim();
-    const jumlah = parseInt(jumlahStr, 10);
-    const total = parseInt(totalStr, 10);
-    const lat = parseFloat(latStr);
-    const lon = parseFloat(lonStr);
-    if (!Number.isFinite(jumlah) || !Number.isFinite(total) || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    if (!fullText || typeof fullText !== 'string') return null;
+    const cleanText = fullText.trim();
+    if (!cleanText.startsWith("[SAR]")) return null;
+
+    const data = cleanText.split(";");
+    // Format 5 bagian: [0]="[SAR]", [1]=status, [2]=jumlah, [3]=lat, [4]=lon
+    if (data.length < 5) return null;
+
+    const status = data[1].trim();
+    const jumlah = parseInt(data[2], 10);
+    const total = jumlah; // Menyamakan total dengan jumlah saat ini
+    const lat = parseFloat(data[3]);
+    const lon = parseFloat(data[4]);
+
+    if (!Number.isFinite(jumlah) || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
     return { status, jumlah, total, lat, lon };
 }
 
@@ -1331,11 +1302,16 @@ function showHudError(text, severity) {
 }
 
 window.updateMavlogUI = function(logItem) {
+    // Print console untuk memeriksa setiap pesan MAVLink log yang masuk
+    console.log("[GCS Log Received]", logItem);
+
     const sarResult = reassembleSarText(logItem);
     if (sarResult.status === 'pending') return;
     if (sarResult.status === 'complete') {
         const parsed = parseSarStatustext(sarResult.text);
         if (parsed) {
+            console.log("🚨 [SAR DETECTED & PARSED] ->", parsed);
+
             addVictimMarker(parsed.lat, parsed.lon, { status: parsed.status, jumlah: parsed.jumlah, total: parsed.total, source: 'SAR' });
 
             victimState.currentCount = parsed.jumlah;
@@ -1346,8 +1322,6 @@ window.updateMavlogUI = function(logItem) {
             victimState.lastUpdateMs = Date.now();
             updateVictimPanelUI();
 
-            // Banner HUD yang ramah-manusia (bukan teks mentah "[SAR]; H; 2; 5; ..."),
-            // hanya untuk kasus darurat (melambai / minta tolong)
             if (parsed.status === 'H') {
                 showHudError(
                     `🆘 Korban melambai/minta tolong terdeteksi! ${parsed.jumlah} orang di (${parsed.lat.toFixed(6)}, ${parsed.lon.toFixed(6)})`,
@@ -1355,7 +1329,6 @@ window.updateMavlogUI = function(logItem) {
                 );
             }
         }
-        // return;
     }
 
     showHudError(logItem.text, logItem.severity ?? 6);
@@ -1396,7 +1369,6 @@ let headingLineBlack = null;
 let headingLineYellow = null;
 let isAutoCenterEnabled = true;
 
-// KODE BARU: Fungsi untuk Toggle Auto-Center
 window.toggleAutoCenter = function() {
     isAutoCenterEnabled = !isAutoCenterEnabled;
     const btn = document.getElementById('autoCenterBtn');
@@ -1405,7 +1377,6 @@ window.toggleAutoCenter = function() {
         btn.setAttribute('aria-pressed', String(isAutoCenterEnabled));
     }
     
-    // Jika diaktifkan kembali, langsung paksakan kamera ke posisi drone saat ini
     if (isAutoCenterEnabled && droneMarker) {
         const currentPos = droneMarker.getLatLng();
         map.setView(currentPos, map.getZoom());
@@ -1422,14 +1393,13 @@ function updateMap(data) {
         return;
     }
 
-    const rawHeading = Number.isFinite(data.heading) ? data.heading : (Number.isFinite(data.yaw) ? data.yaw : 0);
-    const heading = ((rawHeading % 360) + 360) % 360;
+    const heading = Number.isFinite(data.heading) ? data.heading : 0;
     const vType = window.currentVehicleType || 'COPTER';
-    const markerImage = (vType === 'ROVER') ? './static/images/rover.png' : './static/images/dronehijau.png';
-    const markerHtml = `<img src="${markerImage}" style="width: 36px; height: 36px; transform: rotate(${heading}deg); object-fit: contain; border-radius: 5px;">`;
+    const markerImage = (vType === 'ROVER') ? './static/images/rover.jpg' : './static/images/dronehijau.png';
+    const markerHtml = `<img src="${markerImage}" style="width: 50px; height: 50px; transform: rotate(${heading}deg); object-fit: contain; border-radius: 5px;">`;
 
     if (!droneMarker) {
-        const droneIcon = L.divIcon({ html: markerHtml, iconSize: [36, 36], iconAnchor: [18, 18], className: 'drone-icon-custom' });
+        const droneIcon = L.divIcon({ html: markerHtml, iconSize: [50, 50], iconAnchor: [25, 25], className: 'drone-icon-custom' });
         droneMarker = L.marker([lat, lon], { icon: droneIcon, zIndexOffset: 500, title: 'Vehicle Position' })
             .bindPopup(`<b>Vehicle</b><br>Lat: ${lat.toFixed(8)}<br>Lon: ${lon.toFixed(8)}<br>Alt: ${(Number(data.alt)||0).toFixed(1)}m<br>Heading: ${heading.toFixed(0)}°<br>Speed: ${(Number(data.speed)||0).toFixed(1)} m/s`)
             .addTo(map);
@@ -1507,133 +1477,76 @@ window.toggleVideoPanel = function() {
     else openVideo();
 };
 
-// let pc = null;
-// window.openVideo = async function() {
-//     const modal = document.getElementById('videoModal');
-//     const statusText = document.getElementById('webrtc-status');
-//     const videoElement = document.getElementById('webrtc-video');
-//     const imgElement = document.getElementById('mjpeg-video');
-
-//     if (!modal || !statusText || !videoElement || !imgElement) return;
-
-//     modal.style.display = 'block';
-//     modal.classList.add('is-open');
-//     modal.setAttribute('aria-hidden', 'false');
-//     updateCameraButtonState(true);
-
-//     const streamType = (localStorage.getItem('videoStreamType')).toLowerCase();
-//     const streamUrl = localStorage.getItem('videoStreamUrl') || localStorage.getItem('raspyUrl') || 'http://127.0.0.1:5001/video_feed';
-
-//     statusText.innerText = `Connecting (${streamType.toUpperCase()})...`;
-//     statusText.style.color = '#00bcd4';
-
-//     if (streamType.includes('http') || streamType === 'udp' || streamUrl.includes('/video_feed')) {
-//         videoElement.style.display = 'none';
-//         imgElement.style.display = 'block';
-//         imgElement.onload = () => { statusText.innerText = `Video Live (${streamType.toUpperCase()})`; statusText.style.color = '#4caf50'; };
-//         imgElement.onerror = () => { statusText.innerText = `Gagal memuat ${streamType.toUpperCase()}`; statusText.style.color = '#f44336'; };
-
-//         let targetUrl = streamUrl;
-//         if (targetUrl.startsWith('udp://')) {
-//             const host = targetUrl.replace('udp://', '').split(':')[0] || '127.0.0.1';
-//             targetUrl = `http://${host}:5001/video_feed`;
-//         }
-//         imgElement.src = targetUrl + (targetUrl.includes('?') ? '&' : '?') + 't=' + Date.now();
-//         return;
-//     }
-
-//     videoElement.style.display = 'block';
-//     imgElement.style.display = 'none';
-//     videoElement.muted = true; videoElement.autoplay = true; videoElement.playsInline = true;
-
-//     try {
-//         let endpoint = streamUrl.trim().replace(/\/+$/, '');
-//         if (!endpoint.endsWith('/webrtc/offer') && !endpoint.endsWith('/offer')) {
-//             endpoint += '/webrtc/offer';
-//         }
-
-//         pc = new RTCPeerConnection({ sdpSemantics: 'unified-plan' });
-//         pc.addTransceiver('video', { direction: 'recvonly' });
-
-//         let inboundStream = new MediaStream();
-//         videoElement.srcObject = inboundStream;
-//         pc.addEventListener('track', (evt) => {
-//             if (evt.track.kind === 'video') {
-//                 inboundStream.addTrack(evt.track);
-//                 videoElement.play().catch(() => {});
-//                 statusText.innerText = 'Video Live (WebRTC)';
-//                 statusText.style.color = '#4caf50';
-//             }
-//         });
-
-//         const offer = await pc.createOffer();
-//         await pc.setLocalDescription(offer);
-
-//         const response = await fetch(endpoint, {
-//             method: 'POST',
-//             headers: { 'Content-Type': 'application/json' },
-//             body: JSON.stringify({ sdp: pc.localDescription.sdp, type: pc.localDescription.type })
-//         });
-
-//         if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
-//         await pc.setRemoteDescription(await response.json());
-//     } catch (err) {
-//         statusText.innerText = 'Connection Failed: ' + err.message;
-//         statusText.style.color = '#f44336';
-//     }
-// };
-
 // ===== VIDEO STREAMING (WebRTC) =====
 let pc = null;
 window.openVideo = async function() {
     const modal = document.getElementById('videoModal');
     const statusText = document.getElementById('webrtc-status');
     const videoElement = document.getElementById('webrtc-video');
+    const imgElement = document.getElementById('mjpeg-video');
+
+    if (!modal || !statusText || !videoElement) return;
 
     modal.style.display = 'block';
-    statusText.innerText = 'Connecting Video...';
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    updateCameraButtonState(true);
+
+    const streamType = (localStorage.getItem('videoStreamType') || 'webrtc').toLowerCase();
+    const streamUrl = localStorage.getItem('videoStreamUrl') || localStorage.getItem('raspyUrl') || 'http://127.0.0.1:5002';
+
+    statusText.innerText = `Connecting (${streamType.toUpperCase()})...`;
     statusText.style.color = '#00bcd4';
 
+    if (streamType.includes('http') && !streamType.includes('webrtc') && streamUrl.includes('/video_feed')) {
+        if (imgElement) {
+            videoElement.style.display = 'none';
+            imgElement.style.display = 'block';
+            imgElement.onload = () => { statusText.innerText = `Video Live (${streamType.toUpperCase()})`; statusText.style.color = '#4caf50'; };
+            imgElement.onerror = () => { statusText.innerText = `Gagal memuat ${streamType.toUpperCase()}`; statusText.style.color = '#f44336'; };
+            imgElement.src = streamUrl + (streamUrl.includes('?') ? '&' : '?') + 't=' + Date.now();
+        }
+        return;
+    }
+
+    videoElement.style.display = 'block';
+    if (imgElement) imgElement.style.display = 'none';
+    videoElement.muted = true; 
+    videoElement.autoplay = true; 
+    videoElement.playsInline = true;
+
     try {
-        let apiBase = localStorage.getItem('raspyUrl') || 'http://127.0.0.1:5000';
-        console.log("[WebRTC] Using API Base URL:", apiBase);
+        let apiBase = localStorage.getItem('raspyUrl') || localStorage.getItem('videoStreamUrl') || 'http://127.0.0.1:5002';
+        apiBase = apiBase.replace(/\/offer.*$/, '').replace(/\/webrtc.*$/, '').replace(/\/+$/, '');
+        let endpoint = apiBase + '/webrtc/offer';
+
+        console.log("[WebRTC] Connecting to endpoint:", endpoint);
 
         const config = {
             sdpSemantics: 'unified-plan',
             bundlePolicy: 'max-bundle',
-            rtcpMuxPolicy: 'require',
+            rtcpMuxPolicy: 'require'
         };
         pc = new RTCPeerConnection(config);
-        pc.addEventListener('iceconnectionstatechange', () => console.log("[WebRTC] ICE iceConnection State:", pc.iceConnectionState));
-        pc.addEventListener('connectionstatechange', () => console.log("[WebRTC] Connection State:", pc.connectionState));
-        pc.addEventListener('track', (evt) => console.log('[WebRTC] track diterima! kind:', evt.track.kind, '| jumlah streams:', evt.streams.length));
-        pc.addEventListener('icecandidate', (event) => {
-            if (event.candidate) {
-                console.log('[WebRTC] Local ICE candidate:', event.candidate.candidate);
-            }
-        });
 
-        let inboundStream = null;
-
-        pc.addEventListener('track', function(evt) {
+        pc.addEventListener('track', (evt) => {
+            console.log('[WebRTC] Track video diterima!', evt.track.kind);
             if (evt.track.kind === 'video') {
                 if (evt.streams && evt.streams[0]) {
                     videoElement.srcObject = evt.streams[0];
                 } else {
-                    if (!inboundStream) inboundStream = new MediaStream();
+                    let inboundStream = new MediaStream();
                     inboundStream.addTrack(evt.track);
                     videoElement.srcObject = inboundStream;
                 }
-                const playPromise = videoElement.play()
-                if (playPromise !== undefined){
+                const playPromise = videoElement.play();
+                if (playPromise !== undefined) {
                     playPromise.catch(err => {
-                        if(err.name !== 'AbortError') {
-                            console.error("[WebRTC] Error playing video:", err);
-                        }
+                        if (err.name !== 'AbortError') console.error("[WebRTC] Error play:", err);
                     });
-                    
                 }
-
+                statusText.innerText = 'Video Live (WebRTC)';
+                statusText.style.color = '#4caf50';
             }
         });
 
@@ -1643,8 +1556,9 @@ window.openVideo = async function() {
         await pc.setLocalDescription(offer);
 
         await new Promise((resolve) => {
-            if (pc.iceGatheringState === 'complete') resolve();
-            else {
+            if (pc.iceGatheringState === 'complete') {
+                resolve();
+            } else {
                 function checkState() {
                     if (pc.iceGatheringState === 'complete') {
                         pc.removeEventListener('icegatheringstatechange', checkState);
@@ -1652,20 +1566,18 @@ window.openVideo = async function() {
                     }
                 }
                 pc.addEventListener('icegatheringstatechange', checkState);
-                // setTimeout(resolve, 5000); 
+                setTimeout(resolve, 3000);
             }
         });
 
-        console.log("[WebRTC] ICE gathering complete, sending offer...");
+        console.log("[WebRTC] ICE gathering selesai, mengirim offer ke C++...");
 
-        const response = await fetch(apiBase + '/webrtc/offer', {
+        const response = await fetch(endpoint, {
             method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json', 
-            },
-            body: JSON.stringify({
-                sdp: pc.localDescription.sdp,
-                type: pc.localDescription.type
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                sdp: pc.localDescription.sdp, 
+                type: pc.localDescription.type 
             })
         });
 
@@ -1676,45 +1588,33 @@ window.openVideo = async function() {
         }
 
         await pc.setRemoteDescription(answer);
-        statusText.innerText = 'Video Connected - Live (WebRTC)';
-        statusText.style.color = '#4caf50'; 
+        statusText.innerText = 'Video Connected (WebRTC)';
+        statusText.style.color = '#4caf50';
 
     } catch (err) {
         statusText.innerText = 'Connection Failed: ' + err.message;
         statusText.style.color = '#f44336';
-        alert("webRTC Connection Error: " + err.message);
+        console.error("[WebRTC Error]", err);
     }
-}
-
-// window.closeVideo = function() {
-//     const modal = document.getElementById('videoModal');
-//     if (modal) {
-//         modal.style.display = 'none';
-//         modal.classList.remove('is-open');
-//         modal.setAttribute('aria-hidden', 'true');
-//     }
-//     updateCameraButtonState(false);
-//     const videoElement = document.getElementById('webrtc-video');
-//     if (videoElement && videoElement.srcObject) {
-//         videoElement.srcObject.getTracks().forEach(t => t.stop());
-//         videoElement.srcObject = null;
-//     }
-//     const imgElement = document.getElementById('mjpeg-video');
-//     if (imgElement) imgElement.src = '';
-//     if (pc) { pc.close(); pc = null; }
-// };
-
+};
 
 window.closeVideo = function() {
-    document.getElementById('videoModal').style.display = 'none';
+    const modal = document.getElementById('videoModal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.remove('is-open');
+        modal.setAttribute('aria-hidden', 'true');
+    }
+    updateCameraButtonState(false);
     const videoElement = document.getElementById('webrtc-video');
-    if (videoElement.srcObject) {
-        videoElement.srcObject.getTracks().forEach(track => track.stop());
+    if (videoElement && videoElement.srcObject) {
+        videoElement.srcObject.getTracks().forEach(t => t.stop());
         videoElement.srcObject = null;
     }
+    const imgElement = document.getElementById('mjpeg-video');
+    if (imgElement) imgElement.src = '';
     if (pc) { pc.close(); pc = null; }
-}
-
+};
 
 // ===== GOTO VICTIM =====
 async function goToVictim(lat, lon, alt = null) {
@@ -1728,7 +1628,7 @@ async function goToVictim(lat, lon, alt = null) {
     const targetAlt = (alt !== null && !Number.isNaN(alt)) ? alt : (Number(t.altitude) || 0);
 
     if (isArmed && currentMode === 'AUTO') {
-        if (!confirm(`Drone sedang ARMED (AUTO). Pindah ke GUIDED untuk interupsi misi ke korban (${lat.toFixed(5)}, ${lon.toFixed(5)})?`)) return;
+        if (!confirm(`Drone sedang ARMED (AUTO). Pindah ke GUIDED untuk interupsi misi ke korban (${lat.toFixed(8)}, ${lon.toFixed(8)})?`)) return;
     }
 
     const result = await link.sendCommandLong(192, { p1: -1, p2: 0, p3: 0, p4: NaN, p5: lat, p6: lon, p7: targetAlt });

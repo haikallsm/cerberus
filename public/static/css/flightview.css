@@ -179,6 +179,7 @@ html, body{
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
     transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
     backdrop-filter: blur(3px);
+    position: relative; /* Menambahkan positioning agar badge bekerja optimal */
 }
 
 .map-tool-btn:hover {
@@ -663,4 +664,129 @@ body.transparent-bg {
     border-radius: 4px; 
     pointer-events: none; 
     color: #00bcd4;
+}
+
+/* ===== NEW EXTRACTED CLASSES DARI HTML ===== */
+.telemetry-panel.telemetry-panel-static {
+    position: relative;
+    top: 0;
+    right: 0;
+}
+
+.wp-input {
+    background: #06090d;
+    border: 1px solid #2a394a;
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 3px;
+    width: 80px;
+    text-align: center;
+}
+
+.btn-go-wp {
+    flex: 1;
+    background: #ff9800 !important;
+    color: #fff !important;
+}
+
+#compassCanvas {
+    display: block;
+}
+
+.victim-badge-pill {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 3px;
+    border-radius: 8px;
+    background: #f44336;
+    color: #fff;
+    font-size: 9px;
+    font-weight: bold;
+    line-height: 16px;
+    text-align: center;
+    border: 1px solid #fff;
+    box-sizing: border-box;
+}
+
+.victim-panel-override {
+    top: 320px !important;
+    height: auto !important;
+    padding-bottom: 12px !important;
+}
+
+.victim-status-badge {
+    text-align: center;
+    padding: 8px;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 13px;
+    margin-bottom: 10px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #8fa0b5;
+}
+
+.victim-stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    font-size: 11px;
+    color: #b1a5a5;
+}
+
+.victim-stat-value {
+    font-size: 16px;
+    color: #00e5ff;
+}
+
+.victim-loc-info {
+    margin-top: 10px;
+    font-size: 10px;
+    color: #71828d;
+}
+
+.victim-loc-val {
+    color: #9be7f2;
+}
+
+.victim-goto-btn {
+    display: block;
+    width: 100%;
+    margin-top: 10px;
+    background: #2196f3;
+    color: white;
+    border: none;
+    padding: 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    opacity: 0.5;
+    transition: opacity 0.3s;
+}
+
+.video-modal.video-modal-override {
+    bottom: 20px;
+    left: 20px;
+    width: 320px;
+    height: 240px;
+    background: #000;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    border: 1px solid #333;
+}
+
+.video-close-btn.video-close-btn-small {
+    top: 6px;
+    right: 8px;
+    width: 22px;
+    height: 22px;
+    font-size: 14px;
+    line-height: 20px;
+    background: rgba(0,0,0,0.6);
+}
+
+.media-contain {
+    object-fit: contain !important;
 }
