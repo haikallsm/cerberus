@@ -120,11 +120,11 @@
                     <button id="armToggleBtn" class="action-btn btn-disarm" onclick="toggleArm()">DISARM</button>
                     <button id="safetyToggleBtn" class="action-btn btn-warning" onclick="toggleSS()">SAFETY ON</button>
                     <button class="action-btn btn-danger" onclick="doAction('reboot')">REBOOT</button>
-                    <button class="action-btn btn-rover" onclick="doAction('rover')">ROVER</button>
-                    <button class="action-btn btn-copter" onclick="doAction('copter')">COPTER</button>
                     <button class="action-btn" onclick="doAction('takeoff')">TAKEOFF</button>
                     <button class="action-btn" onclick="doAction('land')">LAND</button>
                     <button class="action-btn btn-rtl" onclick="doAction('rtl')">RTL</button>
+                    <button class="action-btn btn-rover" onclick="doAction('rover')">ROVER</button>
+                    <button class="action-btn btn-copter" onclick="doAction('copter')">COPTER</button>
                     <button class="action-btn btn-warning" onclick="doAction('release_rc')">RELEASE RC</button>
                 </div>
 
@@ -1025,15 +1025,6 @@ async function doAction(action) {
                 logAckResult(`${modeLabel}`, ack);
                 break;
             }
-            case 'release_rc': {
-                const ack = await window.parent.commands.setHybridMode('release');
-                if (ack && ack.ok) {
-                    logLocalFeedback('[TRANSITION] RC Override dilepas (CH5 kembali ke switch fisik remote)', 6);
-                } else {
-                    logLocalFeedback('[TRANSITION] Gagal melepas RC Override', 3);
-                }
-                break;
-            }
         }
     } catch (e) {
         logLocalFeedback(`❌ Gagal mengirim perintah ${action}: ${e.message}`, 3);
@@ -1315,7 +1306,10 @@ window.updateMavlogUI = function(logItem) {
             addVictimMarker(parsed.lat, parsed.lon, { status: parsed.status, jumlah: parsed.jumlah, total: parsed.total, source: 'SAR' });
 
             victimState.currentCount = parsed.jumlah;
-            victimState.totalCount = parsed.total;
+            // vision.cpp versi saat ini tidak selalu mengirim totalKorbanMisi (format 5 field).
+            // Kalau tidak ada, pakai jumlah marker unik yang sudah dideduplikasi (addVictimMarker
+            // menggabungkan titik yang jaraknya < VICTIM_BUFFER_RADIUS_METERS) sebagai perkiraan.
+            victimState.totalCount = parsed.total !== null ? parsed.total : victimMarkers.length;
             victimState.lastStatus = parsed.status;
             victimState.lastLat = parsed.lat;
             victimState.lastLon = parsed.lon;
@@ -1550,11 +1544,39 @@ window.openVideo = async function() {
             }
         });
 
+        pc = new RTCPeerConnection({ sdpSemantics: 'unified-plan' });
         pc.addTransceiver('video', { direction: 'recvonly' });
+
+        let inboundStream = new MediaStream();
+        videoElement.srcObject = inboundStream;
+        pc.addEventListener('track', (evt) => {
+            if (evt.track.kind === 'video') {
+                inboundStream.addTrack(evt.track);
+                videoElement.play().catch(() => {});
+                statusText.innerText = 'Video Live (WebRTC)';
+                statusText.style.color = '#4caf50';
+            }
+        });
+
+        // Kalau koneksi ICE gagal/putus di tengah jalan, jangan biarkan status diam
+        // di "Connecting..." -- kasih tahu user biar tahu perlu retry.
+        pc.addEventListener('iceconnectionstatechange', () => {
+            if (!pc) return;
+            if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+                statusText.innerText = `Koneksi WebRTC terputus (${pc.iceConnectionState})`;
+                statusText.style.color = '#f44336';
+            }
+        });
 
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
+        // PENTING: server (vision.cpp / GstWebRtcServer) TIDAK punya endpoint untuk
+        // trickle ICE candidate susulan -- dia cuma terima 1x POST /webrtc/offer dan
+        // menunggu ICE gathering-nya sendiri selesai (maks 5 detik) sebelum membalas.
+        // Makanya di sisi client juga WAJIB tunggu ICE gathering selesai dulu sebelum
+        // kirim offer, kalau tidak SDP yang terkirim bisa kosong/kurang kandidatnya
+        // dan koneksi P2P gagal terbentuk (race condition -- kadang jalan kadang tidak).
         await new Promise((resolve) => {
             if (pc.iceGatheringState === 'complete') {
                 resolve();
