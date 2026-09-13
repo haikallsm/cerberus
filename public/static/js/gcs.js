@@ -15,6 +15,18 @@ class GCSTelemetry {
     }
 }
 
+// Mapping custom_mode (HEARTBEAT, field angka) -> nama mode, khusus ArduCopter
+// (vehicle_type_code 2 = MAV_TYPE_QUADROTOR). Tambahkan tabel rover/plane di sini
+// kalau nanti perlu menampilkan mode saat FC dalam konfigurasi lain.
+const ARDUCOPTER_MODE_NAMES = {
+    0: 'STABILIZE', 1: 'ACRO', 2: 'ALT_HOLD', 3: 'AUTO', 4: 'GUIDED',
+    5: 'LOITER', 6: 'RTL', 7: 'CIRCLE', 9: 'LAND', 11: 'DRIFT',
+    13: 'SPORT', 14: 'FLIP', 15: 'AUTOTUNE', 16: 'POSHOLD', 17: 'BRAKE',
+    18: 'THROW', 19: 'AVOID_ADSB', 20: 'GUIDED_NOGPS', 21: 'SMART_RTL',
+    22: 'FLOWHOLD', 23: 'FOLLOW', 24: 'ZIGZAG', 25: 'SYSTEMID',
+    26: 'AUTOROTATE', 27: 'AUTO_RTL'
+};
+
 function adaptRadioTelemetry(raw) {
     const RAD2DEG = 180 / Math.PI;
 
@@ -26,6 +38,10 @@ function adaptRadioTelemetry(raw) {
         out.arm_mode = raw.armed ? 'ARMED' : 'DISARMED';
     }
     if (raw.mode !== undefined) out.flight_mode = raw.mode;
+    else if (raw.custom_mode !== undefined) {
+        // radio-mavlink.js / mavlink_udp.js mengisi custom_mode (angka), bukan raw.mode
+        out.flight_mode = ARDUCOPTER_MODE_NAMES[raw.custom_mode] ?? `MODE_${raw.custom_mode}`;
+    }
     if (raw.connected !== undefined) {
         out.status = raw.connected ? 'connected' : 'disconnected';
         out.system_status = out.status;

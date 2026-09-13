@@ -12,6 +12,9 @@
 //     return MAV_RESULT_MESSAGES[result] ?? `UNKNOWN (${result})`;
 // }
 
+// harus match FCU_COMP_ID di config.h firmware ESP32
+// const MAV_COMP_ID_AUTOPILOT1 = 1;
+
 class UdpMavlink {
     constructor() {
         this.parser = new MavlinkFrameParser((msgId, payload, sysid, compid) => this._handleFrame(msgId, payload, sysid, compid));
@@ -1595,7 +1598,7 @@ class UdpMavlink {
     _emitTelemetrySafe() {
         if (!this.onTelemetry) return;
         try {
-            this.onTelemetry({ ...this.telemetry });
+            this.onTelemetry({ ...this.telemetry, link: 'udp' });   // penanda sumber
         } catch (err) {
             console.error('[UdpMavlink] onTelemetry callback error:', err);
         }
@@ -1655,9 +1658,12 @@ class UdpMavlink {
 
         if (msgId === 0 && !isSelf) {
             if (!this._streamsRequested) {
-                console.log(`[UdpMavlink] Heartbeat pertama diterima: sysid=${sysid}, compid=${compid} -- dipakai sebagai target.`);
+                console.log(`[UdpMavlink] Heartbeat pertama diterima: sysid=${sysid}, compid=${compid} -- target dikunci ke sysid=${sysid}, compid=${MAV_COMP_ID_AUTOPILOT1} (autopilot).`);
                 this.targetSystem = sysid;
-                this.targetComponent = compid;
+                // FIX: paksa compid ke autopilot asli (FCU_COMP_ID di firmware), jangan ikut
+                // race "siapa duluan" -- ESP32 companion juga kirim HEARTBEAT sendiri
+                // (compid MAV_COMP_ID_ONBOARD_COMPUTER) dan bisa menang race ini.
+                this.targetComponent = MAV_COMP_ID_AUTOPILOT1;
                 this._streamsRequested = true;
                 this.requestDataStreams().catch(e => console.warn('[UdpMavlink] requestDataStreams gagal:', e));
                 this.requestHomePosition();
@@ -1673,7 +1679,7 @@ class UdpMavlink {
             //     }
             // }
             // after
-            if (sysid === this.targetSystem && compid === this.targetComponent) {
+            if (sysid === this.targetSystem && Number(compid) === MAV_COMP_ID_AUTOPILOT1) {
                 const wasReady = this._linkReady;
                 this._linkReady = true; // Tambahkan ini
                 this.lastHeartbeatTime = Date.now();
@@ -1710,13 +1716,19 @@ class UdpMavlink {
                         console.error('[UdpMavlink] onConnect callback error:', err);
                     }
                 }
-            } else {
-                // console.warn(`[UdpMavlink] Heartbeat dari sysid=${sysid}/compid=${compid} diabaikan (target saat ini: ${this.targetSystem}/${this.targetComponent})`);
+            } else if (sysid === this.targetSystem) {
+                // Heartbeat dari companion (ESP32, compid != MAV_COMP_ID_AUTOPILOT1)
+                // -- dipakai buat deteksi "ESP32 masih hidup", TIDAK dipakai untuk arm/mode
+                this.telemetry.esp32_alive = true;
+                this.telemetry.esp32_last_heartbeat = Date.now();
             }
+            return;
         }
 
         if (isSelf) return;
-        if (this._streamsRequested && sysid !== this.targetSystem) return;
+        // if (this._streamsRequested && sysid !== this.targetSystem) return;
+        if (this._streamsRequested && (sysid !== this.targetSystem || compid !== this.targetComponent)) return;
+
 
         if (msgId === 35) {
             this._handleRawRcChannels(payload);

@@ -12,6 +12,9 @@ function mavResultMessage(result) {
     return MAV_RESULT_MESSAGES[result] ?? `UNKNOWN (${result})`;
 }
 
+// harus match FCU_COMP_ID di config.h firmware ESP32
+const MAV_COMP_ID_AUTOPILOT1 = 1;
+
 class RadioMavlink {
     constructor() {
         this._useWebSerial = !window.serialBridge && ('serial' in navigator);
@@ -1788,7 +1791,8 @@ class RadioMavlink {
 
         try {
             this.onTelemetry({
-                ...this.telemetry
+                ...this.telemetry,
+                link: 'radio'   // penanda sumber, dipakai routeTelemetry() di index.html
             });
         } catch (err) {
             console.error(
@@ -1880,11 +1884,14 @@ class RadioMavlink {
 
             if (firstHeartbeat) {
                 console.log(
-                    `[RadioMavlink] HEARTBEAT diterima: sysid=${sysid}, compid=${compid}`
+                    `[RadioMavlink] HEARTBEAT diterima: sysid=${sysid}, compid=${compid} -- target dikunci ke compid=${MAV_COMP_ID_AUTOPILOT1} (autopilot).`
                 );
 
                 this.targetSystem = sysid;
-                this.targetComponent = compid;
+                // FIX: paksa compid ke autopilot asli (FCU_COMP_ID di firmware), jangan ikut
+                // race "siapa duluan" -- ESP32 companion juga kirim HEARTBEAT sendiri
+                // (compid MAV_COMP_ID_ONBOARD_COMPUTER) dan bisa menang race ini.
+                this.targetComponent = MAV_COMP_ID_AUTOPILOT1;
                 this._streamsRequested = true;
                 this.requestDataStreams()
                 .then(() => {
@@ -1901,7 +1908,7 @@ class RadioMavlink {
 
             if (
                 sysid === this.targetSystem &&
-                compid === this.targetComponent
+                Number(compid) === MAV_COMP_ID_AUTOPILOT1
             ) {
                 const wasReady = this._linkReady;
                 this.lastHeartbeatTime = Date.now();
@@ -1947,16 +1954,18 @@ class RadioMavlink {
                         );
                     }
                 }
-            } else {
-                console.warn(
-                    // `[RadioMavlink] Heartbeat dari sysid=${sysid}/compid=${compid} diabaikan ` +
-                    // `(target saat ini: ${this.targetSystem}/${this.targetComponent})`
-                );
+            } else if (sysid === this.targetSystem) {
+                // Heartbeat dari companion (ESP32, compid != MAV_COMP_ID_AUTOPILOT1)
+                // -- dipakai buat deteksi "ESP32 masih hidup", TIDAK dipakai untuk arm/mode
+                this.telemetry.esp32_alive = true;
+                this.telemetry.esp32_last_heartbeat = Date.now();
             }
+            return;
         }
 
         if (isSelf) return;
-        if (this._streamsRequested && sysid !== this.targetSystem) return;
+        // if (this._streamsRequested && sysid !== this.targetSystem) return;
+        if (this._streamsRequested && (sysid !== this.targetSystem || compid !== this.targetComponent)) return;
 
         if (msgId === 35) {
             this._handleRawRcChannels(payload);
@@ -2029,7 +2038,7 @@ class RadioMavlink {
             this.telemetry.rangefinder_distance = result.current_distance / 100;   // cm -> m
             this.telemetry.rangefinder_healthy = isHealthy;
             this.telemetry.rangefinder_type = RANGEFINDER_TYPE_MAP[result.type] || 'UNKNOWN';
-            if (this.onTelemetry) this.onTelemetry({ ...this.telemetry });
+            if (this.onTelemetry) this.onTelemetry({ ...this.telemetry, link: 'radio' });
         } else if (result._kind === 'mag_cal_progress') {
             if (!this.telemetry.mag_cal_progress) this.telemetry.mag_cal_progress = {};
             this.telemetry.mag_cal_progress[result.compass_id] = {

@@ -77,6 +77,17 @@
         let iframeReady = false;
 
         function routeTelemetry(raw) {
+            // FIX: radioMavlink dan udpMavlink SAMA-SAMA memanggil routeTelemetry.
+            // Kalau kedua link kebetulan aktif bersamaan (mis. link satunya belum
+            // sempat disconnect dengan bersih), keduanya akan menimpa UI secara
+            // bergantian tanpa guard ini -- itulah sumber status yang "flicker".
+            // Hanya proses telemetry dari link yang sedang dipilih user di dropdown.
+            const activeType = document.getElementById('connTypeSelect')?.value;
+            const expectedLink = (activeType === 'serial') ? 'radio' : 'udp';
+            if (raw && raw.link && raw.link !== expectedLink) {
+                return;
+            }
+
             const adaptedData = window.adaptRadioTelemetry(raw);
 
             if (window.gcsConnection && window.gcsConnection.telemetry) {

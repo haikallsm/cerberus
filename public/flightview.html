@@ -1294,7 +1294,7 @@ function showHudError(text, severity) {
 
 window.updateMavlogUI = function(logItem) {
     // Print console untuk memeriksa setiap pesan MAVLink log yang masuk
-    console.log("[GCS Log Received]", logItem);
+    // console.log("[GCS Log Received]", logItem);
 
     const sarResult = reassembleSarText(logItem);
     if (sarResult.status === 'pending') return;
@@ -1510,7 +1510,7 @@ window.openVideo = async function() {
     videoElement.playsInline = true;
 
     try {
-        let apiBase = localStorage.getItem('raspyUrl') || localStorage.getItem('videoStreamUrl') || 'http://127.0.0.1:5002';
+        let apiBase = localStorage.getItem('raspyUrl') || localStorage.getItem('videoStreamUrl') || 'http://127.0.0.1:5000';
         apiBase = apiBase.replace(/\/offer.*$/, '').replace(/\/webrtc.*$/, '').replace(/\/+$/, '');
         let endpoint = apiBase + '/webrtc/offer';
 
