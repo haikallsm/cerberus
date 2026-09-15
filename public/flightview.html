@@ -1389,7 +1389,7 @@ function updateMap(data) {
 
     const heading = Number.isFinite(data.heading) ? data.heading : 0;
     const vType = window.currentVehicleType || 'COPTER';
-    const markerImage = (vType === 'ROVER') ? './static/images/rover.jpg' : './static/images/dronehijau.png';
+    const markerImage = (vType === 'ROVER') ? './static/images/rover.png' : './static/images/dronehijau.png';
     const markerHtml = `<img src="${markerImage}" style="width: 50px; height: 50px; transform: rotate(${heading}deg); object-fit: contain; border-radius: 5px;">`;
 
     if (!droneMarker) {
@@ -1571,12 +1571,6 @@ window.openVideo = async function() {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
-        // PENTING: server (vision.cpp / GstWebRtcServer) TIDAK punya endpoint untuk
-        // trickle ICE candidate susulan -- dia cuma terima 1x POST /webrtc/offer dan
-        // menunggu ICE gathering-nya sendiri selesai (maks 5 detik) sebelum membalas.
-        // Makanya di sisi client juga WAJIB tunggu ICE gathering selesai dulu sebelum
-        // kirim offer, kalau tidak SDP yang terkirim bisa kosong/kurang kandidatnya
-        // dan koneksi P2P gagal terbentuk (race condition -- kadang jalan kadang tidak).
         await new Promise((resolve) => {
             if (pc.iceGatheringState === 'complete') {
                 resolve();
@@ -1653,7 +1647,7 @@ async function goToVictim(lat, lon, alt = null) {
         if (!confirm(`Drone sedang ARMED (AUTO). Pindah ke GUIDED untuk interupsi misi ke korban (${lat.toFixed(8)}, ${lon.toFixed(8)})?`)) return;
     }
 
-    const result = await link.sendCommandLong(192, { p1: -1, p2: 0, p3: 0, p4: NaN, p5: lat, p6: lon, p7: targetAlt });
+    // const result = await link.sendCommandLong(192, { p1: -1, p2: 0, p3: 0, p4: NaN, p5: lat, p6: lon, p7: targetAlt });
     if (!result.ok) alert(`Gagal reposition: ${result.result}`);
 }
 

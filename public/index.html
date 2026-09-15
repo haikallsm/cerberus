@@ -3,17 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hawkeye</title>
+    <title>HAWKEYE - GCS</title>
+    <link rel="stylesheet" href="./static/css/index.css">
     <link rel="stylesheet" href="./static/css/navbar.css">
     <link rel="stylesheet" href="./static/css/gcs.css">
     <script src="./static/js/socket.io.min.js"></script>
-    <style>
-        body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; background: #0a0a1a; }
-        iframe { border: none; width: 100%; height: 100%; flex-grow: 1; }
-    </style>
 </head>
 <body>
-
     <div id="paramLoadingBanner" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(10, 10, 26, 0.8); z-index:10000; justify-content:center; align-items:center; backdrop-filter: blur(3px);">
         <div style="background:#1a1a2e; border: 2px solid #ff9800; border-radius: 12px; padding: 30px 50px; display:flex; flex-direction:column; align-items:center; gap:20px; box-shadow: 0 15px 35px rgba(0,0,0,0.8);">
             <div style="font-size: 32px; animation: spin 2s linear infinite;">⏳</div>
@@ -23,9 +19,15 @@
     
     <div id="navbar-placeholder"></div>
 
-    <iframe id="main-frame" src="./flightview.html"></iframe>
+    <!-- Multi-Iframe Container (Mencegah Refresh Total saat Pindah Menu) -->
+    <div class="view-container">
+        <iframe id="frame-flight" class="app-iframe active" src="./flightview.html"></iframe>
+        <iframe id="frame-setup" class="app-iframe" src="./setup.html"></iframe>
+        <iframe id="frame-mission" class="app-iframe" src="./mission.html"></iframe>
+        <iframe id="frame-config" class="app-iframe" src="./config.html"></iframe>
+    </div>
 
-    <!-- <script src="./static/js/index.js"></script> -->
+    <!-- <script src="./static/js/web-bridge.js"></script> -->
     <script src="./static/js/mavlink_protocol.js"></script>
     <script src="./static/js/gcs.js"></script>
     <script src="./static/js/radio-mavlink.js"></script>
@@ -47,6 +49,13 @@
         window.radioMavlink.tryAutoReconnect().catch(() => {});
 
         window.udpMavlink = new UdpMavlink();
+
+        // Inisialisasi Koneksi Socket.IO untuk menjembatani python bridge (port 5002)
+        // const bridgeSocket = io('http://127.0.0.1:5002');
+        // bridgeSocket.on('mavlink-log', (logItem) => {
+        //     // Tangkap langsung pesan log/SAR dari Python bridge dan teruskan ke router MAVLog GCS
+        //     routeMavlog(logItem);
+        // });
 
         window.mavFeatures = window.commands;
         window.gcsState = {safety: {off: false}, armed: false};
@@ -76,6 +85,11 @@
 
         let iframeReady = false;
 
+        // Fungsi bantu untuk mendapatkan elemen iframe aktif saat ini
+        function getActiveFrame() {
+            return document.querySelector('.app-iframe.active');
+        }
+
         function routeTelemetry(raw) {
             // FIX: radioMavlink dan udpMavlink SAMA-SAMA memanggil routeTelemetry.
             // Kalau kedua link kebetulan aktif bersamaan (mis. link satunya belum
@@ -94,10 +108,12 @@
                 window.gcsConnection.telemetry.updateFromApi(adaptedData);
             }
 
-            const frame = document.getElementById('main-frame');
-            if (frame?.contentWindow?.updateTelemetryUI) {
-                frame.contentWindow.updateTelemetryUI(adaptedData);
-            }
+            // Kirim data telemetri ke semua iframe yang aktif/memuat fungsi terkait
+            document.querySelectorAll('.app-iframe').forEach(frame => {
+                if (frame?.contentWindow?.updateTelemetryUI) {
+                    frame.contentWindow.updateTelemetryUI(adaptedData);
+                }
+            });
         }
 
         const MAVLOG_HISTORY_MAX = 500;
@@ -117,14 +133,12 @@
                 logItem.severity ?? 6,
                 logItem.source ?? 'FC'
             );
-            if (!iframeReady) {
-                logQueue.push(logItem);
-                return;
-            }
-            const frame = document.getElementById('main-frame');
-            if (frame?.contentWindow?.updateMavlogUI) {
-                frame.contentWindow.updateMavlogUI(logItem);
-            }
+            
+            document.querySelectorAll('.app-iframe').forEach(frame => {
+                if (frame?.contentWindow?.updateMavlogUI) {
+                    frame.contentWindow.updateMavlogUI(logItem);
+                }
+            });
         }
 
         function handleLinkConnect() {
@@ -138,19 +152,16 @@
         }
 
         document.addEventListener('DOMContentLoaded', function() {
-            const frame = document.getElementById('main-frame');
-            if (frame) {
+            document.querySelectorAll('.app-iframe').forEach(frame => {
                 frame.addEventListener('load', function() {
                     iframeReady = true;
-                    console.log('Iframe ready');
                 });
-            }
+            });
 
             window.radioMavlink.onTelemetry = routeTelemetry;
             window.radioMavlink.onMavlog = routeMavlog;
             window.udpMavlink.onTelemetry = routeTelemetry;
             window.udpMavlink.onMavlog = routeMavlog;
-
         });
 
         window.paramCache = {
@@ -190,10 +201,11 @@
                 window.paramCache.params = params;
                 window.paramCache.loaded = true;
 
-                const frame = document.getElementById('main-frame');
-                if (frame && frame.contentWindow) {
-                    frame.contentWindow.dispatchEvent(new Event('paramCacheUpdated'));
-                }
+                document.querySelectorAll('.app-iframe').forEach(frame => {
+                    if (frame && frame.contentWindow) {
+                        frame.contentWindow.dispatchEvent(new Event('paramCacheUpdated'));
+                    }
+                });
             } catch (err) {
                 console.error('Gagal memuat parameter:', err);
                 alert('Gagal memuat parameter: ' + err.message);
@@ -206,14 +218,14 @@
 
         function handleAccelCalPosRequest(posNumber) {
             window.acceptCalStep = posNumber;
-            const frame = document.getElementById('main-frame');
+            const frame = getActiveFrame();
             if (frame?.contentWindow?.onAccelCalPosPrompt) {
                 frame.contentWindow.onAccelCalPosPrompt(posNumber);
             }
         }
 
         function handleAccelCalPosSignal(param1) {
-            const frame = document.getElementById('main-frame');
+            const frame = getActiveFrame();
             if (frame?.contentWindow?.onAccelCalPosSignal) {
                 frame.contentWindow.onAccelCalPosSignal(param1);
             }
@@ -228,10 +240,25 @@
         window.radioMavlink.onAccelCalPosSignal = handleAccelCalPosSignal;
         window.udpMavlink.onAccelCalPosSignal = handleAccelCalPosSignal;
 
+        // Navigasi diperbarui mencakup frame-config agar menu config tidak hilang
         function navigateTo(url, el) {
-            document.getElementById('main-frame').src = url;
+            document.querySelectorAll('.app-iframe').forEach(frame => {
+                frame.classList.remove('active');
+            });
+
+            let targetFrameId = 'frame-flight';
+            if (url.includes('setup.html')) targetFrameId = 'frame-setup';
+            else if (url.includes('mission.html')) targetFrameId = 'frame-mission';
+            else if (url.includes('config.html')) targetFrameId = 'frame-config';
+
+            const targetFrame = document.getElementById(targetFrameId);
+            if (targetFrame) {
+                targetFrame.classList.add('active');
+            }
+
             document.querySelectorAll('.nav-left a').forEach(a => a.classList.remove('active'));
             if(el) el.classList.add('active');
+            
             const camBtn = document.getElementById('nav-camera');
             if (camBtn) {
                 camBtn.style.display = (url === './flightview.html') ? 'inline-block' : 'none';
@@ -239,7 +266,7 @@
         }
 
         function triggerCamera() {
-            const frame = document.getElementById('main-frame');
+            const frame = getActiveFrame();
             if (frame.contentWindow && typeof frame.contentWindow.openVideo === 'function') {
                 frame.contentWindow.openVideo();
             }
@@ -255,7 +282,7 @@
                 if (ipGroup) ipGroup.style.display = 'none';
             } else {
                 if (serialGroup) serialGroup.style.display = 'none';
-                if (ipGroup) ipGroup.style.display = 'flex';
+                if (ipGroup) ipGroup.style.display = 'flex'; 
             }
             updateNavbarStatus();
         }
@@ -300,6 +327,7 @@
 
         async function disconnectRadio() {
             if (window.radioMavlink) {
+                window.RadioMavlink.autoReconnect = false;
                 await window.radioMavlink.disconnect();
             }
             updateNavbarStatus();
@@ -374,14 +402,12 @@
                 statusEl.style.color = '#4caf50';
                 statusEl.style.backgroundColor = 'rgba(76, 175, 80, 0.15)';
                 statusEl.style.borderColor = '#4caf50';
-                
                 statusEl.classList.remove('disconnected');
                 statusEl.classList.add('connected');
             } else {
                 statusEl.style.color = '#f44336';
                 statusEl.style.backgroundColor = 'rgba(244, 67, 54, 0.15)';
                 statusEl.style.borderColor = '#f44336';
-                
                 statusEl.classList.remove('connected');
                 statusEl.classList.add('disconnected');
             }

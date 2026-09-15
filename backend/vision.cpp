@@ -1870,10 +1870,10 @@ private:
         char buf[64];
         if (jikaMelambai) {
             msg.severity = 0; // EMERGENCY
-            std::snprintf(buf, sizeof(buf), "[SAR]; H; %d; %.6f; %.6f", jumlahOrang, current_lat_, current_lon_);
+            std::snprintf(buf, sizeof(buf), "[SAR];H;%d;%.6f;%.6f", jumlahOrang, current_lat_, current_lon_);
         } else {
             msg.severity = 6; // NOTICE
-            std::snprintf(buf, sizeof(buf), "[SAR]; D; %d; %.6f; %.6f", jumlahOrang, current_lat_, current_lon_);
+            std::snprintf(buf, sizeof(buf), "[SAR];D;%d;%.6f;%.6f", jumlahOrang, current_lat_, current_lon_);
         }
         std::string text(buf);
         if (text.size() > 50) {
