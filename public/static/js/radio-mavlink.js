@@ -794,6 +794,13 @@ class RadioMavlink {
                 this._ackWaiters.delete(command);
                 resolve({ ok: false, result: 'timeout' });
             }, timeout);
+
+            const stale = this._ackWaiters.get(command);      // BARU
+            if (stale) {                                       // BARU
+                clearTimeout(stale.timer);                      // BARU
+                stale.resolve({ ok: false, result: 'superseded' }); // BARU
+            }                                                    // BARU
+
             this._ackWaiters.set(command, { resolve, timer });
         });
         await this._sendFrame(76, Array.from(payload), CRC_EXTRA[76]);
@@ -1757,6 +1764,25 @@ class RadioMavlink {
     async calibrateMag(compassId = -1) {
         return this.sendCommandLong(241, { p3: 1, p4: compassId >= 0 ? compassId : 0 });
     }
+    clearMagCalState() {
+        this.telemetry.mag_cal_progress = {};
+        this.telemetry.mag_cal_report   = {};
+        window.compassSuccessMask = 0;
+        this._emitTelemetrySafe();
+    }
+    async sendCommandLongRetry(command, params = {}, opts = {}) {
+        const { retries = 3, timeout = 3000, gapMs = 250 } = opts;
+        let last = null;
+        for (let i = 0; i <= retries; i++) {
+            last = await this.sendCommandLong(command, params, true, timeout);
+            if (last && last.ok) return last;
+            const r = last ? last.result : 'timeout';
+            const retryable = (r === 'timeout' || r === 1 || r === 5);
+            if (!retryable) return last;
+            if (i < retries) await new Promise(res => setTimeout(res, gapMs));
+        }
+        return last;
+    }
     async calibrateAccel(retries = 0) {
         return this.sendCommandLong(241, { p1: 1, p2: retries });
     }
@@ -2041,25 +2067,47 @@ class RadioMavlink {
             if (this.onTelemetry) this.onTelemetry({ ...this.telemetry, link: 'radio' });
         } else if (result._kind === 'mag_cal_progress') {
             if (!this.telemetry.mag_cal_progress) this.telemetry.mag_cal_progress = {};
-            this.telemetry.mag_cal_progress[result.compass_id] = {
-                id: result.compass_id,
-                pct: result.completion_pct
-            };
+            const id      = Number(result.compass_id);
+            const attempt = Number(result.attempt) || 1;
+            const prev    = this.telemetry.mag_cal_progress[id];
 
+            if (prev && attempt > (prev.attempt || 1)) {
+                if (this.telemetry.mag_cal_report) delete this.telemetry.mag_cal_report[id];
+                window.compassSuccessMask = (window.compassSuccessMask || 0) & ~(1 << id);
+            }
+
+            this.telemetry.mag_cal_progress[id] = {
+                id,
+                pct:        Number(result.completion_pct) || 0,
+                cal_status: Number(result.cal_status) || 0,
+                attempt,
+                done:       false
+            };
             this._scheduleMagCalTelemetry();
 
         } else if (result._kind === 'mag_cal_report') {
-            if (!this.telemetry.mag_cal_report) this.telemetry.mag_cal_report = {};
-            this.telemetry.mag_cal_report[result.compass_id] = {
-                id: result.compass_id,
-                status: result.cal_status,
-                fitness: result.fitness
-            };
             const MAG_CAL_SUCCESS = 4;
-            if(result.cal_status === MAG_CAL_SUCCESS) {
-                window.compassSuccessMask = (window.compassSuccessMask || 0) | (1 << result.compass_id);
-                if (!this.telemetry.mag_cal_progress) this.telemetry.mag_cal_progress = {};
-                this.telemetry.mag_cal_progress[result.compass_id] = { id: result.compass_id, pct: 100 };
+            const id     = Number(result.compass_id);
+            const status = Number(result.cal_status);
+
+            if (!this.telemetry.mag_cal_report)   this.telemetry.mag_cal_report   = {};
+            if (!this.telemetry.mag_cal_progress) this.telemetry.mag_cal_progress = {};
+
+            this.telemetry.mag_cal_report[id] = {
+                id, status,
+                fitness:   Number(result.fitness),
+                autosaved: Number(result.autosaved) || 0,
+                ts:        Date.now()
+            };
+
+            const attempt = this.telemetry.mag_cal_progress[id]?.attempt || 1;
+
+            if (status === MAG_CAL_SUCCESS) {
+                window.compassSuccessMask = (window.compassSuccessMask || 0) | (1 << id);
+                this.telemetry.mag_cal_progress[id] = { id, pct: 100, cal_status: status, attempt, done: true };
+            } else {
+                window.compassSuccessMask = (window.compassSuccessMask || 0) & ~(1 << id);
+                this.telemetry.mag_cal_progress[id] = { id, pct: 0, cal_status: status, attempt, done: true };
             }
             this._emitTelemetrySafe();
         }

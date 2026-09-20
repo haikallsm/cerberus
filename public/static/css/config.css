@@ -75,9 +75,14 @@ html, body {
 .param-counter-badge { font-size: 10px; color: #8fa0b5; background: #141b24; padding: 4px 10px; border-radius: 4px; border: 1px solid #24303f; }
 .param-counter-badge b { color: #00bcd4; }
 
+#tab-params {
+    overflow-y: hidden !important;
+}
+
 .param-table-container { 
     flex: 1; 
     min-height: 0; 
+    max-height: 460px; /* Tinggi maksimal ini diset agar pas memuat 15 parameter per tampilan (sekitar ~30px per baris) */
     overflow-y: auto; 
     border: 1px solid #202b38; 
     background: #090d12; 

@@ -45,7 +45,7 @@ const MSG_LENGTHS = {
     0: 9, 1: 31, 20: 20, 21: 2, 22: 25, 23: 23, 24: 30, 27: 29, 30: 28, 
     33: 28, 35: 22, 40: 4, 43: 3, 44: 5, 47: 4, 51: 5, 65: 42, 66: 6, 70: 18, 
     73: 38, 74: 20, 75: 35, 76: 33, 77: 3, 109: 9, 132: 14, 191: 27, 
-    192: 44, 253: 54, 160: 12, 161: 3, 45: 2, 242: 60
+    192: 54, 253: 54, 160: 12, 161: 3, 45: 2, 242: 60
 };
 
 const REQUESTED_STREAMS = [1, 2, 3, 6, 10, 11, 12];
@@ -472,17 +472,38 @@ const DECODERS = {
         const dv = new DataView(new Uint8Array(bytes).buffer);
         return {
             _kind: 'mag_cal_progress',
-            compass_id: dv.getUint8(12),
-            completion_pct: dv.getUint8(16)
+            direction_x:    dv.getFloat32(0, true),
+            direction_y:    dv.getFloat32(4, true),
+            direction_z:    dv.getFloat32(8, true),
+            compass_id:     dv.getUint8(12),
+            cal_mask:       dv.getUint8(13),
+            cal_status:     dv.getUint8(14),   // BARU
+            attempt:        dv.getUint8(15),   // BARU
+            completion_pct: dv.getUint8(16),
         };
     },
     192: (bytes) => {
         const dv = new DataView(new Uint8Array(bytes).buffer);
         return {
             _kind: 'mag_cal_report',
-            fitness: dv.getFloat32(0, true),
-            compass_id: dv.getUint8(40),
-            cal_status: dv.getUint8(42)
+            fitness:     dv.getFloat32(0, true),
+            ofs_x:       dv.getFloat32(4, true),
+            ofs_y:       dv.getFloat32(8, true),
+            ofs_z:       dv.getFloat32(12, true),
+            diag_x:      dv.getFloat32(16, true),
+            diag_y:      dv.getFloat32(20, true),
+            diag_z:      dv.getFloat32(24, true),
+            offdiag_x:   dv.getFloat32(28, true),
+            offdiag_y:   dv.getFloat32(32, true),
+            offdiag_z:   dv.getFloat32(36, true),
+            compass_id:  dv.getUint8(40),
+            cal_mask:    dv.getUint8(41),   // BARU
+            cal_status:  dv.getUint8(42),
+            autosaved:   dv.getUint8(43),   // BARU
+            orientation_confidence: dv.getFloat32(44, true),  // BARU
+            old_orientation:        dv.getUint8(48),           // BARU
+            new_orientation:        dv.getUint8(49),           // BARU
+            scale_factor:           dv.getFloat32(50, true),   // BARU
         };
     },
     109: (bytes) => {

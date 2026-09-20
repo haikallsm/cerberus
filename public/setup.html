@@ -431,6 +431,109 @@ async function sendCalibrationNext() {
     }
 }
 
+/* ===================== COMPASS CALIBRATION RENDERER ===================== */
+const MAG_CAL_SUCCESS = 4;
+const MAG_STATUS_LABEL = {
+    0: 'IDLE', 1: 'WAITING', 2: 'COLLECTING', 3: 'FITTING',
+    4: 'SUCCESS', 5: 'FAILED', 6: 'BAD ORIENTATION', 7: 'BAD RADIUS'
+};
+
+// state per compass_id -> { attempt, locked, final }
+const magRowState = {};
+
+function getSuccessMask() {
+    const w = window.parent || window;
+    return Number(w.compassSuccessMask) || 0;
+}
+
+function setMagRow(id, pct, label, cls) {
+    const idx     = Number(id) + 1;
+    const textEl  = document.getElementById(`mag${idx}_prog_text`);
+    const barEl   = document.getElementById(`mag${idx}_prog_bar`);
+    const inputEl = document.getElementById(`mag${idx}_prog`);
+    if (!barEl) return;
+
+    barEl.style.width = `${pct}%`;
+    barEl.className   = `mag-progress-fill${cls ? ' ' + cls : ''}`;
+    if (textEl)  textEl.textContent = label;
+    if (inputEl) inputEl.value      = label;
+}
+
+function renderMagCalibration() {
+    const progressMap = telemetryData.mag_cal_progress || {};
+    const reportMap   = telemetryData.mag_cal_report   || {};
+
+    for (const key in progressMap) {
+        const prog    = progressMap[key];
+        const id      = Number(prog.id);
+        const attempt = Number(prog.attempt) || 1;
+        const status  = Number(prog.cal_status) || 0;
+
+        if (!magRowState[id]) magRowState[id] = { attempt, locked: false, final: null };
+        const st = magRowState[id];
+
+        if (attempt > st.attempt) {
+            st.attempt = attempt;
+            st.locked  = false;
+            st.final   = null;
+            setMagRow(id, 0, `0% (try ${attempt})`, 'running');
+            logToConsole(`↻ Compass ${id}: fit gagal, FC retry #${attempt} — progress reset ke 0%`);
+        }
+
+        if (st.locked) continue;
+
+        const ceil = (status === MAG_CAL_SUCCESS) ? 100 : 99;
+        const pct  = Math.max(0, Math.min(ceil, Number(prog.pct) || 0));
+
+        let label = `${pct}%`;
+        if (attempt > 1) label += ` (try ${attempt})`;
+        setMagRow(id, pct, label, 'running');
+    }
+
+    for (const key in reportMap) {
+        const rep    = reportMap[key];
+        const id     = Number(rep.id);
+        const status = Number(rep.status);
+
+        if (!magRowState[id]) magRowState[id] = { attempt: 1, locked: false, final: null };
+        const st = magRowState[id];
+
+        if (status === MAG_CAL_SUCCESS) {
+            if (st.final !== 'SUCCESS') {
+                st.final = 'SUCCESS';
+                st.locked = true;
+                const fit = Number(rep.fitness);
+                const fitStr = Number.isFinite(fit) ? ` · fit ${fit.toFixed(2)}` : '';
+                setMagRow(id, 100, `SUCCESS${fitStr}`, 'success');
+                logToConsole(`✓ Compass ${id} SUCCESS${fitStr}`);
+            }
+        } else if (status >= 5) {
+            if (st.final !== 'FAILED') {
+                st.final = 'FAILED';
+                st.locked = true;
+                const lbl = MAG_STATUS_LABEL[status] || `FAILED (${status})`;
+                setMagRow(id, 0, lbl, 'failed');
+                logToConsole(`✗ Compass ${id} ${lbl} — ulangi kalibrasi`);
+            }
+        }
+    }
+
+    const btnAccept = document.getElementById('btnCompassAccept');
+    if (btnAccept) btnAccept.disabled = (getSuccessMask() === 0);
+
+    const statusEl = document.getElementById('compassCalStatusText');
+    if (statusEl) {
+        const ids = Object.keys(magRowState).map(Number);
+        if (ids.length) {
+            const anyRunning = ids.some(i => !magRowState[i].locked);
+            const okCount    = ids.filter(i => magRowState[i].final === 'SUCCESS').length;
+            statusEl.textContent = anyRunning
+                ? 'IN PROGRESS'
+                : (okCount > 0 ? `READY TO ACCEPT (${okCount} OK)` : 'FAILED');
+        }
+    }
+}
+
 const COMPASS_ENDPOINT_MAP = {
     'compass_start' : '/command/calibrate/compass/start',
     'compass_accept': '/command/calibrate/compass/accept',
@@ -443,10 +546,13 @@ async function sendCompassCalibration(cmdType) {
     const mav = window.parent.mavFeatures;
     try {
         if (cmdType === 'compass_start') {
-            window.compassSuccessMask = 0; 
-            resetMagProgressUI();
-            await mav.startCompassCal();
-            logToConsole('System: Compass calibration started');
+            resetMagProgressUI();                          // window.compassSuccessMask=0 lokal DIHAPUS (percuma, itu window iframe)
+            const ack = await mav.startCompassCal();
+            if (ack && ack.ok) {
+                logToConsole('System: Compass calibration started (retry=ON, autosave=OFF)');
+            } else {
+                logToConsole(`Start GAGAL (${ack ? ack.result : 'timeout'})`);
+            }
             const statusEl = document.getElementById('compassCalStatusText');
             if (statusEl) statusEl.textContent = 'IN PROGRESS';
         } 
@@ -476,10 +582,10 @@ async function sendCompassCalibration(cmdType) {
 }
 
 function resetMagProgressUI() {
-    for (let i = 1; i <= 3; i++) {
-        const el = document.getElementById(`mag${i}_prog`);
-        if (el) el.value = '0%';
-    }
+    for (const k in magRowState) delete magRowState[k];
+    for (let i = 0; i < 3; i++) setMagRow(i, 0, '0%', '');
+    const btnAccept = document.getElementById('btnCompassAccept');
+    if (btnAccept) btnAccept.disabled = true;
 }
 
 function logToConsole(text) {
@@ -537,49 +643,50 @@ function updateHealthCards() {
         document.getElementById('compassInterf').innerText = 'Check Sensor';
     }
 
-    if (telemetryData.mag_cal_progress) {
-        for (const compassId in telemetryData.mag_cal_progress) {
-            const prog = telemetryData.mag_cal_progress[compassId];
-            const index = Number(prog.id) + 1;
-            const inputEl = document.getElementById(`mag${index}_prog`);
-            const textEl = document.getElementById(`mag${index}_prog_text`);
-            const barEl = document.getElementById(`mag${index}_prog_bar`);
-            const pct = Math.max(0, Math.min(100, Number(prog.pct) || 0));
-            if (inputEl && inputEl.value !== 'SUCCESS' && inputEl.value !== 'FAILED') inputEl.value = `${pct}%`;
-            if (textEl) textEl.textContent = `${pct}%`;
-            if (barEl) barEl.style.width = `${pct}%`;
-        }
-    }
+    // if (telemetryData.mag_cal_progress) {
+    //     for (const compassId in telemetryData.mag_cal_progress) {
+    //         const prog = telemetryData.mag_cal_progress[compassId];
+    //         const index = Number(prog.id) + 1;
+    //         const inputEl = document.getElementById(`mag${index}_prog`);
+    //         const textEl = document.getElementById(`mag${index}_prog_text`);
+    //         const barEl = document.getElementById(`mag${index}_prog_bar`);
+    //         const pct = Math.max(0, Math.min(100, Number(prog.pct) || 0));
+    //         if (inputEl && inputEl.value !== 'SUCCESS' && inputEl.value !== 'FAILED') inputEl.value = `${pct}%`;
+    //         if (textEl) textEl.textContent = `${pct}%`;
+    //         if (barEl) barEl.style.width = `${pct}%`;
+    //     }
+    // }
 
-    if (telemetryData.mag_cal_report) {
-        for (const compassId in telemetryData.mag_cal_report) {
-            const rep = telemetryData.mag_cal_report[compassId];
-            const inputEl = document.getElementById(`mag${rep.id + 1}_prog`);
-            if (inputEl) {
-                const textEl = document.getElementById(`mag${rep.id + 1}_prog_text`);
-                const barEl = document.getElementById(`mag${rep.id + 1}_prog_bar`);
-                if (rep.status === 4) { // 4 = MAG_CAL_SUCCESS
-                    if (inputEl.value !== 'SUCCESS') {
-                        inputEl.value = 'SUCCESS';
-                        if (textEl) textEl.textContent = 'SUCCESS';
-                        if (barEl) barEl.style.width = '100%';
-                        window.compassSuccessMask = (window.compassSuccessMask || 0) | (1 << rep.id);
-                        logToConsole(`✓ Compass ${rep.id} SUKSES (fitness: ${rep.fitness.toFixed(2)})`);
-                    }
-                } else if (rep.status > 4) { // 5 = FAILED, 6 = BAD_ORIENTATION, 7 = BAD_RADIUS
-                    if (inputEl.value !== 'FAILED') {
-                        inputEl.value = 'FAILED';
-                        if (textEl) textEl.textContent = 'FAILED';
-                        logToConsole(`✗ Compass ${rep.id} GAGAL (kode: ${rep.status})`);
-                    }
-                }
-            }
-        }
-        const btnAccept = document.getElementById('btnCompassAccept');
-        if (btnAccept && window.compassSuccessMask > 0) {
-            btnAccept.disabled = false;
-        }
-    }
+    // if (telemetryData.mag_cal_report) {
+    //     for (const compassId in telemetryData.mag_cal_report) {
+    //         const rep = telemetryData.mag_cal_report[compassId];
+    //         const inputEl = document.getElementById(`mag${rep.id + 1}_prog`);
+    //         if (inputEl) {
+    //             const textEl = document.getElementById(`mag${rep.id + 1}_prog_text`);
+    //             const barEl = document.getElementById(`mag${rep.id + 1}_prog_bar`);
+    //             if (rep.status === 4) { // 4 = MAG_CAL_SUCCESS
+    //                 if (inputEl.value !== 'SUCCESS') {
+    //                     inputEl.value = 'SUCCESS';
+    //                     if (textEl) textEl.textContent = 'SUCCESS';
+    //                     if (barEl) barEl.style.width = '100%';
+    //                     window.compassSuccessMask = (window.compassSuccessMask || 0) | (1 << rep.id);
+    //                     logToConsole(`✓ Compass ${rep.id} SUKSES (fitness: ${rep.fitness.toFixed(2)})`);
+    //                 }
+    //             } else if (rep.status > 4) { // 5 = FAILED, 6 = BAD_ORIENTATION, 7 = BAD_RADIUS
+    //                 if (inputEl.value !== 'FAILED') {
+    //                     inputEl.value = 'FAILED';
+    //                     if (textEl) textEl.textContent = 'FAILED';
+    //                     logToConsole(`✗ Compass ${rep.id} GAGAL (kode: ${rep.status})`);
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     const btnAccept = document.getElementById('btnCompassAccept');
+    //     if (btnAccept && window.compassSuccessMask > 0) {
+    //         btnAccept.disabled = false;
+    //     }
+    // }
+    renderMagCalibration();
     updateHealthStateUI();
     updatePreflightHeader();
 

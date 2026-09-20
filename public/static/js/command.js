@@ -300,25 +300,58 @@ const commands = {
     },
 
     async startCompassCal() {
-        window.compassSuccessMask = 0;
         const link = this._getActiveLink();
+
+        if (typeof link.clearMagCalState === 'function') {
+            link.clearMagCalState();
+        } else {
+            window.compassSuccessMask = 0;
+        }
+
         link.pauseRcOverride();
         link.rcChannels = new Array(8).fill(65535);
-        return link.sendCommandLong(42424, { p3: 1.0 }); // 42424 = START_MAG_CAL
+
+        const send = (typeof link.sendCommandLongRetry === 'function')
+            ? link.sendCommandLongRetry.bind(link)
+            : (c, p) => link.sendCommandLong(c, p);
+
+        // p2: retry=1 (dulu tidak diset -> default 0), p3: autosave=0 (dulu 1.0)
+        return send(42424, { p1: 0, p2: 1, p3: 0, p4: 0, p5: 0 },
+                    { retries: 2, timeout: 3000 });
     },
     
     async cancelCompassCal() {
         const link = this._getActiveLink();
+        const send = (typeof link.sendCommandLongRetry === 'function')
+            ? link.sendCommandLongRetry.bind(link)
+            : (c, p) => link.sendCommandLong(c, p);
+
+        const ack = await send(42426, {}, { retries: 2, timeout: 3000 });
+        if (typeof link.clearMagCalState === 'function') link.clearMagCalState();  // BARU
+        else window.compassSuccessMask = 0;                                        // BARU
         link.resumeRcOverride();
-        return link.sendCommandLong(42426, {}); // 42426 = CANCEL_MAG_CAL
+        return ack;
     },
     
     async acceptCompassCal() {
+        const link = this._getActiveLink();
         const mask = window.compassSuccessMask || 0;
         if (mask === 0) throw new Error("Tidak ada compass yang SUCCESS. Silakan kalibrasi ulang.");
-        const link = this._getActiveLink();
-        link.resumeRcOverride();
-        return link.sendCommandLong(42425, { p1: mask }); // 42425 = ACCEPT_MAG_CAL
+
+        const send = (typeof link.sendCommandLongRetry === 'function')
+            ? link.sendCommandLongRetry.bind(link)
+            : (c, p) => link.sendCommandLong(c, p);
+
+        let ack;
+        try {
+            // resumeRcOverride() TIDAK lagi dipanggil di sini sebelum kirim (dulu di baris pertama)
+            ack = await send(42425, { p1: mask }, { retries: 3, timeout: 5000 });
+        } finally {
+            link.resumeRcOverride();   // dipindah ke sini, setelah ACK diterima
+        }
+
+        if (ack && ack.ok) window.compassSuccessMask = 0;
+        return ack;
     },
     async uploadFence(points) {
         return this._getActiveLink().uploadFence(points);

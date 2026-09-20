@@ -212,9 +212,6 @@
             Lokasi terakhir: <span id="victimLastLoc" class="victim-loc-val">-</span><br>
             Update terakhir: <span id="victimLastTime" class="victim-loc-val">-</span>
         </div>
-        <button id="victimGotoBtn" class="victim-goto-btn" onclick="goToLastVictim()" disabled>
-            Terbang ke lokasi terakhir
-        </button>
     </div>
 </div>
 
@@ -233,11 +230,12 @@
 <script src="./static/js/leaflet.js"></script>
 <script>
 // ===== MAP INITIALIZATION =====
-let map = L.map('map', { zoomControl: false, attributionControl: false }).setView([-7.25, 112.75], 13);
+let map = L.map('map', { zoomControl: false, attributionControl: false, maxZoom: 25 }).setView([-7.25, 112.75], 13);
 L.control.zoom({position: 'bottomright'}).addTo(map);
 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     attribution: 'Tiles © Esri',
-    maxZoom: 19
+    maxNativeZoom: 19,
+    maxZoom: 25
 }).addTo(map);
 
 setTimeout(() => map.invalidateSize(), 200);
@@ -781,14 +779,16 @@ window.updateTelemetryUI = function(data) {
         window._stableVehicleType = data.vehicle_type; 
     }
     
-    let rc5 = data.rc5_in !== undefined ? data.rc5_in : (window.lastTelemetry ? window.lastTelemetry.rc5_in : 0);
+    let rc5 = data.rc5_raw ?? data.rc5_in ?? data.rc5_physical ?? 
+            (window.lastTelemetry ? (window.lastTelemetry.rc5_raw ?? window.lastTelemetry.rc5_in ?? window.lastTelemetry.rc5_physical) : 0);
+
     if (rc5 >= 1400) {
         window._stableVehicleType = 'COPTER';
     } else if (rc5 > 800 && rc5 < 1300) {
         window._stableVehicleType = 'ROVER';
     }
-    
-    let displayType = window._stableVehicleType || 'ROVER';
+
+    let displayType = window._stableVehicleType || 'COPTER';
     if (rc5 > 800) { 
         displayType = (rc5 > 1700 || rc5 < 1200) ? 'ROVER' : 'COPTER';
     }
@@ -1120,18 +1120,16 @@ function updateVictimPanelUI() {
 
     const locEl = document.getElementById('victimLastLoc');
     const timeEl = document.getElementById('victimLastTime');
-    const gotoBtn = document.getElementById('victimGotoBtn');
     if (victimState.lastLat !== null && victimState.lastLon !== null) {
         if (locEl) locEl.textContent = `${victimState.lastLat.toFixed(6)}, ${victimState.lastLon.toFixed(6)}`;
         if (timeEl && victimState.lastUpdateMs) timeEl.textContent = new Date(victimState.lastUpdateMs).toTimeString().split(' ')[0];
-        if (gotoBtn) { gotoBtn.disabled = false; gotoBtn.style.opacity = '1'; }
     }
 }
 
-window.goToLastVictim = function() {
-    if (victimState.lastLat === null || victimState.lastLon === null) return;
-    goToVictim(victimState.lastLat, victimState.lastLon);
-};
+// window.goToLastVictim = function() {
+//     if (victimState.lastLat === null || victimState.lastLon === null) return;
+//     goToVictim(victimState.lastLat, victimState.lastLon);
+// };
 
 function getDistanceMeters(lat1, lon1, lat2, lon2) {
     const R = 6371e3;
@@ -1155,9 +1153,6 @@ function buildPopupHtml(lat, lon, opts = {}) {
             <b style="color:${accentColor}; font-size:12px;">${isEmergency ? '🆘' : '📍'} KORBAN TERDETEKSI</b><br>
             <span style="font-size:11px; color:#666;">Radius: ${VICTIM_BUFFER_RADIUS_METERS}m</span><br><br>
             ${detailLine}<br>Lat: ${lat.toFixed(8)}<br>Lon: ${lon.toFixed(8)}<br><br>
-            <button onclick="goToVictim(${lat}, ${lon})" style="background:#2196f3;color:white;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:12px;">
-                Terbang ke titik ini
-            </button>
         </div>
     `;
 }
@@ -1249,13 +1244,27 @@ function parseSarStatustext(fullText) {
 
     const data = cleanText.split(";");
     // Format 5 bagian: [0]="[SAR]", [1]=status, [2]=jumlah, [3]=lat, [4]=lon
+    // Format 6 bagian (vision.cpp versi baru): field ke-6 [5]=totalMisi,
+    // yaitu jumlah korban UNIK yang pernah terdeteksi sepanjang misi
+    // (dihitung di C++ dari total track ID unik, bukan akumulasi
+    // per-frame -- lihat komentar reportVictim() di vision.cpp).
     if (data.length < 5) return null;
 
     const status = data[1].trim();
     const jumlah = parseInt(data[2], 10);
-    const total = jumlah; // Menyamakan total dengan jumlah saat ini
     const lat = parseFloat(data[3]);
     const lon = parseFloat(data[4]);
+
+    // Field ke-6 (total misi) opsional untuk backward-compat dengan
+    // firmware/vision.cpp lama yang cuma kirim 5 field. Kalau tidak
+    // ada atau tidak valid, fallback ke `jumlah` (perilaku lama).
+    let total = jumlah;
+    if (data.length >= 6) {
+        const parsedTotal = parseInt(data[5], 10);
+        if (Number.isFinite(parsedTotal)) {
+            total = parsedTotal;
+        }
+    }
 
     if (!Number.isFinite(jumlah) || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
     return { status, jumlah, total, lat, lon };
@@ -1306,10 +1315,13 @@ window.updateMavlogUI = function(logItem) {
             addVictimMarker(parsed.lat, parsed.lon, { status: parsed.status, jumlah: parsed.jumlah, total: parsed.total, source: 'SAR' });
 
             victimState.currentCount = parsed.jumlah;
-            // vision.cpp versi saat ini tidak selalu mengirim totalKorbanMisi (format 5 field).
-            // Kalau tidak ada, pakai jumlah marker unik yang sudah dideduplikasi (addVictimMarker
-            // menggabungkan titik yang jaraknya < VICTIM_BUFFER_RADIUS_METERS) sebagai perkiraan.
-            victimState.totalCount = parsed.total !== null ? parsed.total : victimMarkers.length;
+            // parsed.total sekarang berasal dari field ke-6 StatusText (totalMisi),
+            // dihitung di vision.cpp dari total track ID unik sepanjang misi.
+            // Fallback ke victimMarkers.length hanya untuk firmware lama yang
+            // masih kirim format 5 field (lihat parseSarStatustext()).
+            victimState.totalCount = (parsed.total !== null && parsed.total !== undefined)
+                ? parsed.total
+                : victimMarkers.length;
             victimState.lastStatus = parsed.status;
             victimState.lastLat = parsed.lat;
             victimState.lastLon = parsed.lon;
@@ -1633,23 +1645,23 @@ window.closeVideo = function() {
 };
 
 // ===== GOTO VICTIM =====
-async function goToVictim(lat, lon, alt = null) {
-    if (!window.parent.commands) return alert("Command bridge not loaded.");
-    const link = window.parent.commands._getActiveLink();
-    if (!link) return alert("No active link to drone.");
+// async function goToVictim(lat, lon, alt = null) {
+//     if (!window.parent.commands) return alert("Command bridge not loaded.");
+//     const link = window.parent.commands._getActiveLink();
+//     if (!link) return alert("No active link to drone.");
     
-    const t = window.lastTelemetry || {};
-    const isArmed = t.is_armed || (t.arm_mode === 'armed') || false;
-    const currentMode = t.flight_mode || 'UNKNOWN';
-    const targetAlt = (alt !== null && !Number.isNaN(alt)) ? alt : (Number(t.altitude) || 0);
+//     const t = window.lastTelemetry || {};
+//     const isArmed = t.is_armed || (t.arm_mode === 'armed') || false;
+//     const currentMode = t.flight_mode || 'UNKNOWN';
+//     const targetAlt = (alt !== null && !Number.isNaN(alt)) ? alt : (Number(t.altitude) || 0);
 
-    if (isArmed && currentMode === 'AUTO') {
-        if (!confirm(`Drone sedang ARMED (AUTO). Pindah ke GUIDED untuk interupsi misi ke korban (${lat.toFixed(8)}, ${lon.toFixed(8)})?`)) return;
-    }
+//     if (isArmed && currentMode === 'AUTO') {
+//         if (!confirm(`Drone sedang ARMED (AUTO). Pindah ke GUIDED untuk interupsi misi ke korban (${lat.toFixed(8)}, ${lon.toFixed(8)})?`)) return;
+//     }
 
-    // const result = await link.sendCommandLong(192, { p1: -1, p2: 0, p3: 0, p4: NaN, p5: lat, p6: lon, p7: targetAlt });
-    if (!result.ok) alert(`Gagal reposition: ${result.result}`);
-}
+//     // const result = await link.sendCommandLong(192, { p1: -1, p2: 0, p3: 0, p4: NaN, p5: lat, p6: lon, p7: targetAlt });
+//     if (!result.ok) alert(`Gagal reposition: ${result.result}`);
+// }
 
 // ===== STATS INTERVAL =====
 function updateStats() {
