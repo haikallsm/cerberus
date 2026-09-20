@@ -679,12 +679,15 @@ body.transparent-bg {
     color: #fff;
     padding: 4px 8px;
     border-radius: 3px;
-    width: 80px;
+    flex: 1;
+    width: auto;
+    min-width: 0;
     text-align: center;
 }
 
 .btn-go-wp {
-    flex: 1;
+    flex: 0 0 90px;
+    width: 90px;
     background: #ff9800 !important;
     color: #fff !important;
 }

@@ -140,10 +140,12 @@
                     <button class="action-btn action-set-btn" onclick="doAction('setmode')">SET</button>
                 </div>
 
-                <!-- FITUR SET WAYPOINT (JUMP) -->
+                <!-- FITUR SET WAYPOINT (JUMP) DENGAN DROPDOWN -->
                 <div class="action-section-title">Set Waypoint (Jump)</div>
                 <div class="action-select-row">
-                    <input type="number" id="targetWaypointInput" class="action-select wp-input" value="1" min="0" placeholder="No. WP">
+                    <select id="targetWaypointSelect" class="action-select wp-input">
+                        <option value="">-- Pilih Waypoint --</option>
+                    </select>
                     <button class="action-btn btn-go-wp" onclick="doJumpWaypoint()">GO WP</button>
                 </div>
             </div>
@@ -264,6 +266,39 @@ function calculateFlightSmoothTrajectory(wp1, wp2, stepMeters = 15) {
     return points;
 }
 
+// ===== FUNGSI UNTUK MENGISI DROPDOWN WAYPOINT OTOMATIS =====
+function populateWaypointDropdown() {
+    const selectEl = document.getElementById('targetWaypointSelect');
+    if (!selectEl) return;
+
+    const currentSelected = selectEl.value;
+    selectEl.innerHTML = '<option value="">-- Pilih Waypoint --</option>';
+
+    const saved = localStorage.getItem('hawkeye_mission');
+    if (!saved) return;
+
+    try {
+        const waypoints = JSON.parse(saved);
+        if (!Array.isArray(waypoints) || waypoints.length === 0) return;
+
+        waypoints.forEach((wp, index) => {
+            const isHome = wp.command === 'HOME';
+            const label = isHome ? `0: HOME` : `${index}: ${wp.command || 'WAYPOINT'} (Alt: ${wp.alt || 0}m)`;
+
+            const option = document.createElement('option');
+            option.value = index;
+            option.textContent = label;
+            selectEl.appendChild(option);
+        });
+
+        if (currentSelected !== "") {
+            selectEl.value = currentSelected;
+        }
+    } catch (e) {
+        console.warn("[FlightView] Gagal mengisi dropdown waypoint:", e);
+    }
+}
+
 window.loadAndRenderMissionOnFlightView = function() {
     if (!map) return;
     missionMarkers.forEach(m => { if (map.hasLayer(m)) map.removeLayer(m); });
@@ -309,6 +344,8 @@ window.loadAndRenderMissionOnFlightView = function() {
     } catch (e) {
         console.warn("[FlightView] Gagal merender rute mission:", e);
     }
+
+    populateWaypointDropdown();
 };
 
 loadAndRenderMissionOnFlightView();
@@ -478,7 +515,7 @@ function drawArtificialHorizon(rollDeg, pitchDeg, yawDeg) {
     // 1. Gambar Dasar Horizon (Pitch & Roll)
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.rotate(rollDeg * deg2rad);
+    ctx.rotate(-rollDeg * deg2rad);
 
     const font = "Arial";
     const fontsize = Math.max(9, height / 18);
@@ -948,6 +985,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateArmButton();
     updateSafetyButton();
     updateSafetyHUDIndicator();
+    populateWaypointDropdown();
 });
 
 async function doAction(action) {
@@ -1038,11 +1076,11 @@ async function doJumpWaypoint() {
     const isLive = window.parent.commands._radioActive() || window.parent.commands._udpActive();
     if (!isLive) return alert("Gagal: Tidak ada koneksi aktif ke Drone.");
 
-    const wpInput = document.getElementById('targetWaypointInput');
-    const seq = parseInt(wpInput?.value, 10);
-    
+    const wpSelect = document.getElementById('targetWaypointSelect');
+    const seq = parseInt(wpSelect?.value, 10);
+
     if (isNaN(seq) || seq < 0) {
-        return alert("Nomor waypoint tidak valid.");
+        return alert("Silakan pilih nomor waypoint terlebih dahulu dari daftar.");
     }
 
     try {
@@ -1053,7 +1091,7 @@ async function doJumpWaypoint() {
         } else {
             const link = window.parent.commands._getActiveLink();
             if (link && typeof link.sendCommandLong === 'function') {
-                ack = await link.sendCommandLong(46, { p1: seq, p2: 0, p3: 0, p4: 0, p5: 0, p6: 0, p7: 0 });
+                ack = await link.sendCommandLong(224, { p1: seq, p2: 0, p3: 0, p4: 0, p5: 0, p6: 0, p7: 0 });
             } else {
                 throw new Error("Tidak ditemukan interface pengiriman perintah misi.");
             }
