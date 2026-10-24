@@ -555,46 +555,46 @@ class RadioMavlink {
     // FUNCTION INI KETIKA DINYALAKAN APP TIDAK BISA CONNECT, BEGITU SEBALIKNYA KETIKA INI DIMATIKAN WEBSITE TIDAK BISA CONNECT
     // JIKA INGIN MELAKUKAN PERUBAHAN PADA WEBSITE DAN HARUS DEPLOY MAKA NYALAKAN DULU FUNCTION INI AGAR BISA CONNECT WEBSITENYA
     // JIKA INGIN MELAKUKAN BUILD APLIKASI MAKA FUNCTION INI HARUS DIMATIKAN AGAR APLIKASI BISA CONNECT KE SERIAL PORT
-    // async _readLoop() {
-    //     if (!this.port || !this.port.readable) {
-    //         console.warn('[RadioMavlink] Web Serial readable stream tidak tersedia.');
-    //         this.keepReading = false;
-    //         return;
-    //     }
+    async _readLoop() {
+        if (!this.port || !this.port.readable) {
+            console.warn('[RadioMavlink] Web Serial readable stream tidak tersedia.');
+            this.keepReading = false;
+            return;
+        }
 
-    //     while (this.keepReading && this.port && this.port.readable) {
-    //         try {
-    //             this.reader = this.port.readable.getReader();
+        while (this.keepReading && this.port && this.port.readable) {
+            try {
+                this.reader = this.port.readable.getReader();
 
-    //             while (this.keepReading) {
-    //                 const { value, done } = await this.reader.read();
+                while (this.keepReading) {
+                    const { value, done } = await this.reader.read();
 
-    //                 if (done) {
-    //                     break;
-    //                 }
+                    if (done) {
+                        break;
+                    }
 
-    //                 if (value) {
-    //                     for (const byte of value) {
-    //                         this.parser.feedByte(byte);
-    //                     }
-    //                 }
-    //             }
+                    if (value) {
+                        for (const byte of value) {
+                            this.parser.feedByte(byte);
+                        }
+                    }
+                }
 
-    //         } catch (e) {
-    //             if (this.keepReading) {
-    //                 console.error('[RadioMavlink] Web Serial read error:', e);
-    //             }
-    //         } finally {
-    //             if (this.reader) {
-    //                 try {
-    //                     this.reader.releaseLock();
-    //                 } catch (e) {}
+            } catch (e) {
+                if (this.keepReading) {
+                    console.error('[RadioMavlink] Web Serial read error:', e);
+                }
+            } finally {
+                if (this.reader) {
+                    try {
+                        this.reader.releaseLock();
+                    } catch (e) {}
 
-    //                 this.reader = null;
-    //             }
-    //         }
-    //     }
-    // }
+                    this.reader = null;
+                }
+            }
+        }
+    }
 
     _startWatchdog() {
         this._stopWatchdog();
