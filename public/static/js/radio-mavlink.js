@@ -887,25 +887,44 @@ class RadioMavlink {
 
     async getAllParams(onProgress, timeout = 3000) {
         return new Promise((resolve, reject) => {
-            const waiter = { resolve, reject, params: {}, total: null, count: 0, onProgress, timer: null };
+            const waiter = { resolve, reject, params: {}, total: null, count: 0, onProgress, timer: null, resendTimer: null };
+            
             waiter._resetTimer = () => {
                 if (waiter.timer) clearTimeout(waiter.timer);
+                // Matikan resend jika paket parameter pertama sudah masuk
+                if (waiter.resendTimer && waiter.count > 0) {
+                    clearInterval(waiter.resendTimer);
+                    waiter.resendTimer = null;
+                }
+                
                 waiter.timer = setTimeout(() => {
                     const idx = this._paramListWaiters.indexOf(waiter);
                     if (idx !== -1) this._paramListWaiters.splice(idx, 1);
+                    if (waiter.resendTimer) clearInterval(waiter.resendTimer);
 
                     const receivedCount = Object.keys(waiter.params).length;
                     if (receivedCount > 0) {
-                        console.warn(`[RadioMavlink] Timeout getAllParams, mengembalikan ${receivedCount} parameter yang diterima`);
                         resolve(waiter.params);
                     } else {
-                        reject(new Error(`Timeout getAllParams (${waiter.count}/${waiter.total ?? '?'} diterima)`));
+                        reject(new Error(`Timeout getAllParams. FC tidak merespons.`));
                     }
                 }, timeout);
             };
+
             waiter._resetTimer();
             this._paramListWaiters.push(waiter);
-            this._sendFrame(21, [this.targetSystem, this.targetComponent], CRC_EXTRA[21]);
+
+            // Paksa komponen 1 (Autopilot Utama)
+            const requestPayload = [this.targetSystem, 1]; 
+            this._sendFrame(21, requestPayload, CRC_EXTRA[21]);
+
+            // Resend otomatis jika FC drop paket request pertama
+            waiter.resendTimer = setInterval(() => {
+                if (waiter.count === 0) {
+                    console.warn('[Mavlink] Resending PARAM_REQUEST_LIST...');
+                    this._sendFrame(21, requestPayload, CRC_EXTRA[21]);
+                }
+            }, 1000);
         });
     }
 
@@ -1991,7 +2010,11 @@ class RadioMavlink {
 
         if (isSelf) return;
         // if (this._streamsRequested && sysid !== this.targetSystem) return;
-        if (this._streamsRequested && (sysid !== this.targetSystem || compid !== this.targetComponent)) return;
+        // if (this._streamsRequested && (sysid !== this.targetSystem || compid !== this.targetComponent)) return;
+        if (this._streamsRequested) {
+            if (sysid !== this.targetSystem) return;
+            if (compid !== this.targetComponent && msgId !== 253) return;
+        }
 
         if (msgId === 35) {
             this._handleRawRcChannels(payload);

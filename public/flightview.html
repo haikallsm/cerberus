@@ -1113,6 +1113,7 @@ async function doJumpWaypoint() {
 // ===== SAR VICTIM DETECTION =====
 let victimMarkers = [];
 const VICTIM_BUFFER_RADIUS_METERS = 10;
+let accumulatedTotalVictims = 0;
 
 const victimState = {
     currentCount: 0,
@@ -1345,12 +1346,16 @@ window.updateMavlogUI = function(logItem) {
 
     const sarResult = reassembleSarText(logItem);
     if (sarResult.status === 'pending') return;
+    
     if (sarResult.status === 'complete') {
         const parsed = parseSarStatustext(sarResult.text);
         if (parsed) {
-            console.log("🚨 [SAR DETECTED & PARSED] ->", parsed);
+            console.log("[SAR DETECTED & PARSED] ->", parsed);
 
             addVictimMarker(parsed.lat, parsed.lon, { status: parsed.status, jumlah: parsed.jumlah, total: parsed.total, source: 'SAR' });
+
+            // LOGIKA AKUMULASI BARU:
+            accumulatedTotalVictims += parsed.jumlah;
 
             victimState.currentCount = parsed.jumlah;
             // parsed.total sekarang berasal dari field ke-6 StatusText (totalMisi),
@@ -1439,7 +1444,7 @@ function updateMap(data) {
 
     const heading = Number.isFinite(data.heading) ? data.heading : 0;
     const vType = window.currentVehicleType || 'COPTER';
-    const markerImage = (vType === 'ROVER') ? './static/images/rover.png' : './static/images/dronehijau.png';
+    const markerImage = (vType === 'ROVER') ? './static/images/roverhijau.png' : './static/images/dronehijau.png';
     const markerHtml = `<img src="${markerImage}" style="width: 50px; height: 50px; transform: rotate(${heading}deg); object-fit: contain; border-radius: 5px;">`;
 
     if (!droneMarker) {
