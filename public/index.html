@@ -83,11 +83,101 @@
         };
         
 
-        let iframeReady = false;
+        // =========================================================================
+        // FRAME ORCHESTRATION (multi-iframe shell)
+        //
+        // Parent adalah single source of truth: telemetri, riwayat log, dan param
+        // cache selalu diperbarui di sini. Hanya frame AKTIF yang menerima render
+        // (updateTelemetryUI / updateMavlogUI). Frame lain tidur di sisi UI
+        // (parent meng-set window.__gcsActive = false di dalamnya) dan
+        // disinkronkan ulang lewat syncFrame() saat diaktifkan, sehingga tidak ada
+        // data yang hilang saat pindah halaman — dan hidden frame tidak membuang
+        // CPU untuk update kolom yang tidak terlihat.
+        // =========================================================================
+
+        // Pesan "penting" = severity <= WARNING skala MAV_SEVERITY, atau hasil deteksi SAR.
+        const IMPORTANT_LOG_SEVERITY_MAX = 4;
+        const SAR_LOG_MARKER = '[SAR]';
+
+        let activeFrameId = 'frame-flight';
+        const frameReady = {
+            'frame-flight': false,
+            'frame-setup': false,
+            'frame-mission': false,
+            'frame-config': false
+        };
+
+        // Salinan hasil adaptRadioTelemetry terakhir, dipakai syncFrame agar frame
+        // yang baru diaktifkan menerima snapshot dalam bentuk yang identik dengan
+        // alur live (telemetry.data di gcsConnection adalah master internal, bukan
+        // bentuk untuk render).
+        let lastAdaptedTelemetry = null;
 
         // Fungsi bantu untuk mendapatkan elemen iframe aktif saat ini
         function getActiveFrame() {
-            return document.querySelector('.app-iframe.active');
+            return document.getElementById(activeFrameId);
+        }
+
+        // Panggil satu fungsi di window iframe aktif, tanpa error bila iframe
+        // belum selesai dimuat atau fungsi belum didefinisikan.
+        function deliverToActiveFrame(functionName, ...args) {
+            const callback = getActiveFrame()?.contentWindow?.[functionName];
+            if (typeof callback === 'function') callback(...args);
+        }
+
+        // Tandai window frame aktif/tidur; frame-fungsi polling internal (mission,
+        // config) membaca flag ini agar berhenti membangunkan DOM saat hidden.
+        function setFrameActiveFlag(frameId, isActive) {
+            const frameWindow = document.getElementById(frameId)?.contentWindow;
+            if (frameWindow) frameWindow.__gcsActive = isActive;
+        }
+
+        // Sinkronisasi penuh satu frame yang baru diaktifkan: snapshot telemetri,
+        // replay log (delta dihitung di sisi frame berdasarkan seq), dan sinyal
+        // param cache terbaru.
+        function syncFrame(frameId) {
+            const frameWindow = document.getElementById(frameId)?.contentWindow;
+            if (typeof frameWindow?.applyParentState !== 'function') return;
+
+            frameWindow.applyParentState({
+                telemetry: lastAdaptedTelemetry,
+                logs: window.gcsConnection?.logHistory || [],
+                paramsLoaded: window.paramCache?.loaded ?? false
+            });
+
+            // Sebagian konsumsi param menunggu event ini (mis. tab PID di config)
+            frameWindow.dispatchEvent(new Event('paramCacheUpdated'));
+        }
+
+        function activateFrame(frameId) {
+            const frame = document.getElementById(frameId);
+            if (!frame) return;
+
+            // Sudah aktif: tidak perlu toggle class maupun resync
+            if (activeFrameId === frameId && frame.classList.contains('active')) return;
+
+            const previousFrameId = activeFrameId;
+            document.querySelectorAll('.app-iframe').forEach(f => f.classList.remove('active'));
+            frame.classList.add('active');
+            activeFrameId = frameId;
+
+            setFrameActiveFlag(previousFrameId, false);
+            setFrameActiveFlag(frameId, true);
+
+            // Badge pesan penting hanya relevan sampai pesannya tampil di Flight View
+            if (frameId === 'frame-flight') hideImportantBadge();
+
+            if (frameReady[frameId]) syncFrame(frameId);
+        }
+
+        // Selesai load iframe: tanda siap, dan sinkronkan langsung bila frame ini
+        // justru yang aktif (bisa saja user sudah navigasi sebelum iframe selesai).
+        function onFrameLoaded(frameId) {
+            frameReady[frameId] = true;
+            if (frameId === activeFrameId) {
+                setFrameActiveFlag(frameId, true);
+                syncFrame(frameId);
+            }
         }
 
         function routeTelemetry(raw) {
@@ -104,16 +194,14 @@
 
             const adaptedData = window.adaptRadioTelemetry(raw);
 
+            // Master state selalu diperbarui (source of truth semua frame)
             if (window.gcsConnection && window.gcsConnection.telemetry) {
                 window.gcsConnection.telemetry.updateFromApi(adaptedData);
             }
+            lastAdaptedTelemetry = adaptedData;
 
-            // Kirim data telemetri ke semua iframe yang aktif/memuat fungsi terkait
-            document.querySelectorAll('.app-iframe').forEach(frame => {
-                if (frame?.contentWindow?.updateTelemetryUI) {
-                    frame.contentWindow.updateTelemetryUI(adaptedData);
-                }
-            });
+            // Render hanya ke frame aktif; frame lain disinkronkan saat diaktifkan
+            deliverToActiveFrame('updateTelemetryUI', adaptedData);
         }
 
         const MAVLOG_HISTORY_MAX = 500;
@@ -128,17 +216,37 @@
 
         function routeMavlog(logItem) {
             if (!logItem) return;
-            window.gcsConnection?.addLog(
+
+            // Master history selalu ditulis (ring buffer, sumber replay semua frame).
+            // Item hasil addLog punya `seq` yang dipakai sebagai kursor replay di frame.
+            const storedItem = window.gcsConnection?.addLog(
                 logItem.text,
                 logItem.severity ?? 6,
                 logItem.source ?? 'FC'
             );
-            
-            document.querySelectorAll('.app-iframe').forEach(frame => {
-                if (frame?.contentWindow?.updateMavlogUI) {
-                    frame.contentWindow.updateMavlogUI(logItem);
-                }
-            });
+
+            // Render hanya ke frame aktif; frame lain mereplay lewat syncFrame()
+            deliverToActiveFrame('updateMavlogUI', storedItem || logItem);
+
+            // Pesan penting yang datang saat user tidak berada di Flight View
+            // ditandai di navbar, bukan di-frame-kan ke halaman yang tersembunyi.
+            if (isImportantLog(logItem) && activeFrameId !== 'frame-flight') {
+                showImportantBadge();
+            }
+        }
+
+        function isImportantLog(logItem) {
+            const severity = logItem?.severity ?? 6;
+            const text = String(logItem?.text || '');
+            return severity <= IMPORTANT_LOG_SEVERITY_MAX || text.includes(SAR_LOG_MARKER);
+        }
+
+        function showImportantBadge() {
+            document.getElementById('importantBadge')?.style.setProperty('display', 'inline-block');
+        }
+
+        function hideImportantBadge() {
+            document.getElementById('importantBadge')?.style.setProperty('display', 'none');
         }
 
         function handleLinkConnect() {
@@ -153,9 +261,13 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             document.querySelectorAll('.app-iframe').forEach(frame => {
-                frame.addEventListener('load', function() {
-                    iframeReady = true;
-                });
+                // Load dari file:// sangat cepat dan bisa kelewatan sebelum listener
+                // terpasang; readyState 'complete' berarti semua script frame sudah jalan.
+                if (frame.contentDocument?.readyState === 'complete') {
+                    onFrameLoaded(frame.id);
+                } else {
+                    frame.addEventListener('load', () => onFrameLoaded(frame.id));
+                }
             });
 
             window.radioMavlink.onTelemetry = routeTelemetry;
@@ -201,11 +313,9 @@
                 window.paramCache.params = params;
                 window.paramCache.loaded = true;
 
-                document.querySelectorAll('.app-iframe').forEach(frame => {
-                    if (frame && frame.contentWindow) {
-                        frame.contentWindow.dispatchEvent(new Event('paramCacheUpdated'));
-                    }
-                });
+                // Hanya frame aktif yang direfresh; frame lain disinkronkan lewat
+                // syncFrame() saat diaktifkan (supaya tidak update frame tersembunyi)
+                getActiveFrame()?.contentWindow?.dispatchEvent(new Event('paramCacheUpdated'));
             } catch (err) {
                 console.error('Gagal memuat parameter:', err);
                 alert('Gagal memuat parameter: ' + err.message);
@@ -240,25 +350,19 @@
         window.radioMavlink.onAccelCalPosSignal = handleAccelCalPosSignal;
         window.udpMavlink.onAccelCalPosSignal = handleAccelCalPosSignal;
 
-        // Navigasi diperbarui mencakup frame-config agar menu config tidak hilang
+        // Navigasi mencakup semua frame (flight/setup/mission/config) lewat
+        // activateFrame(), yang menangani flag siaga dan sinkronisasi state.
         function navigateTo(url, el) {
-            document.querySelectorAll('.app-iframe').forEach(frame => {
-                frame.classList.remove('active');
-            });
-
             let targetFrameId = 'frame-flight';
             if (url.includes('setup.html')) targetFrameId = 'frame-setup';
             else if (url.includes('mission.html')) targetFrameId = 'frame-mission';
             else if (url.includes('config.html')) targetFrameId = 'frame-config';
 
-            const targetFrame = document.getElementById(targetFrameId);
-            if (targetFrame) {
-                targetFrame.classList.add('active');
-            }
+            activateFrame(targetFrameId);
 
             document.querySelectorAll('.nav-left a').forEach(a => a.classList.remove('active'));
-            if(el) el.classList.add('active');
-            
+            if (el) el.classList.add('active');
+
             const camBtn = document.getElementById('nav-camera');
             if (camBtn) {
                 camBtn.style.display = (url === './flightview.html') ? 'inline-block' : 'none';

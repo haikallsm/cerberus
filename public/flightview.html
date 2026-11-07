@@ -1340,9 +1340,18 @@ function showHudError(text, severity) {
     }, 6000);
 }
 
+// Kursor pesan log terakhir yang sudah dirender — dipakai applyParentState()
+// untuk mereplay hanya pesan yang masuk saat frame tidur (anti duplikat saat
+// aktivasi berulang). Kursor juga berjalan di alur live normal.
+let lastReplayedLogSeq = 0;
+
 window.updateMavlogUI = function(logItem) {
     // Print console untuk memeriksa setiap pesan MAVLink log yang masuk
     // console.log("[GCS Log Received]", logItem);
+
+    if (logItem?.seq != null && logItem.seq > lastReplayedLogSeq) {
+        lastReplayedLogSeq = logItem.seq;
+    }
 
     const sarResult = reassembleSarText(logItem);
     if (sarResult.status === 'pending') return;
@@ -1402,16 +1411,23 @@ window.updateMavlogUI = function(logItem) {
     logContent.scrollTop = logContent.scrollHeight;
 };
 
-(function replayLogHistory() {
-    try {
-        const parentConn = window.parent && window.parent.gcsConnection;
-        if (parentConn && Array.isArray(parentConn.logHistory)) {
-            parentConn.logHistory.forEach(logItem => window.updateMavlogUI(logItem));
-        } 
-    } catch (err) {
-        console.error("[LOG] replaying log history:", err);
+// ===== SINKRONISASI DARI PARENT =====
+// Dipanggil oleh parent saat frame ini diaktifkan (pindah menu / selesai load).
+// Frame tidur saat tidak aktif (parent berhenti mengirim update), sehingga
+// aktivasi wajib menarik ulang state terbaru:
+//   1) snapshot telemetri terakhir, agar HUD/tape tidak menggantung di nilai lama,
+//   2) replay pesan log yang belum pernah dirender (delta via kursor seq).
+window.applyParentState = function(state) {
+    if (state?.telemetry) {
+        window.updateTelemetryUI(state.telemetry);
     }
-})();
+
+    (state?.logs || []).forEach(logItem => {
+        if (logItem?.seq != null && logItem.seq > lastReplayedLogSeq) {
+            window.updateMavlogUI(logItem);
+        }
+    });
+};
 
 // ===== UPDATE MAP MARKER & HEADING =====
 let headingLineBlack = null;
@@ -1708,6 +1724,9 @@ window.closeVideo = function() {
 
 // ===== STATS INTERVAL =====
 function updateStats() {
+    // Panel stat hanya relevan saat frame aktif; parent memutar flag __gcsActive
+    // sehingga interval ini tidak membuang DOM update saat frame tersembunyi.
+    if (!window.__gcsActive) return;
     if (!window.parent.commands) return;
     const isLive = window.parent.commands._radioActive() || window.parent.commands._udpActive();
     const msgCountEl = document.getElementById('msgCount');

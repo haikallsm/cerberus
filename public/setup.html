@@ -698,12 +698,38 @@ function updateHealthCards() {
     }
 }
 
+// Kursor pesan log terakhir yang sudah dirender — dipakai applyParentState()
+// agar replay hanya pesan yang masuk saat frame tidur (anti duplikat).
+let lastReplayedLogSeq = 0;
+
 window.updateMavlogUI = function(logItem) {
+    if (logItem?.seq != null && logItem.seq > lastReplayedLogSeq) {
+        lastReplayedLogSeq = logItem.seq;
+    }
+
     const safeText = String(logItem.text).replace(/</g, '&lt;').replace(/>/g, '&gt;');
     logToConsole(safeText);
     if (typeof processCalibrationMessages === 'function') {
         processCalibrationMessages(safeText);
     }
+};
+
+// ===== SINKRONISASI DARI PARENT =====
+// Dipanggil parent saat frame diaktifkan (pindah menu / selesai load).
+// Frame tidur saat tidak aktif, maka aktivasi menarik ulang state terbaru:
+//   1) snapshot telemetri untuk kartu health,
+//   2) replay log kalibrasi/preflight yang masuk selama frame tidur
+//      (delta via kursor seq, aman untuk aktivasi berulang).
+window.applyParentState = function(state) {
+    if (state?.telemetry) {
+        window.updateTelemetryUI(state.telemetry);
+    }
+
+    (state?.logs || []).forEach(logItem => {
+        if (logItem?.seq != null && logItem.seq > lastReplayedLogSeq) {
+            window.updateMavlogUI(logItem);
+        }
+    });
 };
 
 const ACCELCAL_POS_VALUES = { level: 1, left: 2, right: 3, nosedown: 4, noseup: 5, back: 6 };

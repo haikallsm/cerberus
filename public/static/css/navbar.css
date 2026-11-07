@@ -70,3 +70,14 @@
     padding: 4px 8px;
     border-radius: 4px;
 }
+
+/* Penanda pesan penting (SAR / severity <= WARNING) yang masuk saat user tidak
+   berada di Flight View. Klik badge = pindah ke Flight View untuk melihat pesan. */
+#importantBadge {
+    background: linear-gradient(135deg, #ffb74d 0%, #ff9800 100%);
+    color: #263238;
+}
+
+#importantBadge:hover {
+    background: #ff9800;
+}

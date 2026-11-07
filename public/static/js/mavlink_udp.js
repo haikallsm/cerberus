@@ -1,19 +1,6 @@
-// const MAV_RESULT_MESSAGES = {
-//     0: 'ACCEPTED',
-//     1: 'TEMPORARILY_REJECTED',
-//     2: 'DENIED',
-//     3: 'UNSUPPORTED',
-//     4: 'FAILED',
-//     5: 'IN_PROGRESS',
-//     6: 'CANCELLED'
-// };
-
-// function mavResultMessage(result) {
-//     return MAV_RESULT_MESSAGES[result] ?? `UNKNOWN (${result})`;
-// }
 
 // harus match FCU_COMP_ID di config.h firmware ESP32
-// const MAV_COMP_ID_AUTOPILOT1 = 1;
+// (referensi: MAV_COMP_ID_AUTOPILOT1 = 1)
 
 class UdpMavlink {
     constructor() {
@@ -63,7 +50,6 @@ class UdpMavlink {
         this.onConnect = null;
         this.onDisconnect = null;
 
-        
         this._intentionalDisconnect = false;
         this._awaitingReconnect = false;
         this._linkReady = false;
@@ -98,35 +84,8 @@ class UdpMavlink {
         }
     }
 
-    // ini kode yang kemaren
-    // async connect(ip, port) {
-    //     if (!window.udpBridge) throw new Error('udpBridge tidak tersedia -- pastikan preload.js sudah dimuat.');
-    //     if (!ip || !port) throw new Error('IP dan Port wajib diisi.');
-
     //     this._intentionalDisconnect = false;
     //     this._awaitingReconnect = false;
-
-    //     const result = await window.udpBridge.connect(ip, parseInt(port, 10));
-    //     if (!result || !result.ok) {
-    //         throw new Error(result?.message || 'Gagal membuka UDP socket di main process.');
-    //     }
-
-    //     this._remoteIp = ip;
-    //     this._remotePort = parseInt(port, 10);
-    //     this._connected = true;
-    //     this.telemetry.connected = true;
-    //     this.lastHeartbeatTime = Date.now(); // grace period awal, sama seperti RadioMavlink
-
-    //     // Dengarkan data masuk dari main process
-    //     this._dataUnsubscribe = window.udpBridge.onData((bytes) => {
-    //         for (const b of bytes) this.parser.feedByte(b);
-    //     });
-
-    //     this._startGcsHeartbeat();
-    //     this._startWatchdog();
-    //     this._startRcOverrideLoop();
-    //     if (this.onConnect) this.onConnect();
-    // }
 
     // ini kode yang bisa
     async connect(ip, port, localPort = null) {
@@ -206,10 +165,6 @@ class UdpMavlink {
         this._streamsRequested = false;
     }
 
-    // async _handleUnexpectedDrop() {
-    //     if (this._intentionalDisconnect) return;
-    //     if (this._awaitingReconnect) return;
-
     //     console.warn('[UdpMavlink] Drop tak terduga (Heartbeat Timeout). Memulai teardown & auto-reconnect...');
     //     this._awaitingReconnect = true; 
         
@@ -217,10 +172,6 @@ class UdpMavlink {
         
     //     await this._teardownTransport();
         
-    //     if (this.onDisconnect) this.onDisconnect();
-    //     this._scheduleReconnect(1);
-    // }
-
     async _handleUnexpectedDrop() {
         if (this._intentionalDisconnect) return;
         
@@ -255,26 +206,6 @@ class UdpMavlink {
         console.log(`[UdpMavlink] Reconnect attempt ${attempt} dijadwalkan dalam ${delayMs}ms...`);
         this._reconnectTimer = setTimeout(() => this._attemptReconnect(attempt), delayMs);
     }
-
-    // async _attemptReconnect(attempt) {
-    //     if (this._intentionalDisconnect || !this._awaitingReconnect || this._reconnecting) return;
-    //     if (!this._remoteIp || !this._remotePort) {
-    //         this._scheduleReconnect(attempt + 1);
-    //         return;
-    //     }
-        
-    //     this._reconnecting = true;
-    //     try {
-    //         await this.connect(this._remoteIp, this._remotePort);
-    //         console.log('[UdpMavlink] Auto-reconnect berhasil setelah unexpected drop.');
-    //     } catch (e) {
-    //         console.warn(`[UdpMavlink] Auto-reconnect attempt ${attempt} gagal:`, e.message);
-    //         this._reconnecting = false;
-    //         this._scheduleReconnect(attempt + 1);
-    //         return;
-    //     }
-    //     this._reconnecting = false;
-    // }
 
     async disconnect() {
         if (this._intentionalDisconnect) return;
@@ -340,16 +271,6 @@ class UdpMavlink {
     _stopGcsHeartbeat() {
         if (this._gcsHeartbeatTimer) { clearInterval(this._gcsHeartbeatTimer); this._gcsHeartbeatTimer = null; }
     }
-
-    // _startWatchdog() {
-    //     this._stopWatchdog();
-    //     this._watchdogTimer = setInterval(() => {
-    //         if (this.telemetry.connected && !this.isLive()) {
-    //             console.warn('[UdpMavlink] Heartbeat FC timeout — memicu unexpected drop.');
-    //             this._handleUnexpectedDrop().catch(() => {});
-    //         }
-    //     }, 1000);
-    // }
 
     _startWatchdog() {
         this._stopWatchdog();
@@ -629,35 +550,8 @@ class UdpMavlink {
         });
     }
 
-    // before
-    // async uploadMission(items, timeout = 10000) {
-    //     const count = items.length;
-    //     if (count === 0) throw new Error('Mission kosong, tidak ada yang di-upload');
-    //     if (this._missionUpload) throw new Error('Upload mission sedang berlangsung, tunggu selesai');
-
-    //     return new Promise((resolve, reject) => {
-    //         const state = { items, resolve, reject, timer: null, resendTimer: null };
-    //         state.resetTimer = () => {
-    //             if (state.resendTimer) { clearInterval(state.resendTimer); state.resendTimer = null; }
-    //             if (state.timer) clearTimeout(state.timer);
-    //             state.timer = setTimeout(() => {
-    //                 this._missionUpload = null;
-    //                 reject(new Error('Upload mission timeout -- FC berhenti meminta item'));
-    //             }, timeout);
-    //         };
-    //         state.resetTimer();
-    //         this._missionUpload = state;
-
     //         const countPayload = [count & 0xFF, (count >> 8) & 0xFF, this.targetSystem, this.targetComponent];
     //         this._sendFrame(44, countPayload, CRC_EXTRA[44]);
-
-    //         state.resendTimer = setInterval(() => {
-    //             if (!this._missionUpload) return;
-    //             console.warn('[UdpMavlink] uploadMission: belum ada respons FC, resend MISSION_COUNT...');
-    //             this._sendFrame(44, countPayload, CRC_EXTRA[44]);
-    //         }, 1500);
-    //     });
-    // }
 
     async uploadMission(items, timeout = 10000) {
         const count = items.length;
@@ -666,6 +560,10 @@ class UdpMavlink {
 
         this._missionBusy = true;
         this.pauseRcOverride();
+
+        // MISSION_CLEAR_ALL dulu (paritas dgn radio-mavlink.js) -- supaya FC bersih
+        // dari misi lama sebelum menarik item baru; CRC_EXTRA[45] sudah benar (232).
+        await this._sendFrame(45, [this.targetSystem, this.targetComponent], CRC_EXTRA[45]);
 
         const p = new Promise((resolve, reject) => {
             const state = { items, resolve, reject, timer: null, resendTimer: null };
@@ -1142,27 +1040,6 @@ class UdpMavlink {
         return true;
     }
 
-    // before
-    // _resetHybridOverride() {
-    //     if (!this._hybridOverride) return;
-
-    //     if (this._hybridOverride.releaseTimer) {
-    //         clearTimeout(this._hybridOverride.releaseTimer);
-    //         this._hybridOverride.releaseTimer = null;
-    //     }
-
-    //     this._hybridOverride.active = false;
-    //     this._hybridOverride.targetPwm = 65535;
-    //     this._hybridOverride.targetState = null;
-    //     this._hybridOverride.startedAt = 0;
-
-    //     this._hybridOverride.initialRemoteState = null;
-    //     this._hybridOverride.matchStableCount = 0;
-    //     this._hybridOverride.changeStableCount = 0;
-    //     this._hybridOverride.matchedOnce = false;
-    //     this._hybridOverride.lastPhysicalState = null;
-    // }
-
     // 2) GANTI _resetHybridOverride()
     _resetHybridOverride() {
         if (!this._hybridOverride) return;
@@ -1172,41 +1049,7 @@ class UdpMavlink {
         this._hybridOverride.targetState = null;
     }
 
-    // before
-    // async setHybridModeTemporary(targetState, targetPwm, channel = 4) {
-    //     const normalized = this._normalizeHybridState(targetState);
-
-    //     if (!normalized) {
-    //         throw new Error(
-    //             `Hybrid target state tidak valid: ${targetState}`
-    //         );
-    //     }
-
-    //     if (!Number.isFinite(Number(targetPwm))) {
-    //         throw new Error(
-    //             `Hybrid target PWM tidak valid: ${targetPwm}`
-    //         );
-    //     }
-
-    //     if (channel < 0 || channel > 7) {
-    //         throw new Error(`Channel ${channel} tidak valid.`);
-    //     }
-
-    //     const remotePwm = Number(
-    //         this.telemetry?.[`rc${channel + 1}_raw`]
-    //     );
-
     //     const remoteState = this._getHybridStateFromRc(remotePwm);
-
-    //     this._hybridOverride.active = true;
-    //     this._hybridOverride.channel = channel;
-    //     this._hybridOverride.targetPwm = Number(targetPwm);
-    //     this._hybridOverride.targetState = normalized;
-    //     this._hybridOverride.startedAt = Date.now();
-    //     this._hybridOverride.minHoldMs = 800;
-    //     this._hybridOverride.stableMatches = 0;
-    //     this._hybridOverride.lastRemoteState = remoteState;
-    //     this._hybridOverride.initialRemoteState = remoteState;
 
     //     console.log(
     //         `[HybridOverride] START target=${normalized} pwm=${targetPwm} ` +
@@ -1224,61 +1067,6 @@ class UdpMavlink {
 
     //     this._checkHybridOverrideRelease();
 
-    //     return {
-    //         ok: true,
-    //         temporary: true,
-    //         targetState: normalized,
-    //         targetPwm: Number(targetPwm),
-    //         remoteState
-    //     };
-    // }
-
-
-    // after
-    // async setHybridModeTemporary(targetState, targetPwm, channel = 4) {
-    //     const normalized = this._normalizeHybridState(targetState);
-
-    //     if (!normalized) {
-    //         throw new Error(`Hybrid target state tidak valid: ${targetState}`);
-    //     }
-
-    //     if (!Number.isFinite(Number(targetPwm))) {
-    //         throw new Error(`Hybrid target PWM tidak valid: ${targetPwm}`);
-    //     }
-
-    //     if (channel < 0 || channel > 7) {
-    //         throw new Error(`Channel ${channel} tidak valid.`);
-    //     }
-
-    //     const remotePwm = Number(
-    //         this.telemetry?.[`rc${channel + 1}_raw`] ?? this.telemetry?.rc5_physical
-    //     );
-    //     const remoteState = this._getHybridStateFromRc(remotePwm);
-
-    //     // Start/refresh latch
-    //     this._hybridOverride.active = true;
-    //     this._hybridOverride.channel = channel;
-    //     this._hybridOverride.targetPwm = Number(targetPwm);
-    //     this._hybridOverride.targetState = normalized;
-    //     this._hybridOverride.startedAt = Date.now();
-
-    //     this._hybridOverride.initialRemoteState = remoteState;
-    //     this._hybridOverride.matchStableCount = 0;
-    //     this._hybridOverride.changeStableCount = 0;
-    //     this._hybridOverride.matchedOnce = false;
-    //     this._hybridOverride.lastPhysicalState = remoteState;
-
-    //     // Failsafe timer: jangan lock selamanya kalau RC hilang total
-    //     if (this._hybridOverride.releaseTimer) {
-    //         clearTimeout(this._hybridOverride.releaseTimer);
-    //     }
-    //     this._hybridOverride.releaseTimer = setTimeout(() => {
-    //         if (this._hybridOverride?.active) {
-    //             console.warn('[HybridOverride] Failsafe release (maxHoldMs reached)');
-    //             this._releaseHybridOverride().catch(() => {});
-    //         }
-    //     }, this._hybridOverride.maxHoldMs);
-
     //     console.log(
     //         `[HybridOverride] START target=${normalized} pwm=${targetPwm} ` +
     //         `| remote_rc${channel + 1}=${Number.isFinite(remotePwm) ? remotePwm : 'N/A'} ` +
@@ -1287,15 +1075,6 @@ class UdpMavlink {
 
     //     // Ambil alih CH5 sekarang; loop override akan mempertahankan
     //     await this.sendRcOverride(channel, Number(targetPwm));
-
-    //     return {
-    //         ok: true,
-    //         temporary: true,
-    //         targetState: normalized,
-    //         targetPwm: Number(targetPwm),
-    //         remoteState
-    //     };
-    // }
 
     // 3) GANTI setHybridModeTemporary() -> jadi pure latch (tanpa auto-release)
     async setHybridModeTemporary(targetState, targetPwm, channel = 4) {
@@ -1323,108 +1102,8 @@ class UdpMavlink {
         };
     }
 
-    // before
-    // _checkHybridOverrideRelease() {
-    //     const state = this._hybridOverride;
-    //     if (!state?.active) return false;
-
-    //     const remotePwm = Number(
-    //         this.telemetry?.[`rc${state.channel + 1}_raw`]
-    //     );
-    //     const remoteState = this._getHybridStateFromRc(remotePwm);
-
-    //     const matchesTarget =
-    //         remoteState === state.targetState &&
-    //         this._isHybridVehicleTypeCompatible(state.targetState);
-
-    //     const operatorMovedAway =
-    //         remoteState !== null &&
-    //         remoteState !== state.initialRemoteState;
-
     //     const shouldTrack = matchesTarget || operatorMovedAway;
 
-    //     if (shouldTrack) {
-    //         state.stableMatches =
-    //             state.lastRemoteState === remoteState
-                    // ? state.stableMatches + 1
-    //                 : 1;
-    //     } else {
-    //         state.stableMatches = 0;
-    //     }
-    //     state.lastRemoteState = remoteState;
-
-    //     const heldLongEnough =
-    //         Date.now() - state.startedAt >= state.minHoldMs;
-    //     const stableEnough =
-    //         state.stableMatches >= state.requiredStableMatches;
-
-    //     if (heldLongEnough && stableEnough) {
-    //         this._releaseHybridOverride();
-    //         return true;
-    //     }
-
-    //     return false;
-    // }
-
-    // after
-    // _checkHybridOverrideRelease() {
-    //     const state = this._hybridOverride;
-    //     if (!state?.active) return false;
-
-    //     const physicalPwm = Number(
-    //         this.telemetry?.[`rc${state.channel + 1}_raw`] ??
-    //         this.telemetry?.rc5_physical
-    //     );
-    //     const physicalState = this._getHybridStateFromRc(physicalPwm);
-
-    //     // Tidak ada data RC valid -> tetap latch (biar mode tidak mental balik)
-    //     if (physicalState === null) {
-    //         state.matchStableCount = 0;
-    //         state.changeStableCount = 0;
-    //         return false;
-    //     }
-
-    //     // Stage 1: operator harus samakan dulu switch fisik ke mode yang sedang dilatch GCS
-    //     if (!state.matchedOnce) {
-    //         if (physicalState === state.targetState) {
-    //             state.matchStableCount =
-    //                 (state.lastPhysicalState === physicalState)
-    //                     ? state.matchStableCount + 1
-    //                     : 1;
-
-    //             if (state.matchStableCount >= state.requiredStableMatches) {
-    //                 state.matchedOnce = true;
-    //                 state.changeStableCount = 0;
-    //                 console.log(
-    //                     `[HybridOverride] Catch-up OK: remote sudah match target (${state.targetState}). ` +
-    //                     `Silakan pindah switch untuk takeover.`
-    //                 );
-    //             }
-    //         } else {
-    //             state.matchStableCount = 0;
-    //         }
-
-    //         state.lastPhysicalState = physicalState;
-    //         return false;
-    //     }
-
-    //     // Stage 2: setelah match, tunggu operator ubah ke state lain (intentional takeover)
-    //     if (physicalState !== state.targetState) {
-    //         state.changeStableCount =
-    //             (state.lastPhysicalState === physicalState)
-    //                 ? state.changeStableCount + 1
-    //                 : 1;
-
-    //         if (state.changeStableCount >= state.requiredStableMatches) {
-    //             this._releaseHybridOverride().catch(() => {});
-    //             state.lastPhysicalState = physicalState;
-    //             return true;
-    //         }
-    //     } else {
-    //         state.changeStableCount = 0;
-    //     }
-
-    //     state.lastPhysicalState = physicalState;
     //     return false;
     // }
 
@@ -1433,17 +1112,6 @@ class UdpMavlink {
         // sengaja nonaktif supaya tidak "mental balik" mode
         return false;
     }
-
-    // before
-    // async _releaseHybridOverride() {
-    //     const state = this._hybridOverride;
-
-    //     if (!state?.active) {
-    //         return {
-    //             ok: true,
-    //             alreadyReleased: true
-    //         };
-    //     }
 
     //     const channel = state.channel;
     //     const targetState = state.targetState;
@@ -1466,14 +1134,6 @@ class UdpMavlink {
     //         channel,
     //         65535
     //     );
-
-    //     return {
-    //         ok: true,
-    //         released: true,
-    //         channel,
-    //         targetState
-    //     };
-    // }
 
     // after
     async _releaseHybridOverride() {
@@ -1504,10 +1164,6 @@ class UdpMavlink {
         };
     }
 
-    // before
-    // async cancelHybridOverride() {
-    //     const state = this._hybridOverride;
-
     //     const channel = state?.channel ?? 4;
     //     const wasActive = !!state?.active;
 
@@ -1523,19 +1179,6 @@ class UdpMavlink {
     //         `[HybridOverride] CANCEL/RELEASE CH${channel + 1} ` +
     //         `-> remote kembali menjadi sumber kontrol`
     //     );
-
-    //     return {
-    //         ok: true,
-    //         cancelled: wasActive,
-    //         channel
-    //     };
-    // }
-
-    // after
-    // async cancelHybridOverride() {
-    //     const state = this._hybridOverride;
-    //     const channel = state?.channel ?? 4;
-    //     const wasActive = !!state?.active;
 
     //     this._resetHybridOverride();
 
@@ -1715,17 +1358,6 @@ class UdpMavlink {
                 this.requestDataStreams().catch(e => console.warn('[UdpMavlink] requestDataStreams gagal:', e));
                 this.requestHomePosition();
             }
-            // PERBAIKAN: Perilaku Heartbeat disamakan dengan versi radio
-            // if (sysid === this.targetSystem && compid === this.targetComponent) {
-            //     this.lastHeartbeatTime = Date.now();
-            //     this.telemetry.connected = true;
-            //     this.telemetry.system_status = 'connected';
-            //     if (this._isRebooting) {
-            //         console.log(`[UdpMavlink] FC kembali setelah reboot: sysid=${sysid}, compid=${compid}`);
-            //         this._isRebooting = false;
-            //     }
-            // }
-            // after
             if (sysid === this.targetSystem && Number(compid) === MAV_COMP_ID_AUTOPILOT1) {
                 const wasReady = this._linkReady;
                 this._linkReady = true; // Tambahkan ini
@@ -1788,6 +1420,7 @@ class UdpMavlink {
 
         const paddedPayload = new Uint8Array(255);
         paddedPayload.set(payload, 0);
+        paddedPayload.__len = payload.length; // panjang asli untuk decoder length-aware (mis. VFR_HUD)
 
         let result;
         try {

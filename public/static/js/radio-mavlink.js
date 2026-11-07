@@ -83,8 +83,7 @@ class RadioMavlink {
         this._handlingUnexpectedDrop = false;
         this._setupAutoReconnectListeners();
     }
-    // JANGAN DIHAPUS
-    // ini yang bisa di electron
+    // Jalur auto-reconnect versi Electron (serialBridge), jangan dihapus.
     async tryAutoReconnect(baudRate = 57600) {
         if (this._useWebSerial) {
             try {
@@ -105,7 +104,7 @@ class RadioMavlink {
         }
         try {
             const ports = await window.serialBridge.list();
-            if (!port || ports.length === 0) {
+            if (!ports || ports.length === 0) {
                 console.warn('[RadioMavlink] Tidak ada port serial yang tersedia'); 
                 return false;
             };
@@ -144,69 +143,6 @@ class RadioMavlink {
         }
     }
 
-    // async tryAutoReconnect(baudRate = 57600) {
-    //     if (this._useWebSerial) {
-    //         try {
-    //             const ports = await navigator.serial.getPorts();
-    //             if (!ports || ports.length === 0) return false;
-                
-    //             let found = null;
-    //             if (this.port && ports.includes(this.port)) {
-    //                 found = this.port;
-    //             } else if (ports.length > 0) {
-    //                 found = ports[0];
-    //             }
-                
-    //             if (found) {
-    //                 this.port = found;
-    //                 const info = this.port.getInfo();
-    //                 const pathName = `WebSerial_${info.usbVendorId || 'Auto'}_${info.usbProductId || 'Port'}`;
-    //                 this._webSerialCache.set(pathName, this.port);
-    //                 console.log('[RadioMavlink] Mencoba auto-reconnect ke Web Serial:', pathName);
-    //                 await this.connect(baudRate, pathName);
-    //                 return true;
-    //             }
-    //             return false;
-    //         } catch (e) { return false; }
-    //     }
-
-    //     if (!window.serialBridge || typeof window.serialBridge.list !== 'function') {
-    //         console.warn('[RadioMavlink] serialBridge tidak tersedia.');
-    //         return false;
-    //     }
-
-    //     try {
-    //         const ports = await window.serialBridge.list();
-    //         if (!ports || ports.length === 0) {
-    //             console.warn('[RadioMavlink] Tidak ada port serial yang tersedia'); 
-    //             return false;
-    //         };
-    //         let found = null
-    //         if (this._lastPortPath) {
-    //             found = ports.find(p => p.path === this._lastPortPath);
-    //         }
-    //         if (!found && this._lastVendorId && this._lastProductId) {
-    //             found = ports.find(p => p.vendorId === this._lastVendorId && p.productId === this._lastProductId);
-    //         }
-    //         if (!found) {
-    //             if (!this._lastPortPath && ports.length === 1) {
-    //                 found = ports[0];
-    //             } else {
-    //                 console.warn('[RadioMavlink] Port FC sebelumnya tidak ditemukan.');
-    //                 return false;
-    //             }
-    //         }
-    //         console.log('[RadioMavlink] Mencoba auto-reconnect ke:', found.path);
-    //         await this.connect(baudRate, found.path);
-    //         console.log('[RadioMavlink] Auto-reconnect berhasil.');
-    //         return true;
-
-    //     } catch (e) {
-    //         console.warn('[RadioMavlink] Auto-reconnect gagal:', e.message);
-    //         return false;
-    //     }
-    // }
-
     _setupAutoReconnectListeners() {
         if (!('serial' in navigator)) return;
         navigator.serial.addEventListener('disconnect', (event) => {
@@ -227,6 +163,7 @@ class RadioMavlink {
 
     async _teardownTransport() {
         this._stopWatchdog();
+        this._stopGcsHeartbeat();
         this._stopRcOverrideLoop();
         if (this._useWebSerial) {
             this.keepReading = false;
@@ -351,62 +288,10 @@ class RadioMavlink {
         this._reconnecting = false;
     }
 
-    // ini untuk web
-    // async _attemptReconnect(attempt) {
-    //     if (this._intentionalDisconnect || !this._awaitingReconnect || this._reconnecting) return;
-
     //     this._reconnecting = true;
-
-    //     // --- Perbaikan: Pastikan jika ini Web Serial, maka JANGAN panggil serialBridge ---
-    //     if (this._useWebSerial) {
-    //         try {
-    //             const ports = await navigator.serial.getPorts();
-    //             let found = null;
-    //             if (this.port && ports.includes(this.port)) found = this.port;
-    //             else if (ports.length > 0) found = ports[0];
-                
-    //             if (!found) throw new Error('Perangkat Web Serial belum terdeteksi kembali.');
-    //             this.port = found;
-    //             await this.connect(this._lastBaudRate, this._lastPortPath);
-    //             console.log('[RadioMavlink] Auto-reconnect Web Serial berhasil.');
-    //             this._reconnecting = false;
-    //             return; // Berhenti di sini, jangan lanjutkan ke blok Electron!
-    //         } catch(e) {
-    //             console.warn(`[RadioMavlink] Auto-reconnect Web Serial attempt ${attempt} gagal:`, e.message);
-    //             this._reconnecting = false;
-    //             this._scheduleReconnect(attempt + 1);
-    //             return;
-    //         }
-    //     }
-
-    //     try {
-    //         if (!window.serialBridge || typeof window.serialBridge.list !== 'function') {
-    //             throw new Error('serialBridge tidak tersedia.');
-    //         }
-    //         if (!this._lastPortPath) {
-    //             throw new Error('Tidak ada portPath tersimpan dari koneksi sebelumnya.');
-    //         }
-
-    //         const ports = await window.serialBridge.list();
-    //         let found = ports.find(p => p.path === this._lastPortPath);
-    //         if (!found && this._lastVendorId && this._lastProductId) {
-    //             found = ports.find(p => p.vendorId === this._lastVendorId && p.productId === this._lastProductId);
-    //         }
-    //         if (!found) {
-    //             throw new Error('Perangkat belum terdeteksi kembali oleh OS.');
-    //         }
 
     //         await this.connect(this._lastBaudRate, found.path);
     //         console.log('[RadioMavlink] Auto-reconnect berhasil setelah link drop / reboot.');
-
-    //     } catch (e) {
-    //         console.warn(`[RadioMavlink] Auto-reconnect attempt ${attempt} gagal:`, e.message);
-    //         this._reconnecting = false;
-    //         this._scheduleReconnect(attempt + 1);
-    //         return;
-    //     }
-    //     this._reconnecting = false;
-    // }
 
     async requestPort() {
         if (this._useWebSerial) {
@@ -478,6 +363,7 @@ class RadioMavlink {
             this._transportOpen = true;
             this._connectStartedAt = Date.now();
             this._startWatchdog();
+            this._startGcsHeartbeat();
             this._startRcOverrideLoop();
             return;
         }
@@ -548,6 +434,7 @@ class RadioMavlink {
         );
 
         this._startWatchdog();
+        this._startGcsHeartbeat();
         this._startRcOverrideLoop();
     }
 
@@ -627,21 +514,27 @@ class RadioMavlink {
         if (this._watchdogTimer) { clearInterval(this._watchdogTimer); this._watchdogTimer = null; }
     }
 
-    // before
-    // _startRcOverrideLoop() {
-    //     this._stopRcOverrideLoop();
-    //     this._rcOverrideTimer = setInterval(() => {
-    //         if (this.telemetry.connected && this.rcChannels.some(ch => ch !== 65535)) {
-    //             const payload = [];
-    //             for (let i = 0; i < 8; i++) {
-    //                 const ch = this.rcChannels[i];
-    //                 payload.push(ch & 0xFF, (ch >> 8) & 0xFF);
-    //             }
-    //             payload.push(this.targetSystem, this.targetComponent);
-    //             this._sendFrame(70, payload, CRC_EXTRA[70]).catch(()=>{});
-    //         }
-    //     }, 150);
-    // }
+    // HEARTBEAT GCS (paritas dgn mavlink_udp.js) -- supaya FC menganggap GCS hidup di link radio
+    _startGcsHeartbeat() {
+        this._stopGcsHeartbeat();
+        const sendGcsHeartbeat = () => {
+            const buf = new ArrayBuffer(9);
+            const dv = new DataView(buf);
+            dv.setUint32(0, 0, true);      // custom_mode
+            dv.setUint8(4, 6);              // type = MAV_TYPE_GCS
+            dv.setUint8(5, 8);              // autopilot = MAV_AUTOPILOT_INVALID
+            dv.setUint8(6, 0);              // base_mode
+            dv.setUint8(7, 4);              // system_status = MAV_STATE_ACTIVE
+            dv.setUint8(8, 3);              // mavlink_version
+            this._sendFrame(0, Array.from(new Uint8Array(buf)), CRC_EXTRA[0]);
+        };
+        sendGcsHeartbeat(); // langsung kirim satu begitu transport terbuka
+        this._gcsHeartbeatTimer = setInterval(sendGcsHeartbeat, 1000);
+    }
+
+    _stopGcsHeartbeat() {
+        if (this._gcsHeartbeatTimer) { clearInterval(this._gcsHeartbeatTimer); this._gcsHeartbeatTimer = null; }
+    }
 
     // after
     // 6) TAMBAHKAN di _startRcOverrideLoop() agar saat latch aktif CH5 dipaksa terus
@@ -1260,7 +1153,7 @@ class RadioMavlink {
         return this.sendCommandLong(179, { p1: 0, p5: lat, p6: lon, p7: alt });
     }
     async reposition(lat, lon, alt = null) {
-        const targetAlt = (alt !== null && !Number.isNaN(alt)) ? alt : (Number(this.telemetry?.alt) || 0);
+        const targetAlt = (alt !== null && !Number.isNaN(alt)) ? alt : (Number(this.telemetry?.altitude) || 0);
         return this.sendCommandLong(192, { p1: -1, p4: NaN, p5: lat, p6: lon, p7: targetAlt });
     }
     async setServo(channel, pwm) {
@@ -1329,27 +1222,6 @@ class RadioMavlink {
         return true;
     }
 
-    // before
-    // _resetHybridOverride() {
-    //     if (!this._hybridOverride) return;
-
-    //     if (this._hybridOverride.releaseTimer) {
-    //         clearTimeout(this._hybridOverride.releaseTimer);
-    //         this._hybridOverride.releaseTimer = null;
-    //     }
-
-    //     this._hybridOverride.active = false;
-    //     this._hybridOverride.targetPwm = 65535;
-    //     this._hybridOverride.targetState = null;
-    //     this._hybridOverride.startedAt = 0;
-
-    //     this._hybridOverride.initialRemoteState = null;
-    //     this._hybridOverride.matchStableCount = 0;
-    //     this._hybridOverride.changeStableCount = 0;
-    //     this._hybridOverride.matchedOnce = false;
-    //     this._hybridOverride.lastPhysicalState = null;
-    // }
-    // after
     _resetHybridOverride() {
         if (!this._hybridOverride) return;
         this._hybridOverride.active = false;
@@ -1358,41 +1230,7 @@ class RadioMavlink {
         this._hybridOverride.targetState = null;
     }
 
-    // before
-    // async setHybridModeTemporary(targetState, targetPwm, channel = 4) {
-    //     const normalized = this._normalizeHybridState(targetState);
-
-    //     if (!normalized) {
-    //         throw new Error(
-    //             `Hybrid target state tidak valid: ${targetState}`
-    //         );
-    //     }
-
-    //     if (!Number.isFinite(Number(targetPwm))) {
-    //         throw new Error(
-    //             `Hybrid target PWM tidak valid: ${targetPwm}`
-    //         );
-    //     }
-
-    //     if (channel < 0 || channel > 7) {
-    //         throw new Error(`Channel ${channel} tidak valid.`);
-    //     }
-
-    //     const remotePwm = Number(
-    //         this.telemetry?.[`rc${channel + 1}_raw`]
-    //     );
-
     //     const remoteState = this._getHybridStateFromRc(remotePwm);
-
-    //     this._hybridOverride.active = true;
-    //     this._hybridOverride.channel = channel;
-    //     this._hybridOverride.targetPwm = Number(targetPwm);
-    //     this._hybridOverride.targetState = normalized;
-    //     this._hybridOverride.startedAt = Date.now();
-    //     this._hybridOverride.minHoldMs = 800;
-    //     this._hybridOverride.stableMatches = 0;
-    //     this._hybridOverride.lastRemoteState = remoteState;
-    //     this._hybridOverride.initialRemoteState = remoteState;
 
     //     console.log(
     //         `[HybridOverride] START target=${normalized} pwm=${targetPwm} ` +
@@ -1410,61 +1248,6 @@ class RadioMavlink {
 
     //     this._checkHybridOverrideRelease();
 
-    //     return {
-    //         ok: true,
-    //         temporary: true,
-    //         targetState: normalized,
-    //         targetPwm: Number(targetPwm),
-    //         remoteState
-    //     };
-    // }
-
-
-    // after
-    // async setHybridModeTemporary(targetState, targetPwm, channel = 4) {
-    //     const normalized = this._normalizeHybridState(targetState);
-
-    //     if (!normalized) {
-    //         throw new Error(`Hybrid target state tidak valid: ${targetState}`);
-    //     }
-
-    //     if (!Number.isFinite(Number(targetPwm))) {
-    //         throw new Error(`Hybrid target PWM tidak valid: ${targetPwm}`);
-    //     }
-
-    //     if (channel < 0 || channel > 7) {
-    //         throw new Error(`Channel ${channel} tidak valid.`);
-    //     }
-
-    //     const remotePwm = Number(
-    //         this.telemetry?.[`rc${channel + 1}_raw`] ?? this.telemetry?.rc5_physical
-    //     );
-    //     const remoteState = this._getHybridStateFromRc(remotePwm);
-
-    //     // Start/refresh latch
-    //     this._hybridOverride.active = true;
-    //     this._hybridOverride.channel = channel;
-    //     this._hybridOverride.targetPwm = Number(targetPwm);
-    //     this._hybridOverride.targetState = normalized;
-    //     this._hybridOverride.startedAt = Date.now();
-
-    //     this._hybridOverride.initialRemoteState = remoteState;
-    //     this._hybridOverride.matchStableCount = 0;
-    //     this._hybridOverride.changeStableCount = 0;
-    //     this._hybridOverride.matchedOnce = false;
-    //     this._hybridOverride.lastPhysicalState = remoteState;
-
-    //     // Failsafe timer: jangan lock selamanya kalau RC hilang total
-    //     if (this._hybridOverride.releaseTimer) {
-    //         clearTimeout(this._hybridOverride.releaseTimer);
-    //     }
-    //     this._hybridOverride.releaseTimer = setTimeout(() => {
-    //         if (this._hybridOverride?.active) {
-    //             console.warn('[HybridOverride] Failsafe release (maxHoldMs reached)');
-    //             this._releaseHybridOverride().catch(() => {});
-    //         }
-    //     }, this._hybridOverride.maxHoldMs);
-
     //     console.log(
     //         `[HybridOverride] START target=${normalized} pwm=${targetPwm} ` +
     //         `| remote_rc${channel + 1}=${Number.isFinite(remotePwm) ? remotePwm : 'N/A'} ` +
@@ -1474,16 +1257,6 @@ class RadioMavlink {
     //     // Ambil alih CH5 sekarang; loop override akan mempertahankan
     //     await this.sendRcOverride(channel, Number(targetPwm));
 
-    //     return {
-    //         ok: true,
-    //         temporary: true,
-    //         targetState: normalized,
-    //         targetPwm: Number(targetPwm),
-    //         remoteState
-    //     };
-    // }
-    // after after
-    // 3) GANTI setHybridModeTemporary() -> jadi pure latch (tanpa auto-release)
     async setHybridModeTemporary(targetState, targetPwm, channel = 4) {
         const normalized = this._normalizeHybridState(targetState);
         if (!normalized) throw new Error(`Hybrid target state tidak valid: ${targetState}`);
@@ -1509,45 +1282,7 @@ class RadioMavlink {
         };
     }
 
-    // before
-    // _checkHybridOverrideRelease() {
-    //     const state = this._hybridOverride;
-    //     if (!state?.active) return false;
-
-    //     const remotePwm = Number(
-    //         this.telemetry?.[`rc${state.channel + 1}_raw`]
-    //     );
-    //     const remoteState = this._getHybridStateFromRc(remotePwm);
-
-    //     const matchesTarget =
-    //         remoteState === state.targetState &&
-    //         this._isHybridVehicleTypeCompatible(state.targetState);
-
-    //     const operatorMovedAway =
-    //         remoteState !== null &&
-    //         remoteState !== state.initialRemoteState;
-
     //     const shouldTrack = matchesTarget || operatorMovedAway;
-
-    //     if (shouldTrack) {
-    //         state.stableMatches =
-    //             state.lastRemoteState === remoteState
-    //                 ? state.stableMatches + 1
-    //                 : 1;
-    //     } else {
-    //         state.stableMatches = 0;
-    //     }
-    //     state.lastRemoteState = remoteState;
-
-    //     const heldLongEnough =
-    //         Date.now() - state.startedAt >= state.minHoldMs;
-    //     const stableEnough =
-    //         state.stableMatches >= state.requiredStableMatches;
-
-    //     if (heldLongEnough && stableEnough) {
-    //         this._releaseHybridOverride();
-    //         return true;
-    //     }
 
     //     return false;
     // }
@@ -1557,73 +1292,9 @@ class RadioMavlink {
         // const state = this._hybridOverride;
         // if (!state?.active) return false;
 
-        // const physicalPwm = Number(
-        //     this.telemetry?.[`rc${state.channel + 1}_raw`] ??
-        //     this.telemetry?.rc5_physical
-        // );
-        // const physicalState = this._getHybridStateFromRc(physicalPwm);
-
-        // // Tidak ada data RC valid -> tetap latch (biar mode tidak mental balik)
-        // if (physicalState === null) {
-        //     state.matchStableCount = 0;
-        //     state.changeStableCount = 0;
-        //     return false;
-        // }
-
-        // // Stage 1: operator harus samakan dulu switch fisik ke mode yang sedang dilatch GCS
-        // if (!state.matchedOnce) {
-        //     if (physicalState === state.targetState) {
-        //         state.matchStableCount =
-        //             (state.lastPhysicalState === physicalState)
-        //                 ? state.matchStableCount + 1
-        //                 : 1;
-
-        //         if (state.matchStableCount >= state.requiredStableMatches) {
-        //             state.matchedOnce = true;
-        //             state.changeStableCount = 0;
-        //             console.log(
-        //                 `[HybridOverride] Catch-up OK: remote sudah match target (${state.targetState}). ` +
-        //                 `Silakan pindah switch untuk takeover.`
-        //             );
-        //         }
-        //     } else {
-        //         state.matchStableCount = 0;
-        //     }
-
-        //     state.lastPhysicalState = physicalState;
-        //     return false;
-        // }
-
-        // // Stage 2: setelah match, tunggu operator ubah ke state lain (intentional takeover)
-        // if (physicalState !== state.targetState) {
-        //     state.changeStableCount =
-        //         (state.lastPhysicalState === physicalState)
-        //             ? state.changeStableCount + 1
-        //             : 1;
-
-        //     if (state.changeStableCount >= state.requiredStableMatches) {
-        //         this._releaseHybridOverride().catch(() => {});
-        //         state.lastPhysicalState = physicalState;
-        //         return true;
-        //     }
-        // } else {
-        //     state.changeStableCount = 0;
-        // }
-
         // state.lastPhysicalState = physicalState;
         return false;
     }
-
-    // before
-    // async _releaseHybridOverride() {
-    //     const state = this._hybridOverride;
-
-    //     if (!state?.active) {
-    //         return {
-    //             ok: true,
-    //             alreadyReleased: true
-    //         };
-    //     }
 
     //     const channel = state.channel;
     //     const targetState = state.targetState;
@@ -1646,14 +1317,6 @@ class RadioMavlink {
     //         channel,
     //         65535
     //     );
-
-    //     return {
-    //         ok: true,
-    //         released: true,
-    //         channel,
-    //         targetState
-    //     };
-    // }
 
     // after
     async _releaseHybridOverride() {
@@ -1684,10 +1347,6 @@ class RadioMavlink {
         };
     }
 
-    // before
-    // async cancelHybridOverride() {
-    //     const state = this._hybridOverride;
-
     //     const channel = state?.channel ?? 4;
     //     const wasActive = !!state?.active;
 
@@ -1704,19 +1363,6 @@ class RadioMavlink {
     //         `-> remote kembali menjadi sumber kontrol`
     //     );
 
-    //     return {
-    //         ok: true,
-    //         cancelled: wasActive,
-    //         channel
-    //     };
-    // }
-
-    // after
-    // async cancelHybridOverride() {
-    //     const state = this._hybridOverride;
-    //     const channel = state?.channel ?? 4;
-    //     const wasActive = !!state?.active;
-
     //     this._resetHybridOverride();
 
     //     await this.sendRcOverride(channel, 65535);
@@ -1728,30 +1374,7 @@ class RadioMavlink {
     //     return { ok: true, cancelled: wasActive, channel };
     // }
 
-    // async sendRcOverride(chIndex, pwmValue) {
-    //     if (chIndex < 0 || chIndex > 7) {
-    //         throw new Error('sendRcOverride hanya mendukung channel 1-8 (index 0-7) -- base RC_CHANNELS_OVERRIDE MAVLink1');
-    //     }
-    //     this.rcChannels[chIndex] = pwmValue;
-
     //     console.log(`[RC_OVERRIDE] ch${chIndex + 1} -> ${pwmValue}us | terkirim:`, [...this.rcChannels]);
-
-    //     const buildPayload = () => {
-    //         const payload = [];
-    //         for (let i = 0; i < 8; i++) {
-    //             const ch = this.rcChannels[i];
-    //             payload.push(
-    //                 ch & 0xFF, (ch >> 8) & 0xFF);
-    //         }
-    //         payload.push(this.targetSystem, this.targetComponent);
-    //         return payload;
-    //     };
-    //     await this._sendFrame(70, buildPayload(), CRC_EXTRA[70]);
-    //     for (let i = 0; i < 3; i++) {
-    //         await new Promise(r => setTimeout(r, 50));
-    //         this._sendFrame(70, buildPayload(), CRC_EXTRA[70]).catch(()=>{});
-    //     }    
-    // }
 
     async sendRcOverride(chIndex, pwmValue) {
         if (chIndex < 0 || chIndex > 7) {
@@ -2029,6 +1652,7 @@ class RadioMavlink {
 
         const paddedPayload = new Uint8Array(255);
         paddedPayload.set(payload, 0);
+        paddedPayload.__len = payload.length; // panjang asli untuk decoder length-aware (mis. VFR_HUD)
 
         let result;
         try { 
@@ -2258,7 +1882,7 @@ class RadioMavlink {
         } else {
             entry.timer = setTimeout(flush, 800);
         }
-    }cd 
+    }
 
     _emitStatustext(text, severity) {
         this.logSeq++;

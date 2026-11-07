@@ -672,7 +672,11 @@ async function autoSaveChannelReverse(ch) {
 
 // ===== REAL-TIME RC CHANNELS & SERVO OUTPUT POLLER (GABUNGAN: HIJAU FLIGHT MODE & GRAFIK RADIO AKURAT) =====
 let _lastRcDebugLog = 0;
-setInterval(() => {
+
+// Isi satu tick poller; dipisahkan dari interval-nya agar bisa dipanggil
+// manual saat frame diaktifkan (applyParentState), tanpa menunggu periode
+// interval berikutnya.
+function pollRcChannelsAndServoOutput() {
     try {
         const telemetry = window.parent.gcsConnection?.telemetry;
         // Ambil langsung dari telemetry.data yang sudah diproses oleh gcs.js
@@ -836,7 +840,25 @@ setInterval(() => {
     } catch (e) {
         console.error("Error reading telemetry poller:", e);
     }
+}
+
+// Poller hanya jalan saat frame aktif (parent memutar flag window.__gcsActive);
+// saat frame tersembunyi, puluhan cek RC/servo/mode di atas tidak lagi
+// membangunkan DOM setiap 100 ms.
+setInterval(() => {
+    if (!window.__gcsActive) return;
+    pollRcChannelsAndServoOutput();
 }, 100);
+
+// ===== SINKRONISASI DARI PARENT =====
+// Dipanggil parent saat frame diaktifkan: satu tick supaya indikator
+// RC/servo/flight mode langsung fresh tanpa menunggu periode poller berikutnya.
+// (Sinkronisasi tabel Params/PID menunggu event 'paramCacheUpdated' yang
+// di-dispatch parent bersamaan dengan pemanggilan fungsi ini.)
+window.applyParentState = function() {
+    if (!window.__gcsActive) return;
+    pollRcChannelsAndServoOutput();
+};
 
 // ===============================================
 // PARAMETERS ENGINE (FLATTEN & POPUP CHECKBOX GRID)

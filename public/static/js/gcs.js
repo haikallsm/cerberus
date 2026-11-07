@@ -94,15 +94,6 @@ function adaptRadioTelemetry(raw) {
     if (raw.rangefinder_type !== undefined) out.rangefinder_type = raw.rangefinder_type;
 
     // RC channel
-    // if (raw.rc1_in !== undefined) out.rc1_in = raw.rc1_in;
-    // if (raw.rc2_in !== undefined) out.rc2_in = raw.rc2_in;
-    // if (raw.rc3_in !== undefined) out.rc3_in = raw.rc3_in;
-    // if (raw.rc4_in !== undefined) out.rc4_in = raw.rc4_in;
-    // if (raw.rc5_in !== undefined) out.rc5_in = raw.rc5_in;
-    // if (raw.rc6_in !== undefined) out.rc6_in = raw.rc6_in;
-    // if (raw.rc7_in !== undefined) out.rc7_in = raw.rc7_in;
-    // if (raw.rc8_in !== undefined) out.rc8_in = raw.rc8_in;
-
     for (let i = 1; i <= 16; i++) {
         const rcInKey = `rc${i}_in`;
         const rcRawKey = `rc${i}_raw`;

@@ -19,7 +19,7 @@ const CRC_EXTRA = {
     36: 222,   // SERVO_OUTPUT_RAW
     43: 132,   // MISSION_REQUEST_LIST
     44: 221,   // MISSION_COUNT
-    45: 251,   // MISSION_CLEAR_ALL
+    45: 232,   // MISSION_CLEAR_ALL
     47: 153,   // MISSION_ACK
     242: 104,  // HOME_POSITION
     51: 196,   // MISSION_REQUEST_INT
@@ -39,13 +39,6 @@ const CRC_EXTRA = {
     253: 83,   // STATUSTEXT
     160: 78,   // FENCE_POINT
     161: 68,   // FENCE_FETCH_POINT
-};
-
-const MSG_LENGTHS = {
-    0: 9, 1: 31, 20: 20, 21: 2, 22: 25, 23: 23, 24: 30, 27: 29, 30: 28, 
-    33: 28, 35: 22, 40: 4, 43: 3, 44: 5, 47: 4, 51: 5, 65: 42, 66: 6, 70: 18, 
-    73: 38, 74: 20, 75: 35, 76: 33, 77: 3, 109: 9, 132: 14, 191: 27, 
-    192: 54, 253: 54, 160: 12, 161: 3, 45: 2, 242: 60
 };
 
 const REQUESTED_STREAMS = [1, 2, 3, 6, 10, 11, 12];
@@ -246,7 +239,7 @@ const DECODERS = {
             _kind: 'telemetry', 
             battery_voltage: readU16(dv, 14) / 1000, 
             battery_current: dv.getInt16(16, true) / 100, 
-            battery_remaining: dv.getInt8(30), 
+            battery_remaining: dv.getInt8(18), // offset standar ArduPilot; byte 30 = selalu -1 (unknown sentinel)
             safety_off: safety_off 
         };
     },
@@ -279,12 +272,34 @@ const DECODERS = {
         const lon = readI32(dv, 8) / 1e7;
         const alt = readI32(dv, 12) / 1000;        
         const relativeAlt = readI32(dv, 16) / 1000;
-        const heading = readI16(dv, 26) / 100;
+        const heading = readU16(dv, 26) / 100; // unsigned: heading >180deg tidak lagi menjadi negatif
         return { _kind: 'telemetry', latitude: lat, longitude: lon, altitude: alt, relativeAlt, heading };
     },
     74: (bytes) => {
-        const dv = new DataView(new Uint8Array(bytes).buffer);
-        return { _kind:'telemetry', speed: readF32(dv,4), climb: readF32(dv,12), throttle: dv.getUint16(18, true) };
+        // bytes = payload yang sudah diganjal 255-byte (atau asli); __len = panjang asli
+        const realLen = bytes.__len ?? bytes.length;
+        const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        // Bukti tlog 2026-07-04: FC kirim VFR_HUD layout custom len 17
+        //   [air f32@0, gs f32@4, alt f32@8, climb f32@12, heading i16@16] -- tanpa throttle.
+        // ArduPilot 4.5.1 murni mengirim layout standar len 20:
+        //   [air@0, gs@4, heading u16@8, throttle u16@10, alt@12, climb@16].
+        if (realLen < 20) {
+            return {
+                _kind: 'telemetry',
+                speed: readF32(dv, 4),
+                altitude: readF32(dv, 8),
+                climb: readF32(dv, 12),
+                heading: readI16(dv, 16),
+            };
+        }
+        // Layout standar -- throttle@10 sengaja tidak diekspor (tidak ditampilkan di HUD).
+        return {
+            _kind: 'telemetry',
+            speed: readF32(dv, 4),
+            altitude: readF32(dv, 12),
+            climb: readF32(dv, 16),
+            heading: readU16(dv, 8) / 100,
+        };
     },
     24: (bytes) => {
         const dv = new DataView(new Uint8Array(bytes).buffer);
@@ -296,11 +311,12 @@ const DECODERS = {
     },
     242: (bytes) => {
         const dv = new DataView(new Uint8Array(bytes).buffer);
+        // Struct standar: time_usec u64@0, lat i32@8, lon i32@12, alt i32@16 (mm)
         return {
             _kind: 'telemetry',
-            home_lat: readI32(dv, 0) / 1e7,
-            home_lon: readI32(dv, 4) / 1e7,
-            home_alt: readI32(dv, 8) / 1000,
+            home_lat: readI32(dv, 8) / 1e7,
+            home_lon: readI32(dv, 12) / 1e7,
+            home_alt: readI32(dv, 16) / 1000,
         };
     },
     51: (bytes) => {
@@ -340,54 +356,9 @@ const DECODERS = {
             rc16_in: dv.getUint16(34, true),
             rc_count: dv.getUint8(40),
             rssi: dv.getUint8(41),
-
         };
-        // console.log('[RC_CHANNELS 65]', {
-        //     rc1: result.rc1_in,
-        //     rc2: result.rc2_in,
-        //     rc3: result.rc3_in,
-        //     rc4: result.rc4_in,
-        //     rc5: result.rc5_in,
-        //     rc6: result.rc6_in,
-        //     rc7: result.rc7_in,
-        //     rc8: result.rc8_in,
-        //     rc9: result.rc9_in,
-        //     rc10: result.rc10_in,
-        //     rc11: result.rc11_in,
-        //     rc12: result.rc12_in,
-        //     count: result.rc_count
-        // });
-        // console.log(`[MAVLINK] MSG 65 MASUK! Ch9: ${result.rc9_in} | Ch10: ${result.rc10_in}`);
         return result;
     },
-    // 65: (bytes) => {
-    //     const dv = new DataView(new Uint8Array(bytes).buffer);
-    //     const result = {
-    //         _kind: 'telemetry',
-    //         rc1_in: dv.getUint16(4, true),
-    //         rc2_in: dv.getUint16(6, true),
-    //         rc3_in: dv.getUint16(8, true),
-    //         rc4_in: dv.getUint16(10, true),
-    //         rc5_in: dv.getUint16(12, true),
-    //         rc6_in: dv.getUint16(14, true),
-    //         rc7_in: dv.getUint16(16, true),
-    //         rc8_in: dv.getUint16(18, true),
-    //     };
-
-    //     console.log(
-    //         '[RC_CHANNELS] CH1-CH8:',
-    //         result.rc1_in,
-    //         result.rc2_in,
-    //         result.rc3_in,
-    //         result.rc4_in,
-    //         result.rc5_in,
-    //         result.rc6_in,
-    //         result.rc7_in,
-    //         result.rc8_in
-    //     );
-
-    //     return result;
-    // },
     35: (bytes) => {
         const dv = new DataView(new Uint8Array(bytes).buffer);
 
@@ -477,8 +448,8 @@ const DECODERS = {
             direction_z:    dv.getFloat32(8, true),
             compass_id:     dv.getUint8(12),
             cal_mask:       dv.getUint8(13),
-            cal_status:     dv.getUint8(14),   // BARU
-            attempt:        dv.getUint8(15),   // BARU
+            cal_status:     dv.getUint8(14),
+            attempt:        dv.getUint8(15),
             completion_pct: dv.getUint8(16),
         };
     },
@@ -497,13 +468,13 @@ const DECODERS = {
             offdiag_y:   dv.getFloat32(32, true),
             offdiag_z:   dv.getFloat32(36, true),
             compass_id:  dv.getUint8(40),
-            cal_mask:    dv.getUint8(41),   // BARU
+            cal_mask:    dv.getUint8(41),
             cal_status:  dv.getUint8(42),
-            autosaved:   dv.getUint8(43),   // BARU
-            orientation_confidence: dv.getFloat32(44, true),  // BARU
-            old_orientation:        dv.getUint8(48),           // BARU
-            new_orientation:        dv.getUint8(49),           // BARU
-            scale_factor:           dv.getFloat32(50, true),   // BARU
+            autosaved:   dv.getUint8(43),
+            orientation_confidence: dv.getFloat32(44, true),
+            old_orientation:        dv.getUint8(48),
+            new_orientation:        dv.getUint8(49),
+            scale_factor:           dv.getFloat32(50, true),
         };
     },
     109: (bytes) => {
@@ -542,4 +513,4 @@ const DECODERS = {
     },
 };
 
-console.log('[MavlinkProtocol] mavlink-protocol.js loaded (shared parser/decoder)');
+console.log('[MavlinkProtocol] mavlink_protocol.js loaded (shared parser/decoder)');

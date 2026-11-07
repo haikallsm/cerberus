@@ -1,8 +1,15 @@
+/**
+ * commands.js — API tingkat tinggi untuk perintah ke FC.
+ * Semua perintah di-routing ke link aktif (radio serial atau UDP).
+ */
 const commands = {
+    // ------------------------------------------------------------------
+    // Link selection
+    // ------------------------------------------------------------------
     _radioActive() {
         return !!(window.radioMavlink && window.radioMavlink.isLive());
     },
-    
+
     _udpActive() {
         return !!(window.udpMavlink && window.udpMavlink.isLive());
     },
@@ -13,40 +20,46 @@ const commands = {
         throw new Error('Tidak ada koneksi aktif. Silakan hubungkan Radio atau UDP terlebih dahulu.');
     },
 
+    _retrySender(link) {
+        return (typeof link.sendCommandLongRetry === 'function')
+            ? link.sendCommandLongRetry.bind(link)
+            : (cmd, params) => link.sendCommandLong(cmd, params);
+    },
+
+    // ------------------------------------------------------------------
+    // Flight commands
+    // ------------------------------------------------------------------
     async armDisarm(arm) {
         const ack = await this._getActiveLink().armDisarm(arm);
-        if(ack && ack.ok) {
-            if (window.gcsState) {
-                window.gcsState.armed = !!arm;
-            }
-        } return ack;
+        if (ack && ack.ok && window.gcsState) {
+            window.gcsState.armed = !!arm;
+        }
+        return ack;
     },
 
     async takeoff(alt = 1) {
         return this._getActiveLink().takeoff(alt);
     },
 
-    async reboot() {
-        return this._getActiveLink().reboot();
-    },
-
     async setFlightMode(mode) {
         return this._getActiveLink().setMode(mode);
     },
 
-    // before
+    async reboot() {
+        return this._getActiveLink().reboot();
+    },
+
+    // ------------------------------------------------------------------
+    // Safety switch (protokol kustom FC: CMD 176)
+    // ------------------------------------------------------------------
     async setSafetySwitch(turnOn) {
         const baseMode = 128.0;
         const customMode = turnOn ? 1.0 : 0.0;
 
-        if (turnOn) {
-            console.log("[Command] HARDWARE SAFETY");
-        } else {
-            console.log("[Command] UNSAFETY");
-        }
+        console.log("[Command] Safety Switch:", turnOn ? "HARDWARE SAFETY" : "UNSAFETY");
 
-        const ack = await this._getActiveLink().sendCommandLong(176, { 
-            p1: baseMode, 
+        const ack = await this._getActiveLink().sendCommandLong(176, {
+            p1: baseMode,
             p2: customMode,
             p3: 0.0,
             p4: 0.0
@@ -57,7 +70,7 @@ const commands = {
             return ack;
         }
 
-        if(window.gcsState?.safety) {
+        if (window.gcsState?.safety) {
             window.gcsState.safety.off = !turnOn;
         }
 
@@ -65,164 +78,10 @@ const commands = {
         return ack;
     },
 
-    // after
-    // async setSafetySwitch(turnOn) {
-    //     const MAV_CMD_DO_SET_SAFETY_SWITCH_STATE = 5300;
-    //     const safetyState = turnOn ? 0 : 1;
-
-    //     if (turnOn) {
-    //         console.log("[Command] HARDWARE SAFETY");
-    //     } else {
-    //         console.log("[Command] UNSAFETY");
-    //     }
-
-    //     const ack = await this._getActiveLink().sendCommandLong(MAV_CMD_DO_SET_SAFETY_SWITCH_STATE, { 
-    //         p1: safetyState, 
-    //         p2: 0.0,
-    //         p3: 0.0,
-    //         p4: 0.0,
-    //         p5: 0.0,
-    //         p6: 0.0,
-    //         p7: 0.0
-    //     });
-
-    //     console.log("[Command] Safety ACK:", ack);
-    //     if (!ack || !ack.ok) {
-    //         console.error("[Command] Safety Switch Failed", ack);
-    //         return ack;
-    //     }
-
-    //     if(window.gcsState?.safety) {
-    //         window.gcsState.safety.off = !turnOn;
-    //     }
-
-    //     console.log("[Command] Safety Switch:", window.gcsState?.safety?.off ? "OFF" : "ON");
-    //     return ack;
-    // },
-
-    async setServo(channel, pwm) {
-        return this._getActiveLink().setServo(channel, pwm);
-    },
-
-    // before
-    // async setHybridMode(state) {
-    //     const stateStr = String(state).toLowerCase();
-    //     let targetState;
-    //     let pwm;
-
-    //     if (['low', 'rover'].includes(stateStr)) {
-    //         targetState = 'rover';
-    //         pwm = 999;
-    //         console.log(
-    //             '[COMMAND] HYBRID MODE: ROVER (LOW)'
-    //         );
-
-    //     } else if (['mid', 'middle', 'copter_safe'].includes(stateStr)) {
-    //         targetState = 'copter_safe';
-    //         pwm = 1500;
-    //         console.log(
-    //             '[COMMAND] HYBRID MODE: COPTER & SAFETY (MID)'
-    //         );
-
-    //     } else if (['high', 'copter_unsafe', 'ready'].includes(stateStr)) {
-    //         targetState = 'copter_unsafe';
-    //         pwm = 1998;
-    //         console.log(
-    //             '[COMMAND] HYBRID MODE: COPTER & UNSAFETY (HIGH)'
-    //         );
-
-    //     } else if (['release', 'off'].includes(stateStr)) {
-    //         console.log('[COMMAND] HYBRID MODE: RELEASED');
-    //         const link = this._getActiveLink();
-    //         if (typeof link.cancelHybridOverride === 'function') {
-    //             return link.cancelHybridOverride();
-    //         }
-    //         return link.sendRcOverride(4, 65535);
-    //     } else {
-    //         throw new Error(`Invalid hybrid mode state: ${state}`);
-    //     }
-    //     const link = this._getActiveLink();
-    //     if (typeof link.setHybridModeTemporary === 'function') {
-    //         return link.setHybridModeTemporary(
-    //             targetState,
-    //             pwm,
-    //             4
-    //         );
-    //     }
-    //     return link.sendRcOverride(4, pwm);
-    // },
-
-    // after
-    // async setHybridMode(state) {
-    //     const stateStr = String(state).toLowerCase().trim();
-    //     let targetState;
-    //     let pwm;
-    //     let label;
-
-    //     if (['low', 'rover'].includes(stateStr)) {
-    //         targetState = 'rover';
-    //         pwm = 999;
-    //         label = 'ROVER (LOW)';
-    //     } else if (['mid', 'middle', 'copter_safe'].includes(stateStr)) {
-    //         targetState = 'copter_safe';
-    //         pwm = 1500;
-    //         label = 'COPTER + SAFETY (MID)';
-    //     } else if (['high', 'copter_unsafe', 'ready'].includes(stateStr)) {
-    //         targetState = 'copter_unsafe';
-    //         pwm = 1998;
-    //         label = 'COPTER + UNSAFETY (HIGH)';
-    //     } else if (['release', 'off'].includes(stateStr)) {
-    //         const link = this._getActiveLink();
-    //         console.log('[COMMAND] HYBRID MODE: RELEASE OVERRIDE (CH5 -> RC FISIK)');
-
-    //         let res;
-    //         if (typeof link.cancelHybridOverride === 'function') {
-    //             res = await link.cancelHybridOverride();
-    //         } else {
-    //             res = await link.sendRcOverride(4, 65535);
-    //         }
-
-    //         return {
-    //             ok: true,
-    //             action: 'release',
-    //             mode: 'released',
-    //             channel: 5,
-    //             message: 'Hybrid override released. RC fisik sekarang jadi sumber CH5.',
-    //             result: res
-    //         };
-    //     } else {
-    //         throw new Error(`Invalid hybrid mode state: ${state}`);
-    //     }
-
-    //     const link = this._getActiveLink();
-
-    //     console.log(`[COMMAND] HYBRID MODE REQUEST: ${label}`);
-    //     console.log('[COMMAND] CH5 akan di-latch oleh GCS sampai operator catch-up lalu takeover.');
-
-    //     let res;
-    //     if (typeof link.setHybridModeTemporary === 'function') {
-    //         res = await link.setHybridModeTemporary(targetState, pwm, 4);
-    //     } else {
-    //         // fallback lama (kurang ideal, tapi tetap jalan)
-    //         res = await link.sendRcOverride(4, pwm);
-    //     }
-
-    //     return {
-    //         ok: true,
-    //         action: 'set',
-    //         mode: targetState,
-    //         pwm,
-    //         channel: 5,
-    //         message:
-    //             `Hybrid mode ${targetState} aktif via GCS latch. ` +
-    //             `Untuk ambil alih dari remote: samakan switch ke mode aktif dulu, lalu pindah ke mode tujuan.`,
-    //         result: res
-    //     };
-    // },
-
-    // after after
-    // GANTI setHybridMode() dengan ini
-    // GANTI setHybridMode() dengan ini
+    // ------------------------------------------------------------------
+    // Hybrid mode (transisi UGV <-> UAV via CH5 override)
+    // Menargetkan switch mid/safe saja; mode high/unsafe tidak dipakai GCS.
+    // ------------------------------------------------------------------
     async setHybridMode(state) {
         const stateStr = String(state).toLowerCase().trim();
         const link = this._getActiveLink();
@@ -236,7 +95,7 @@ const commands = {
         } else if (
             ['mid', 'middle', 'copter', 'copter_safe', 'high', 'copter_unsafe', 'ready'].includes(stateStr)
         ) {
-            // FORCE copter selalu SAFE (MID)
+            // copter selalu SAFE (MID)
             targetState = 'copter_safe';
             pwm = 1500;
         } else if (['release', 'off'].includes(stateStr)) {
@@ -254,10 +113,13 @@ const commands = {
         return link.sendRcOverride(4, pwm);
     },
 
-    async setHome(lat, lon, alt = 0) {
-        return this._getActiveLink().setHome(lat, lon, alt);
+    async setServo(channel, pwm) {
+        return this._getActiveLink().setServo(channel, pwm);
     },
 
+    // ------------------------------------------------------------------
+    // Parameters & PID
+    // ------------------------------------------------------------------
     async getAllParams(onProgress) {
         return this._getActiveLink().getAllParams(onProgress);
     },
@@ -274,6 +136,9 @@ const commands = {
         return this._getActiveLink().setPID(axis, pid);
     },
 
+    // ------------------------------------------------------------------
+    // Mission & fence
+    // ------------------------------------------------------------------
     async uploadMission(items) {
         return this._getActiveLink().uploadMission(items);
     },
@@ -282,6 +147,25 @@ const commands = {
         return this._getActiveLink().downloadMission();
     },
 
+    async setHome(lat, lon, alt = 0) {
+        return this._getActiveLink().setHome(lat, lon, alt);
+    },
+
+    async uploadFence(points) {
+        return this._getActiveLink().uploadFence(points);
+    },
+
+    async downloadFence() {
+        return this._getActiveLink().downloadFence();
+    },
+
+    async clearFence() {
+        return this._getActiveLink().clearFence();
+    },
+
+    // ------------------------------------------------------------------
+    // Calibration — accelerometer (custom CMD 241 / 42429)
+    // ------------------------------------------------------------------
     async startAccel3Axis() {
         window.acceptCalStep = 0;
         return this._getActiveLink().sendCommandLong(241, { p5: 1.0 });
@@ -299,6 +183,11 @@ const commands = {
         return this._getActiveLink().sendCommandLong(42429, { p1: posValue });
     },
 
+    // ------------------------------------------------------------------
+    // Calibration — compass (custom CMD 42424/42425/42426)
+    // RC override di-pause selama kalibrasi dan SELALU di-resume
+    // setelah selesai/gagal supaya remote tidak terkunci.
+    // ------------------------------------------------------------------
     async startCompassCal() {
         const link = this._getActiveLink();
 
@@ -309,58 +198,55 @@ const commands = {
         }
 
         link.pauseRcOverride();
-        link.rcChannels = new Array(8).fill(65535);
+        link.rcChannels = new Array(8).fill(65535); // release semua channel
 
-        const send = (typeof link.sendCommandLongRetry === 'function')
-            ? link.sendCommandLongRetry.bind(link)
-            : (c, p) => link.sendCommandLong(c, p);
+        const send = this._retrySender(link);
 
-        // p2: retry=1 (dulu tidak diset -> default 0), p3: autosave=0 (dulu 1.0)
-        return send(42424, { p1: 0, p2: 1, p3: 0, p4: 0, p5: 0 },
-                    { retries: 2, timeout: 3000 });
+        // p2: retry=1, p3: autosave=0
+        let ack;
+        try {
+            ack = await send(42424, { p1: 0, p2: 1, p3: 0, p4: 0, p5: 0 },
+                             { retries: 2, timeout: 3000 });
+        } catch (e) {
+            // Command gagal/timeout: kalibrasi tidak berjalan,
+            // jangan biarkan override mengunci RC selamanya.
+            link.resumeRcOverride();
+            throw e;
+        }
+        if (!ack || !ack.ok) {
+            link.resumeRcOverride();
+        }
+        return ack;
     },
-    
+
     async cancelCompassCal() {
         const link = this._getActiveLink();
-        const send = (typeof link.sendCommandLongRetry === 'function')
-            ? link.sendCommandLongRetry.bind(link)
-            : (c, p) => link.sendCommandLong(c, p);
+        const send = this._retrySender(link);
 
         const ack = await send(42426, {}, { retries: 2, timeout: 3000 });
-        if (typeof link.clearMagCalState === 'function') link.clearMagCalState();  // BARU
-        else window.compassSuccessMask = 0;                                        // BARU
+        if (typeof link.clearMagCalState === 'function') link.clearMagCalState();
+        else window.compassSuccessMask = 0;
         link.resumeRcOverride();
         return ack;
     },
-    
+
     async acceptCompassCal() {
         const link = this._getActiveLink();
+        const send = this._retrySender(link);
+
         const mask = window.compassSuccessMask || 0;
         if (mask === 0) throw new Error("Tidak ada compass yang SUCCESS. Silakan kalibrasi ulang.");
 
-        const send = (typeof link.sendCommandLongRetry === 'function')
-            ? link.sendCommandLongRetry.bind(link)
-            : (c, p) => link.sendCommandLong(c, p);
-
         let ack;
         try {
-            // resumeRcOverride() TIDAK lagi dipanggil di sini sebelum kirim (dulu di baris pertama)
+            // resumeRcOverride() dipanggil di finally, setelah ACK diterima
             ack = await send(42425, { p1: mask }, { retries: 3, timeout: 5000 });
         } finally {
-            link.resumeRcOverride();   // dipindah ke sini, setelah ACK diterima
+            link.resumeRcOverride();
         }
 
         if (ack && ack.ok) window.compassSuccessMask = 0;
         return ack;
-    },
-    async uploadFence(points) {
-        return this._getActiveLink().uploadFence(points);
-    },
-    async downloadFence() {
-        return this._getActiveLink().downloadFence();
-    },
-    async clearFence() {
-        return this._getActiveLink().clearFence();
     },
 };
 
