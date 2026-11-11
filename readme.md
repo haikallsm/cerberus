@@ -2,7 +2,7 @@
 
 Cerberus adalah aplikasi **Ground Control Station (GCS)** berbasis Electron untuk mengoperasikan dan memantau kendaraan udara maupun darat melalui protokol **MAVLink**. Project ini dikembangkan sebagai bagian dari sistem HAWKEYE dan mendukung koneksi melalui radio serial serta UDP.
 
-> Status: project aktif dalam pengembangan. Beberapa fitur backend computer vision dan ROS 2 bersifat opsional serta membutuhkan konfigurasi perangkat keras dan software tambahan.
+> Status: project aktif dalam pengembangan. Beberapa fitur backend computer vision dan ROS 2 bersifat opsional.
 
 ## Fitur
 
